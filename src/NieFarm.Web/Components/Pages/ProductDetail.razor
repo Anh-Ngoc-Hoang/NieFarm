@@ -1,0 +1,714 @@
+@page "/san-pham/{Slug}"
+@using Microsoft.AspNetCore.Components.Authorization
+@using NieFarm.Application.Features.Carts.Commands
+@using NieFarm.Application.Features.Products.Dtos
+@using NieFarm.Application.Features.Products.Queries
+@using NieFarm.Application.Features.Reviews.Commands
+@using NieFarm.Application.Features.Reviews.Dtos
+@using NieFarm.Application.Features.Reviews.Queries
+@using NieFarm.Domain.Entities
+@using NieFarm.Web.Services.Cart
+@inject ISender Sender
+@inject NavigationManager Navigation
+@inject CartState CartState
+
+@if (_product is not null)
+{
+    <PageTitle>@_product.Name - Nie Farm Việt Nam</PageTitle>
+    <HeadContent>
+        <meta name="description" content="@_product.SummaryPlainText" />
+    </HeadContent>
+
+    <div class="max-w-container-max mx-auto px-gutter py-12">
+
+        @* Breadcrumbs *@
+        <nav aria-label="Đường dẫn" class="text-body-sm text-on-surface-variant mb-8">
+            <ol class="inline-flex items-center flex-wrap gap-1">
+                <li><a class="hover:text-forest-green transition-colors duration-250" href="/">Trang chủ</a></li>
+                <li class="flex items-center">
+                    <span class="material-symbols-outlined text-sm mx-1" aria-hidden="true">chevron_right</span>
+                    <a class="hover:text-forest-green transition-colors duration-250" href="/cua-hang">Sản phẩm</a>
+                </li>
+                <li class="flex items-center" aria-current="page">
+                    <span class="material-symbols-outlined text-sm mx-1" aria-hidden="true">chevron_right</span>
+                    <span class="text-on-surface font-medium">@_product.Name</span>
+                </li>
+            </ol>
+        </nav>
+
+        @* Gallery + buying panel *@
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-section-padding-y">
+
+            <div class="flex flex-col gap-4">
+                <div class="aspect-square bg-surface-container-low rounded-lg border border-amber-gold/20 overflow-hidden">
+                    @if (SelectedGalleryImage is { } main)
+                    {
+                        <img class="w-full h-full object-cover" src="@main.Url" alt="@main.Alt" />
+                    }
+                </div>
+                @if (_product.Gallery.Count > 1)
+                {
+                    <div class="grid grid-cols-4 gap-4">
+                        @for (var i = 0; i < _product.Gallery.Count; i++)
+                        {
+                            var index = i;
+                            var image = _product.Gallery[index];
+                            var selected = index == _selectedImage;
+
+                            <button type="button" @onclick="() => _selectedImage = index"
+                                    aria-current="@(selected ? "true" : null)"
+                                    class="aspect-square bg-surface-container-low rounded-lg overflow-hidden transition-colors duration-250 @(selected ? "border-2 border-amber-gold" : "border border-amber-gold/30 hover:border-amber-gold opacity-70 hover:opacity-100")">
+                                <img class="w-full h-full object-cover" src="@image.Url" alt="@image.Alt" />
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="flex flex-col">
+                <div class="flex items-center flex-wrap gap-3 mb-2">
+                    @if (_product.Badge is not null)
+                    {
+                        <span class="bg-forest-green text-white text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
+                            @_product.Badge
+                        </span>
+                    }
+                    @if (_reviews.ApprovedCount > 0)
+                    {
+                        <span class="text-on-surface-variant text-body-sm flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm icon-fill text-amber-gold" aria-hidden="true">star</span>
+                            @_reviews.AverageRating.ToString("0.0", Vietnamese) (@_reviews.ApprovedCount đánh giá)
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="text-on-surface-variant text-body-sm">Chưa có đánh giá</span>
+                    }
+                </div>
+
+                <h1 class="text-headline-md text-on-surface mb-4">@_product.Name</h1>
+
+                <p class="text-headline-sm text-amber-gold font-bold mb-6">
+                    @Money.Vnd(_product.PriceFor(_selectedOptionValues))
+                    @if (_product.OldPrice is { } old)
+                    {
+                        <span class="text-body-sm text-on-surface-variant font-normal line-through ml-2">
+                            @Money.Vnd(old)
+                        </span>
+                    }
+                </p>
+
+                @if (!string.IsNullOrWhiteSpace(_product.SummaryHtml))
+                {
+                    <div class="text-on-surface-variant mb-8 leading-relaxed rich-text-content">
+                        @((MarkupString)_product.SummaryHtml)
+                    </div>
+                }
+
+                <div class="border-t border-b border-amber-gold/30 py-6 mb-8 flex flex-col gap-6">
+
+                    @if (_product.Options.Count > 0)
+                    {
+                        var firstOption = _product.Options[0];
+
+                        <div>
+                            <span class="block text-label-bold font-semibold text-on-surface mb-3">@firstOption.Name</span>
+                            <div class="flex flex-wrap gap-3">
+                                @foreach (var value in firstOption.Values)
+                                {
+                                    var current = value;
+                                    var selected = current == _selectedOptionValues[0];
+
+                                    <button type="button" @onclick="() => SelectOptionValue(0, current)"
+                                            aria-pressed="@selected"
+                                            class="px-4 py-2 rounded-lg font-medium text-sm transition-colors duration-250 @(selected ? "border-2 border-amber-gold bg-surface-container-low text-on-surface" : "border border-amber-gold/30 bg-white hover:border-amber-gold text-on-surface-variant hover:text-on-surface")">
+                                        @current
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        @for (var i = 1; i < _product.Options.Count; i++)
+                        {
+                            var optionIndex = i;
+                            var option = _product.Options[optionIndex];
+
+                            <div>
+                                <label class="block text-label-bold font-semibold text-on-surface mb-3" for="@($"option-{optionIndex}")">@option.Name</label>
+                                <select id="@($"option-{optionIndex}")" class="w-full p-3 border border-amber-gold/30 rounded-lg bg-white text-on-surface input-focus-glow text-body-sm"
+                                        value="@_selectedOptionValues[optionIndex]"
+                                        @onchange="e => SelectOptionValue(optionIndex, e.Value?.ToString() ?? string.Empty)">
+                                    @foreach (var value in option.Values)
+                                    {
+                                        <option value="@value">@value</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
+                        @if (IsOutOfStock)
+                        {
+                            <p class="text-deep-red font-semibold text-body-sm">Tạm hết hàng</p>
+                        }
+                    }
+
+                    <div>
+                        <label class="block text-label-bold font-semibold text-on-surface mb-3" for="quantity">Số lượng</label>
+                        <div class="flex items-center border border-amber-gold/30 rounded-lg w-max overflow-hidden bg-white">
+                            <button type="button" class="px-4 py-2 text-forest-green hover:bg-surface-container-low transition-colors duration-250"
+                                    @onclick="() => _quantity = Math.Max(1, _quantity - 1)" aria-label="Giảm số lượng">
+                                <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+                            </button>
+                            <input id="quantity" type="number" min="1" max="@Cart.MaxQuantityPerItem" @bind="_quantity"
+                                   @bind:after="ClampQuantity"
+                                   class="w-16 text-center border-none focus:ring-0 font-medium bg-transparent text-on-surface p-2" />
+                            <button type="button" class="px-4 py-2 text-forest-green hover:bg-surface-container-low transition-colors duration-250"
+                                    @onclick="() => _quantity = Math.Min(Cart.MaxQuantityPerItem, _quantity + 1)" aria-label="Tăng số lượng">
+                                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_cartErrors.Count > 0)
+                {
+                    <div class="bg-deep-red/10 text-deep-red rounded-lg p-4 mb-4 text-body-sm" role="alert">
+                        @foreach (var error in _cartErrors)
+                        {
+                            <p>@error</p>
+                        }
+                    </div>
+                }
+
+                @if (_cartMessage is not null)
+                {
+                    <div class="bg-forest-green/10 text-forest-green rounded-lg p-4 mb-4 text-body-sm">
+                        @_cartMessage
+                        <a class="font-semibold underline ml-1" href="/thanh-toan">Xem giỏ hàng</a>
+                    </div>
+                }
+
+                <div class="flex flex-col sm:flex-row gap-4 mb-8">
+                    <button type="button" disabled="@(IsOutOfStock || _addingToCart)"
+                            @onclick="() => AddToCartAsync(true)"
+                            class="btn-brand flex-1 font-label-bold text-label-bold py-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                        <span class="material-symbols-outlined" aria-hidden="true">shopping_cart</span>
+                        @(_addingToCart ? "Đang thêm…" : "Mua ngay")
+                    </button>
+                    <button type="button" disabled="@(IsOutOfStock || _addingToCart)"
+                            @onclick="() => AddToCartAsync(false)"
+                            class="btn-secondary-brand flex-1 font-label-bold text-label-bold py-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                        <span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span>
+                        @(_addingToCart ? "Đang thêm…" : "Thêm vào giỏ hàng")
+                    </button>
+                </div>
+
+                @if (_product.Features.Count > 0)
+                {
+                    <div class="mb-4">
+                        <span class="block text-label-bold font-semibold text-on-surface mb-3">Đặc điểm nổi bật</span>
+                        <ul class="space-y-2 text-sm text-on-surface-variant">
+                            @foreach (var feature in _product.Features)
+                            {
+                                <li class="flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-forest-green text-lg" aria-hidden="true">check_circle</span>
+                                    @feature
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <ul class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-on-surface-variant">
+                    <li class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-forest-green" aria-hidden="true">local_shipping</span>
+                        Giao hàng toàn quốc
+                    </li>
+                    <li class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-forest-green" aria-hidden="true">verified</span>
+                        100% Cà phê nguyên chất
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        @* Information tabs *@
+        <section class="mb-section-padding-y">
+            <div class="border-b border-amber-gold/30 mb-8">
+                <ul class="flex flex-wrap -mb-px" role="tablist">
+                    @foreach (var tab in Tabs)
+                    {
+                        var current = tab;
+                        var selected = current.Id == _activeTab;
+
+                        <li class="mr-2" role="presentation">
+                            <button type="button" role="tab" id="@($"tab-{current.Id}")"
+                                    aria-selected="@selected" aria-controls="@($"panel-{current.Id}")"
+                                    @onclick="() => _activeTab = current.Id"
+                                    class="inline-block p-4 border-b-2 rounded-t-lg transition-colors duration-250 @(selected ? "border-amber-gold text-amber-gold font-semibold" : "border-transparent text-on-surface-variant font-medium hover:text-on-surface hover:border-amber-gold/50")">
+                                @(current.Id == "reviews" ? $"{current.Label} ({_reviews.ApprovedCount})" : current.Label)
+                            </button>
+                        </li>
+                    }
+                </ul>
+            </div>
+
+            <div class="max-w-4xl">
+                @if (_activeTab == "desc")
+                {
+                    <div id="panel-desc" role="tabpanel" aria-labelledby="tab-desc"
+                         class="text-on-surface-variant text-body-lg rich-text-content">
+                        @if (string.IsNullOrWhiteSpace(_product.DescriptionHtml))
+                        {
+                            <p>Thông tin chi tiết đang được cập nhật.</p>
+                        }
+                        else
+                        {
+                            @((MarkupString)_product.DescriptionHtml)
+                        }
+                    </div>
+                }
+                else if (_activeTab == "specs")
+                {
+                    <div id="panel-specs" role="tabpanel" aria-labelledby="tab-specs" class="overflow-x-auto">
+                        @if (_product.Specs.Count == 0)
+                        {
+                            <p class="text-on-surface-variant text-body-lg">Thông số kỹ thuật đang được cập nhật.</p>
+                        }
+                        else
+                        {
+                            <table class="w-full text-left text-body-lg text-on-surface-variant">
+                                <tbody>
+                                    @foreach (var spec in _product.Specs)
+                                    {
+                                        <tr class="border-b border-amber-gold/20">
+                                            <th scope="row" class="py-3 pr-6 font-medium text-on-surface w-1/3">@spec.Label</th>
+                                            <td class="py-3">@spec.Value</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div id="panel-reviews" role="tabpanel" aria-labelledby="tab-reviews"
+                         class="text-on-surface-variant text-body-lg">
+
+                        @* Summary *@
+                        @if (_reviews.ApprovedCount > 0)
+                        {
+                            <div class="flex items-center gap-4 mb-8">
+                                <span class="text-headline-md text-amber-gold font-bold">
+                                    @_reviews.AverageRating.ToString("0.0", Vietnamese)
+                                </span>
+                                <div>
+                                    <StarRating Value="@_reviews.AverageRating" SizeClass="text-lg" />
+                                    <p class="text-body-sm mt-1">@_reviews.ApprovedCount đánh giá</p>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="mb-8">Chưa có đánh giá nào cho sản phẩm này.</p>
+                        }
+
+                        @* Submission / edit block *@
+                        @if (_productId is not null)
+                        {
+                            <AuthorizeView>
+                                <Authorized>
+                                    <div class="bg-surface-container-low rounded-lg p-6 mb-10 border border-amber-gold/20">
+                                        <h3 class="text-body-lg font-semibold text-on-surface mb-4">
+                                            @(_editingReviewId is null ? "Viết đánh giá của bạn" : "Chỉnh sửa đánh giá của bạn")
+                                        </h3>
+
+                                        @if (_errors.Count > 0)
+                                        {
+                                            <div class="bg-deep-red/10 text-deep-red rounded-lg p-4 mb-4 text-body-sm">
+                                                @foreach (var error in _errors)
+                                                {
+                                                    <p>@error</p>
+                                                }
+                                            </div>
+                                        }
+
+                                        @if (_successMessage is not null)
+                                        {
+                                            <div class="bg-forest-green/10 text-forest-green rounded-lg p-4 mb-4 text-body-sm">
+                                                @_successMessage
+                                            </div>
+                                        }
+
+                                        <div class="mb-4">
+                                            <StarRatingInput Value="@_rating" ValueChanged="v => _rating = v"
+                                                              Disabled="@_submitting" SizeClass="text-3xl" />
+                                        </div>
+
+                                        <textarea @ref="_commentTextarea" class="w-full p-3 border border-amber-gold/30 rounded-lg bg-white text-on-surface input-focus-glow text-body-sm"
+                                                  rows="4" maxlength="@Review.CommentMaxLength"
+                                                  placeholder="Chia sẻ cảm nhận của bạn về sản phẩm…"
+                                                  disabled="@_submitting"
+                                                  value="@_comment"
+                                                  @oninput="e => _comment = e.Value?.ToString() ?? string.Empty"></textarea>
+                                        <p class="text-xs text-on-surface-variant text-right mt-1">@_comment.Length / @Review.CommentMaxLength</p>
+
+                                        <div class="flex flex-col sm:flex-row gap-3 mt-4">
+                                            <button type="button" class="btn-brand font-label-bold text-label-bold py-3 px-6 rounded-lg w-full sm:w-auto"
+                                                    disabled="@_submitting" @onclick="HandleSubmitAsync">
+                                                @(_submitting ? "Đang xử lý…" : _editingReviewId is null ? "Gửi đánh giá" : "Cập nhật đánh giá")
+                                            </button>
+
+                                            @if (_editingReviewId is not null)
+                                            {
+                                                <button type="button" class="btn-secondary-brand font-label-bold text-label-bold py-3 px-6 rounded-lg w-full sm:w-auto"
+                                                        disabled="@_submitting" @onclick="CancelEdit">
+                                                    Hủy thay đổi
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                </Authorized>
+                                <NotAuthorized>
+                                    <p class="mb-10">
+                                        <a class="text-forest-green font-semibold hover:text-amber-gold transition-colors duration-250"
+                                           href="@($"/dang-nhap?returnUrl=/san-pham/{Slug}")">Vui lòng đăng nhập</a>
+                                        để gửi đánh giá.
+                                    </p>
+                                </NotAuthorized>
+                            </AuthorizeView>
+                        }
+
+                        @* Review list *@
+                        @if (_reviews.Reviews.Count > 0)
+                        {
+                            <div class="flex flex-col gap-6">
+                                @foreach (var review in _reviews.Reviews)
+                                {
+                                    <article class="border-b border-amber-gold/20 pb-6">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-2">
+                                            <span class="font-semibold text-on-surface">@review.AuthorName</span>
+                                            <span class="text-body-sm text-on-surface-variant">@review.CreatedAt.ToString("dd/MM/yyyy", Vietnamese)</span>
+                                        </div>
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <StarRating Value="@review.Rating" SizeClass="text-sm" />
+                                            @if (review.IsPending)
+                                            {
+                                                <span class="bg-amber-gold/20 text-amber-gold text-xs font-semibold px-2 py-1 rounded-full">Đang chờ duyệt</span>
+                                                <button type="button" class="text-forest-green text-xs font-semibold hover:text-amber-gold transition-colors duration-250"
+                                                        @onclick="() => FocusEditFormAsync(review)">
+                                                    Sửa đánh giá
+                                                </button>
+                                            }
+                                        </div>
+                                        @if (review.IsPending)
+                                        {
+                                            <p class="text-xs text-on-surface-variant mb-1">Người khác sẽ thấy được đánh giá này khi được duyệt.</p>
+                                        }
+                                        <p>@review.Comment</p>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+
+        @* Related products *@
+        <section class="mb-section-padding-y">
+            <div class="flex flex-wrap gap-4 justify-between items-end mb-8">
+                <h2 class="text-headline-md text-on-surface">Sản phẩm liên quan</h2>
+                <a class="text-forest-green font-semibold text-label-bold hover:text-amber-gold transition-colors duration-250 flex items-center"
+                   href="/cua-hang">
+                    Xem tất cả
+                    <span class="material-symbols-outlined text-sm ml-1" aria-hidden="true">arrow_forward</span>
+                </a>
+            </div>
+
+            @if (_relatedProducts is { Count: > 0 })
+            {
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    @foreach (var related in _relatedProducts)
+                    {
+                        <article class="bg-white rounded-lg p-card-padding card-hover border border-soft-border flex flex-col h-full">
+                            <a class="aspect-square bg-surface-container-low rounded mb-4 overflow-hidden relative block"
+                               href="@($"/san-pham/{related.Slug}")">
+                                @if (related.Badge is not null)
+                                {
+                                    <span class="absolute top-2 left-2 bg-deep-red text-white text-xs font-bold px-2 py-1 rounded z-10">
+                                        @related.Badge
+                                    </span>
+                                }
+                                <img class="w-full h-full object-cover" src="@related.ImageUrl" alt="@related.ImageAlt" />
+                            </a>
+                            <p class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">@related.CategoryName</p>
+                            <h3 class="text-body-lg font-semibold text-on-surface mb-2">
+                                <a class="hover:text-deep-red transition-colors duration-250"
+                                   href="@($"/san-pham/{related.Slug}")">@related.Name</a>
+                            </h3>
+                            <div class="text-on-surface-variant text-body-sm mb-4 line-clamp-2 flex-grow rich-text-content">
+                                @((MarkupString)related.Summary)
+                            </div>
+                            <div class="flex justify-between items-center mt-auto">
+                                <span class="font-bold text-amber-gold text-lg">@Money.Vnd(related.Price)</span>
+                                <button type="button" aria-label="@($"Thêm {related.Name} vào giỏ hàng")"
+                                        class="w-10 h-10 rounded-full bg-surface-container-low hover:bg-forest-green text-forest-green hover:text-white flex items-center justify-center transition-colors duration-250">
+                                    <span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span>
+                                </button>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo Vietnamese =
+        System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+
+    private sealed record Tab(string Id, string Label);
+
+    private static readonly Tab[] Tabs =
+    [
+        new("desc", "Mô tả chi tiết"),
+        new("specs", "Thông số kỹ thuật"),
+        new("reviews", "Đánh giá")
+    ];
+
+    /// <summary>Route slug.</summary>
+    [Parameter]
+    public string? Slug { get; set; }
+
+    [CascadingParameter(Name = "CartAnonymousId")] public string? CartAnonymousId { get; set; }
+
+    private ProductDetailDto? _product;
+
+    private int _selectedImage;
+    private string[] _selectedOptionValues = [];
+    private int _quantity = 1;
+    private string _activeTab = "desc";
+
+    // -- Add to cart ---------------------------------------------------------
+    // Deliberately separate from the review form's _errors / _successMessage: those live in
+    // the reviews tab panel and are reset by LoadReviewsAsync, so reusing them would make a
+    // cart error appear inside the review box.
+    private bool _addingToCart;
+    private List<string> _cartErrors = [];
+    private string? _cartMessage;
+
+    private ProductImageDto? SelectedGalleryImage =>
+        _product is null || _product.Gallery.Count == 0
+            ? null
+            : _product.Gallery[Math.Clamp(_selectedImage, 0, _product.Gallery.Count - 1)];
+
+    private ProductVariantDto? SelectedVariant => _product?.FindVariant(_selectedOptionValues);
+
+    private bool IsOutOfStock => SelectedVariant is { IsAvailable: false };
+
+    // -- Reviews -----------------------------------------------------------
+
+    private static readonly ProductReviewsDto EmptyReviews = new(0, 0, []);
+
+    private string? _loadedSlug;
+    private int? _productId;
+    private ProductReviewsDto _reviews = EmptyReviews;
+    private IReadOnlyList<ProductCardDto>? _relatedProducts;
+
+    private int? _editingReviewId;
+    private int _rating;
+    private string _comment = string.Empty;
+    private bool _submitting;
+    private List<string> _errors = [];
+    private string? _successMessage;
+    private ElementReference _commentTextarea;
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (Slug == _loadedSlug)
+            return Task.CompletedTask;
+
+        _loadedSlug = Slug;
+        return LoadProductAndReviewsAsync();
+    }
+
+    private async Task LoadProductAndReviewsAsync()
+    {
+        _product = await Sender.Send(new GetProductDetailQuery(Slug ?? string.Empty));
+
+        if (_product is null)
+        {
+            _productId = null;
+            _reviews = EmptyReviews;
+            _relatedProducts = null;
+
+            // Render the 404 page with a real 404 status rather than an empty product shell.
+            Navigation.NotFound();
+            return;
+        }
+
+        _productId = _product.Id;
+
+        // Independent reads — safe to run in parallel (data-access.md).
+        var reviewsTask = LoadReviewsAsync(_productId.Value);
+        var relatedTask = Sender.Send(new GetRelatedProductsQuery(_productId.Value));
+        await Task.WhenAll(reviewsTask, relatedTask);
+        _relatedProducts = relatedTask.Result;
+
+        // Reset per-product interactive state — Blazor reuses the component instance across
+        // /san-pham/a -> /san-pham/b navigations, and stale state (e.g. _selectedImage) can
+        // index past a shorter gallery on the new product.
+        _selectedImage = 0;
+        _activeTab = "desc";
+        _quantity = 1;
+        _selectedOptionValues = _product.Options.Select(o => o.Values.FirstOrDefault() ?? string.Empty).ToArray();
+        _cartErrors = [];
+        _cartMessage = null;
+        _addingToCart = false;
+    }
+
+    private void SelectOptionValue(int optionIndex, string value)
+    {
+        if (optionIndex < 0 || optionIndex >= _selectedOptionValues.Length)
+            return;
+
+        _selectedOptionValues[optionIndex] = value;
+    }
+
+    private void ClampQuantity() => _quantity = Math.Clamp(_quantity, 1, Cart.MaxQuantityPerItem);
+
+    private async Task AddToCartAsync(bool buyNow)
+    {
+        if (_product is null || _addingToCart) return;
+
+        _addingToCart = true;
+        _cartErrors = [];
+        _cartMessage = null;
+
+        try
+        {
+            // Copy: _selectedOptionValues is mutated in place by SelectOptionValue.
+            var selection = _selectedOptionValues.ToArray();
+            var quantity = Math.Clamp(_quantity, 1, Cart.MaxQuantityPerItem);
+
+            var result = await Sender.Send(
+                new AddToCartCommand(_product.Id, selection, quantity, CartAnonymousId));
+
+            if (result.IsSuccess)
+            {
+                CartState.Set(result.Value.ItemCount);   // header badge, no extra round trip
+
+                if (buyNow)
+                {
+                    Navigation.NavigateTo("/thanh-toan");
+                    return;                               // leave _addingToCart true; navigating away
+                }
+
+                _cartMessage = "Đã thêm sản phẩm vào giỏ hàng.";
+            }
+            else
+            {
+                _cartErrors = CollectErrors(result.ValidationErrors, result.Errors,
+                                            "Không thể thêm vào giỏ hàng.");
+            }
+        }
+        finally
+        {
+            if (!buyNow || _cartErrors.Count > 0) _addingToCart = false;
+        }
+    }
+
+    private async Task LoadReviewsAsync(int productId)
+    {
+        _reviews = await Sender.Send(new GetProductReviewsQuery(productId));
+
+        // D5 guarantees at most one pending review per (author, product), so the form is
+        // always in exactly one of two states, derived from the data rather than a click.
+        var pending = _reviews.Reviews.FirstOrDefault(r => r.IsPending);
+        if (pending is not null)
+        {
+            _editingReviewId = pending.Id;
+            _rating = pending.Rating;
+            _comment = pending.Comment;
+        }
+        else
+        {
+            _editingReviewId = null;
+            _rating = 0;
+            _comment = string.Empty;
+        }
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        if (_productId is not { } productId)
+            return;
+
+        _submitting = true;
+        _errors = [];
+        _successMessage = null;
+
+        try
+        {
+            if (_editingReviewId is { } reviewId)
+            {
+                var result = await Sender.Send(new EditProductReviewCommand(reviewId, _rating, _comment));
+                if (result.IsSuccess)
+                    _successMessage = "Đã cập nhật đánh giá. Đánh giá của bạn vẫn đang chờ duyệt.";
+                else
+                    _errors = CollectErrors(result.ValidationErrors, result.Errors, "Không thể cập nhật đánh giá.");
+            }
+            else
+            {
+                var result = await Sender.Send(new SubmitProductReviewCommand(productId, _rating, _comment));
+                if (result.IsSuccess)
+                    _successMessage = "Cảm ơn bạn! Đánh giá của bạn đang chờ duyệt.";
+                else
+                    _errors = CollectErrors(result.ValidationErrors, result.Errors, "Không thể gửi đánh giá.");
+            }
+
+            // Sequential, never Task.WhenAll. Re-running re-derives the edit state, so a race
+            // where the review was moderated (or already has a pending row) between render and
+            // submit self-corrects here rather than leaving the form stuck on stale state.
+            await LoadReviewsAsync(productId);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    /// <summary>Discards unsaved edits; does not leave edit mode — with a pending review there is no other mode to be in.</summary>
+    private void CancelEdit()
+    {
+        if (_editingReviewId is { } id)
+        {
+            var pending = _reviews.Reviews.FirstOrDefault(r => r.Id == id);
+            if (pending is not null)
+            {
+                _rating = pending.Rating;
+                _comment = pending.Comment;
+            }
+        }
+
+        _errors = [];
+        _successMessage = null;
+    }
+
+    /// <summary>
+    /// Scrolls/focuses the form instead of switching modes — the pending card's "Sửa đánh giá"
+    /// affordance is pure discoverability, since the form is already in edit mode for this row.
+    /// </summary>
+    private async Task FocusEditFormAsync(ProductReviewDto review) => await _commentTextarea.FocusAsync();
+
+    private static List<string> CollectErrors(
+        IEnumerable<Ardalis.Result.ValidationError> validationErrors, IEnumerable<string> errors, string fallback) =>
+        validationErrors.Select(e => e.ErrorMessage)
+            .Concat(errors)
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .DefaultIfEmpty(fallback)
+            .ToList();
+}

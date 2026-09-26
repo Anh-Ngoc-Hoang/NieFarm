@@ -1,0 +1,240 @@
+@page "/admin/product-categories"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.ProductCategories.Commands
+@using NieFarm.Application.Features.Admin.ProductCategories.Dtos
+@using NieFarm.Application.Features.Admin.ProductCategories.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Product Categories" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Product Categories</h1>
+        <p>Groups used by the shop filters and the product cards.</p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="OpenForCreate">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Category
+    </button>
+</div>
+
+@if (_pageError is not null)
+{
+    <div class="form-alert form-alert--error">@_pageError</div>
+}
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th style="width:120px;">Products</th>
+                <th style="width:120px;">Visible</th>
+                <th style="width:110px;">Sort</th>
+                <th style="width:120px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var category in _categories)
+            {
+                <tr>
+                    <td class="cell-primary">@category.Name</td>
+                    <td class="cell-muted">/@category.Slug</td>
+                    <td>@category.ProductCount</td>
+                    <td>
+                        @if (category.IsVisible)
+                        {
+                            <AdminBadge Text="Visible" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Hidden" Variant="muted" />
+                        }
+                    </td>
+                    <td class="cell-muted">@category.SortOrder</td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => OpenForEdit(category)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(category)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_categories.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No categories yet.</div>
+    }
+</div>
+
+@if (_formVisible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="category-form-title">
+        <div class="admin-modal__dialog">
+            <div class="admin-modal__head">
+                <h2 id="category-form-title">@(_model.Id is null ? "Add Category" : "Edit Category")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="() => _formVisible = false">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                <div class="form-grid form-grid--2">
+                    <div>
+                        <label class="form-label-admin" for="c-name">Name *</label>
+                        <input id="c-name" class="form-control-admin" @bind="_model.Name" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="c-slug">Slug</label>
+                        <input id="c-slug" class="form-control-admin" @bind="_model.Slug"
+                               placeholder="Leave blank to generate from the name" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="c-sort">Sort order</label>
+                        <input id="c-sort" class="form-control-admin" type="number" min="0"
+                               @bind="_model.SortOrder" />
+                    </div>
+                </div>
+
+                <label class="form-check-admin" style="margin-top:16px;">
+                    <input type="checkbox" @bind="_model.IsVisible" /> Visible on the site
+                </label>
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="() => _formVisible = false"
+                        disabled="@_saving">
+                    Cancel
+                </button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete category?"
+              Message="@($"Delete \"{_deleteTarget?.Name}\"? This cannot be undone.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public bool IsVisible { get; set; } = true;
+        public int SortOrder { get; set; }
+    }
+
+    private List<ProductCategoryDto> _categories = [];
+    private FormModel _model = new();
+    private List<string> _errors = [];
+    private string? _pageError;
+
+    private bool _formVisible;
+    private bool _saving;
+
+    private ConfirmModal _confirmModal = default!;
+    private ProductCategoryDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync() =>
+        _categories = await Sender.Send(new GetProductCategoriesQuery());
+
+    private void OpenForCreate()
+    {
+        _model = new FormModel { SortOrder = _categories.Count };
+        _errors = [];
+        _formVisible = true;
+    }
+
+    private void OpenForEdit(ProductCategoryDto category)
+    {
+        _model = new FormModel
+        {
+            Id = category.Id,
+            Name = category.Name,
+            Slug = category.Slug,
+            IsVisible = category.IsVisible,
+            SortOrder = category.SortOrder
+        };
+        _errors = [];
+        _formVisible = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var result = await Sender.Send(new SaveProductCategoryCommand(
+                _model.Id, _model.Name ?? string.Empty, _model.Slug, _model.IsVisible, _model.SortOrder));
+
+            if (!result.IsSuccess)
+            {
+                _errors = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .DefaultIfEmpty("Could not save the category.")
+                    .ToList();
+                return;
+            }
+
+            _formVisible = false;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void AskDelete(ProductCategoryDto category)
+    {
+        _pageError = null;
+        _deleteTarget = category;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteProductCategoryCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _pageError = result.Errors.FirstOrDefault() ?? "Could not delete the category.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

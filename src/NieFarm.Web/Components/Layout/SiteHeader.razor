@@ -1,0 +1,214 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using NieFarm.Web.Services.Cart
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject CartState CartState
+
+@*
+    Sticky top navigation shared by every public page.
+    Nav items and the active-underline treatment follow the Stitch screens.
+*@
+
+<header class="fixed top-0 w-full z-50 bg-deep-red border-b border-amber-gold">
+    <div class="flex justify-between items-center h-20 px-gutter max-w-container-max mx-auto">
+
+        <a class="font-headline-sm text-headline-sm font-bold text-white" href="/">Nie Farm Việt Nam</a>
+
+        <nav class="hidden md:flex items-center gap-8">
+            @foreach (var item in NavItems)
+            {
+                <a class="@(IsActive(item) ? ActiveLink : InactiveLink)" href="@item.Href"
+                   aria-current="@(IsActive(item) ? "page" : null)">
+                    @item.Label
+                </a>
+            }
+        </nav>
+
+        <div class="flex items-center gap-4">
+            <a class="relative inline-flex text-white p-2" href="/thanh-toan" aria-label="Giỏ hàng (@CartState.Count sản phẩm)">
+                <span class="material-symbols-outlined">shopping_cart</span>
+                @if (CartState.Count > 0)
+                {
+                    <span class="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-1 rounded-full bg-amber-gold text-deep-red text-[0.625rem] font-bold flex items-center justify-center leading-none">
+                        @CartState.Count
+                    </span>
+                }
+            </a>
+            <AuthorizeView>
+                <Authorized>
+                    <div class="relative hidden sm:block">
+                        <button type="button"
+                                class="inline-flex items-center gap-1 text-white/90 hover:text-amber-gold text-body-sm font-medium"
+                                aria-haspopup="true" aria-expanded="@_userMenuOpen" @onclick="ToggleUserMenu">
+                            <span class="material-symbols-outlined text-[20px]" aria-hidden="true">person</span>
+                            <span class="max-w-[10rem] truncate">@DisplayName(context)</span>
+                            <span class="material-symbols-outlined text-[20px]" aria-hidden="true">
+                                @(_userMenuOpen ? "keyboard_arrow_up" : "keyboard_arrow_down")
+                            </span>
+                        </button>
+                        @if (_userMenuOpen)
+                        {
+                            @* Full-viewport click-catcher so clicking anywhere outside the menu closes it. *@
+                            <div class="fixed inset-0 z-40" @onclick="CloseUserMenu"></div>
+                            <div class="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-soft-border py-1 z-50">
+                                <a class="flex items-center gap-2 px-4 py-2 text-body-sm text-on-surface hover:bg-cream-ivory"
+                                   href="/tai-khoan/don-hang" @onclick="CloseUserMenu">
+                                    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">receipt_long</span>
+                                    Đơn hàng của tôi
+                                </a>
+                                <AuthorizeView Roles="Admin,SuperAdmin" Context="adminContext">
+                                    <a class="flex items-center gap-2 px-4 py-2 text-body-sm text-on-surface hover:bg-cream-ivory"
+                                       href="/admin" @onclick="CloseUserMenu">
+                                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">admin_panel_settings</span>
+                                        Trang quản trị
+                                    </a>
+                                </AuthorizeView>
+                                @* Full page load: sign-out must reach the Razor Page that clears the cookie. *@
+                                <a class="flex items-center gap-2 px-4 py-2 text-body-sm text-on-surface hover:bg-cream-ivory"
+                                   href="/pages/tai-khoan/dang-xuat">
+                                    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
+                                    Đăng xuất
+                                </a>
+                            </div>
+                        }
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="hidden sm:inline-flex items-center gap-1 text-white/90 hover:text-amber-gold text-body-sm font-medium"
+                       href="/dang-nhap">
+                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">login</span>
+                        Đăng nhập
+                    </a>
+                </NotAuthorized>
+            </AuthorizeView>
+            <button type="button" class="md:hidden text-white p-2" aria-label="Mở menu"
+                    aria-expanded="@_mobileMenuOpen" @onclick="ToggleMobileMenu">
+                <span class="material-symbols-outlined">@(_mobileMenuOpen ? "close" : "menu")</span>
+            </button>
+        </div>
+    </div>
+
+    @* Mobile drawer — the desktop nav collapses to a stacked list below md. *@
+    @if (_mobileMenuOpen)
+    {
+        <nav class="md:hidden bg-deep-red border-t border-amber-gold/40 px-gutter pb-6 pt-2 flex flex-col gap-1">
+            @foreach (var item in NavItems)
+            {
+                <a class="@(IsActive(item) ? MobileActiveLink : MobileInactiveLink)" href="@item.Href"
+                   aria-current="@(IsActive(item) ? "page" : null)" @onclick="CloseMobileMenu">
+                    @item.Label
+                </a>
+            }
+            <AuthorizeView>
+                <Authorized>
+                    <a class="@MobileInactiveLink flex items-center gap-2" href="/tai-khoan/don-hang" @onclick="CloseMobileMenu">
+                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">receipt_long</span>
+                        Đơn hàng của tôi
+                    </a>
+                    <AuthorizeView Roles="Admin,SuperAdmin" Context="adminContext">
+                        <a class="@MobileInactiveLink flex items-center gap-2" href="/admin" @onclick="CloseMobileMenu">
+                            <span class="material-symbols-outlined text-[20px]" aria-hidden="true">admin_panel_settings</span>
+                            Trang quản trị
+                        </a>
+                    </AuthorizeView>
+                    <a class="@MobileInactiveLink flex items-center gap-2" href="/pages/tai-khoan/dang-xuat">
+                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
+                        Đăng xuất
+                    </a>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="@MobileInactiveLink" href="/dang-nhap" @onclick="CloseMobileMenu">Đăng nhập</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </nav>
+    }
+</header>
+
+@code {
+    private const string InactiveLink =
+        "text-white/90 font-medium hover:text-amber-gold transition-colors duration-250 font-body-lg text-body-lg";
+
+    private const string ActiveLink =
+        "text-white font-bold border-b-2 border-amber-gold pb-1 font-body-lg text-body-lg";
+
+    private const string MobileInactiveLink =
+        "text-white/90 font-medium hover:text-amber-gold transition-colors duration-250 py-3 border-b border-white/10";
+
+    private const string MobileActiveLink =
+        "text-amber-gold font-bold py-3 border-b border-white/10";
+
+    private bool _mobileMenuOpen;
+    private bool _userMenuOpen;
+    private string _path = "/";
+
+    /// <summary>
+    /// <paramref name="Prefixes"/> lists the route prefixes that light the item up; empty means
+    /// the item only matches the site root, and a fragment link never highlights.
+    /// </summary>
+    private sealed record NavItem(string Label, string Href, string[] Prefixes, bool IsFragment = false);
+
+    private static readonly NavItem[] NavItems =
+    [
+        new("Giới thiệu", "/", []),
+        new("Quy trình", "/quy-trinh", ["/quy-trinh"]),
+        // The design underlines "Sản phẩm" on the detail page as well as the shop listing.
+        new("Sản phẩm", "/cua-hang", ["/cua-hang", "/san-pham"]),
+        new("Kiến thức", "/kien-thuc", ["/kien-thuc", "/bai-viet"]),
+        new("Hoạt động", "/hoat-dong", ["/hoat-dong"]),
+        new("Liên hệ", "/#lien-he", [], IsFragment: true)
+    ];
+
+    protected override void OnInitialized()
+    {
+        UpdatePath();
+        Navigation.LocationChanged += OnLocationChanged;
+        CartState.OnChange += HandleCartChanged;
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdatePath();
+        _mobileMenuOpen = false;
+        _userMenuOpen = false;
+        StateHasChanged();
+    }
+
+    private void UpdatePath() =>
+        _path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+
+    private bool IsActive(NavItem item)
+    {
+        if (item.IsFragment)
+        {
+            return false;
+        }
+
+        if (item.Prefixes.Length == 0)
+        {
+            return _path == "/";
+        }
+
+        return item.Prefixes.Any(p =>
+            _path.Equals(p, StringComparison.OrdinalIgnoreCase)
+            || _path.StartsWith(p + "/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string DisplayName(AuthenticationState s) =>
+        s.User.FindFirst("FullName")?.Value ?? s.User.Identity?.Name ?? "Tài khoản";
+
+    private void ToggleMobileMenu() => _mobileMenuOpen = !_mobileMenuOpen;
+
+    private void CloseMobileMenu() => _mobileMenuOpen = false;
+
+    private void ToggleUserMenu() => _userMenuOpen = !_userMenuOpen;
+
+    private void CloseUserMenu() => _userMenuOpen = false;
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        CartState.OnChange -= HandleCartChanged;
+    }
+}

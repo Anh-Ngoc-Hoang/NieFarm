@@ -1,0 +1,6 @@
+@* Single source of the admin tab-title format, so pages only supply their own segment. *@
+<PageTitle>@Title | NieFarm Admin</PageTitle>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+}

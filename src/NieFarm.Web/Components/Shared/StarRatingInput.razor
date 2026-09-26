@@ -1,0 +1,57 @@
+@*
+    Five-star rating input for the review submission/edit form. A separate component from
+    StarRating.razor (which is presentational, role="img") rather than a mode on it — mixing an
+    input role into a presentational component would muddy both. Built as a radiogroup of real
+    radio inputs so keyboard (arrow keys) and screen-reader (aria-checked) behaviour comes for
+    free, which a row of <button>s would need extra work to match.
+*@
+
+<fieldset class="inline-flex items-center gap-1 @CssClass" role="radiogroup" aria-label="Chọn số sao đánh giá" disabled="@Disabled">
+    <legend class="sr-only">Chọn số sao đánh giá</legend>
+    @for (var i = 1; i <= 5; i++)
+    {
+        var star = i;
+        var inputId = $"star-rating-{_groupId}-{star}";
+        var filled = Value >= star;
+
+        <span class="inline-flex">
+            <input type="radio" id="@inputId" name="@_groupId" class="sr-only peer"
+                   checked="@(Value == star)" disabled="@Disabled"
+                   @onchange="() => SetValueAsync(star)" />
+            <label for="@inputId"
+                   class="flex items-center justify-center min-w-[44px] min-h-[44px] rounded-md transition-colors duration-150 @(Disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-surface-container-low")">
+                <span class="material-symbols-outlined @SizeClass @(filled ? "icon-fill text-amber-gold" : "text-on-surface-variant")"
+                      aria-hidden="true">star</span>
+                <span class="sr-only">@star sao</span>
+            </label>
+        </span>
+    }
+</fieldset>
+
+@code {
+    [Parameter]
+    public int Value { get; set; }
+
+    [Parameter]
+    public EventCallback<int> ValueChanged { get; set; }
+
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter]
+    public string SizeClass { get; set; } = "text-2xl";
+
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    private readonly string _groupId = Guid.NewGuid().ToString("N");
+
+    private async Task SetValueAsync(int star)
+    {
+        if (Disabled)
+            return;
+
+        Value = star;
+        await ValueChanged.InvokeAsync(star);
+    }
+}

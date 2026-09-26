@@ -1,0 +1,256 @@
+@using NieFarm.Application.Features.Admin.ArticleCategories.Dtos
+@using NieFarm.Application.Features.Admin.Articles.Commands
+@using NieFarm.Application.Features.Admin.Articles.Dtos
+@using NieFarm.Application.Features.Admin.Articles.Queries
+@inject ISender Sender
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="article-form-title">
+        <div class="admin-modal__dialog admin-modal__dialog--wide">
+            <div class="admin-modal__head">
+                <h2 id="article-form-title">@(_model.Id is null ? "Add Article" : "Edit Article")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="CancelAsync">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                <div class="form-grid form-grid--2">
+                    <div>
+                        <label class="form-label-admin" for="a-title">Title *</label>
+                        <input id="a-title" class="form-control-admin" @bind="_model.Title" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="a-slug">Slug</label>
+                        <input id="a-slug" class="form-control-admin" @bind="_model.Slug"
+                               placeholder="Leave blank to generate from the title" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="a-category">Category *</label>
+                        <select id="a-category" class="form-control-admin" @bind="_model.CategoryId">
+                            <option value="0">Select a category…</option>
+                            @foreach (var category in Categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="a-author">Author *</label>
+                        <input id="a-author" class="form-control-admin" @bind="_model.Author" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="a-date">Publish date *</label>
+                        <input id="a-date" class="form-control-admin" type="date" @bind="_model.PublishedOn" />
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin" for="a-summary">Summary *</label>
+                    <textarea id="a-summary" class="form-control-admin" style="min-height:72px;"
+                              @bind="_model.Summary"></textarea>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        @* Unmounted with the modal so each open gets a fresh InputFile. *@
+                        <SingleImageField @ref="_cardImageField"
+                                          Label="Card thumbnail"
+                                          Subfolder="@ArticleImageLimits.Subfolder"
+                                          MaxBytes="ArticleImageLimits.MaxImageBytes"
+                                          Value="@_model.ImageUrl"
+                                          ValueChanged="url => _model.ImageUrl = url"
+                                          PersistedValue="@_persistedImageUrl"
+                                          Disabled="_saving"
+                                          UploadingChanged="value => _cardUploading = value" />
+                        <label class="form-label-admin" style="margin-top:10px;" for="a-alt">Thumbnail alt text</label>
+                        <input id="a-alt" class="form-control-admin" @bind="_model.ImageAlt" />
+                    </div>
+                    <div>
+                        <SingleImageField @ref="_heroImageField"
+                                          Label="Hero image"
+                                          Subfolder="@ArticleImageLimits.Subfolder"
+                                          MaxBytes="ArticleImageLimits.MaxImageBytes"
+                                          Value="@_model.HeroImageUrl"
+                                          ValueChanged="url => _model.HeroImageUrl = url"
+                                          PersistedValue="@_persistedHeroImageUrl"
+                                          Disabled="_saving"
+                                          UploadingChanged="value => _heroUploading = value" />
+                        <label class="form-label-admin" style="margin-top:10px;" for="a-hero-alt">Hero alt text</label>
+                        <input id="a-hero-alt" class="form-control-admin" @bind="_model.HeroImageAlt" />
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin" for="a-body">Body (HTML)</label>
+                    <textarea id="a-body" class="form-control-admin" style="min-height:220px;font-family:ui-monospace,monospace;font-size:13px;"
+                              @bind="_model.Body"></textarea>
+                    <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                        Paragraphs, headings and lists as HTML. This is rendered as markup on the public
+                        page, so only paste content you trust until sanitisation is added.
+                    </div>
+                </div>
+
+                <label class="form-check-admin" style="margin-top:16px;">
+                    <input type="checkbox" @bind="_model.IsPublished" /> Published
+                </label>
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="CancelAsync" disabled="@_saving">
+                    Cancel
+                </button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync"
+                        disabled="@(_saving || _cardUploading || _heroUploading)">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<ArticleCategoryDto> Categories { get; set; } = [];
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public int CategoryId { get; set; }
+        public string Author { get; set; } = string.Empty;
+        public string Summary { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
+        public string ImageAlt { get; set; } = string.Empty;
+        public string HeroImageUrl { get; set; } = string.Empty;
+        public string HeroImageAlt { get; set; } = string.Empty;
+        public string Body { get; set; } = string.Empty;
+        public DateTime PublishedOn { get; set; } = DateTime.Today;
+        public bool IsPublished { get; set; } = true;
+    }
+
+    private FormModel _model = new();
+    private SingleImageField? _cardImageField;
+    private SingleImageField? _heroImageField;
+    private string _persistedImageUrl = string.Empty;
+    private string _persistedHeroImageUrl = string.Empty;
+    private List<string> _errors = [];
+
+    private bool _visible;
+    private bool _saving;
+    private bool _cardUploading;
+    private bool _heroUploading;
+
+    public void OpenForCreate()
+    {
+        _model = new FormModel
+        {
+            CategoryId = Categories.FirstOrDefault()?.Id ?? 0,
+            Author = "Nie Farm"
+        };
+        _persistedImageUrl = string.Empty;
+        _persistedHeroImageUrl = string.Empty;
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public async Task OpenForEditAsync(int id)
+    {
+        var article = await Sender.Send(new GetArticleForEditQuery(id));
+        if (article is null)
+            return;
+
+        _model = new FormModel
+        {
+            Id = article.Id,
+            Title = article.Title,
+            Slug = article.Slug,
+            CategoryId = article.CategoryId,
+            Author = article.Author,
+            Summary = article.Summary,
+            ImageUrl = article.ImageUrl,
+            ImageAlt = article.ImageAlt,
+            HeroImageUrl = article.HeroImageUrl,
+            HeroImageAlt = article.HeroImageAlt,
+            Body = article.Body,
+            PublishedOn = article.PublishedOn.ToDateTime(TimeOnly.MinValue),
+            IsPublished = article.IsPublished
+        };
+
+        _persistedImageUrl = article.ImageUrl;
+        _persistedHeroImageUrl = article.HeroImageUrl;
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var result = await Sender.Send(new SaveArticleCommand(
+                _model.Id,
+                _model.Title ?? string.Empty,
+                _model.Slug,
+                _model.CategoryId,
+                _model.Author ?? string.Empty,
+                _model.Summary ?? string.Empty,
+                _model.ImageUrl ?? string.Empty,
+                _model.ImageAlt ?? string.Empty,
+                _model.HeroImageUrl ?? string.Empty,
+                _model.HeroImageAlt ?? string.Empty,
+                _model.Body ?? string.Empty,
+                DateOnly.FromDateTime(_model.PublishedOn),
+                _model.IsPublished));
+
+            if (!result.IsSuccess)
+            {
+                _errors = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .DefaultIfEmpty("Could not save the article.")
+                    .ToList();
+                return;
+            }
+
+            // Both uploads are now stored values, so the fields must not treat them as orphans.
+            _persistedImageUrl = _model.ImageUrl ?? string.Empty;
+            _persistedHeroImageUrl = _model.HeroImageUrl ?? string.Empty;
+
+            _visible = false;
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        // Removes uploads that were never persisted, before the fields unmount.
+        if (_cardImageField is not null)
+            await _cardImageField.DiscardAsync();
+
+        if (_heroImageField is not null)
+            await _heroImageField.DiscardAsync();
+
+        _visible = false;
+    }
+}

@@ -1,0 +1,56 @@
+@*
+    Site footer. The contact column doubles as the "Liên hệ" anchor target,
+    since the design has no standalone contact page.
+*@
+
+<footer class="bg-deep-red w-full py-section-padding-y mt-auto text-white" id="lien-he">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-8 max-w-container-max mx-auto px-gutter">
+
+        <div class="col-span-1 flex flex-col gap-4">
+            <span class="font-headline-sm text-headline-sm font-bold text-amber-gold">Nie Farm Việt Nam</span>
+            <p class="font-body-sm text-body-sm text-white/80">
+                Mang hương vị cà phê mộc nguyên bản từ đại ngàn đến từng không gian làm việc.
+            </p>
+            <p class="font-body-sm text-body-sm text-white/60 mt-auto pt-4">
+                © @DateTime.Now.Year Nie Farm Việt Nam. All rights reserved.
+            </p>
+        </div>
+
+        <div class="col-span-1 flex flex-col gap-3 font-body-sm text-body-sm">
+            <h2 class="font-label-bold text-label-bold text-amber-gold mb-2 uppercase tracking-wider">Thông tin</h2>
+            <a class="@FooterLink" href="/hoat-dong">Hoạt động</a>
+            <a class="@FooterLink" href="/tra-cuu-don-hang">Tra cứu đơn hàng</a>
+            <a class="@FooterLink" href="/chinh-sach-bao-mat">Chính sách bảo mật</a>
+            <a class="@FooterLink" href="/dieu-khoan-su-dung">Điều khoản sử dụng</a>
+        </div>
+
+        <div class="col-span-1 flex flex-col gap-3 font-body-sm text-body-sm">
+            <h2 class="font-label-bold text-label-bold text-amber-gold mb-2 uppercase tracking-wider">Hợp tác</h2>
+            <a class="@FooterLink" href="/tuyen-dung">Tuyển dụng</a>
+            <a class="@FooterLink" href="/hop-tac-dai-ly">Hợp tác đại lý</a>
+        </div>
+
+        <div class="col-span-1 flex flex-col gap-3 font-body-sm text-body-sm">
+            <h2 class="font-label-bold text-label-bold text-amber-gold mb-2 uppercase tracking-wider">Liên hệ</h2>
+            <p class="flex items-start gap-2 text-white/80">
+                <span class="material-symbols-outlined text-[18px] text-amber-gold" aria-hidden="true">location_on</span>
+                <span>Thôn 2, Xã Ea Kao, Thành phố Buôn Ma Thuột, Đắk Lắk</span>
+            </p>
+            <a class="flex items-center gap-2 text-white/80 hover:text-amber-gold transition-all duration-250"
+               href="tel:+84901234567">
+                <span class="material-symbols-outlined text-[18px] text-amber-gold" aria-hidden="true">call</span>
+                <span>090 123 4567</span>
+            </a>
+            <a class="flex items-center gap-2 text-white/80 hover:text-amber-gold transition-all duration-250"
+               href="mailto:hello@@niefarm.vn">
+                <span class="material-symbols-outlined text-[18px] text-amber-gold" aria-hidden="true">mail</span>
+                <span>hello@@niefarm.vn</span>
+            </a>
+        </div>
+    </div>
+</footer>
+
+@code {
+    private const string FooterLink =
+        "text-white/80 hover:text-amber-gold transition-all duration-250";
+}

@@ -1,0 +1,24 @@
+@inject NavigationManager Navigation
+
+@*
+    Rendered by AuthorizeRouteView/AuthorizeView when the visitor is not signed in. Path-aware:
+    admin routes bounce to the admin sign-in, everything else to the customer sign-in.
+    forceLoad matters: the sign-in flow round-trips through a Razor Page, so the circuit must
+    be abandoned.
+*@
+
+@code {
+    protected override void OnInitialized()
+    {
+        var path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+
+        if (path.StartsWith("/admin", StringComparison.OrdinalIgnoreCase))
+        {
+            Navigation.NavigateTo("/admin/login", forceLoad: true);
+            return;
+        }
+
+        var returnUrl = Uri.EscapeDataString(path);
+        Navigation.NavigateTo($"/dang-nhap?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

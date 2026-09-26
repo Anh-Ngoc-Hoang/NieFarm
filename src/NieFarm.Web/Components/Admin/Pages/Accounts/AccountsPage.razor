@@ -1,0 +1,318 @@
+@page "/admin/accounts"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Accounts.Commands
+@using NieFarm.Application.Features.Admin.Accounts.Dtos
+@using NieFarm.Application.Features.Admin.Accounts.Queries
+@using NieFarm.Application.Features.Admin.Roles.Dtos
+@using NieFarm.Application.Features.Admin.Roles.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Accounts" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Accounts</h1>
+        <p>Staff accounts that can sign in to this admin.</p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="OpenForCreate">
+        <span class="material-symbols-outlined" aria-hidden="true">person_add</span> Add Account
+    </button>
+</div>
+
+@if (_pageError is not null)
+{
+    <div class="form-alert form-alert--error">@_pageError</div>
+}
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th style="width:160px;">Phone</th>
+                <th style="width:140px;">Role</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:120px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var account in _accounts)
+            {
+                <tr>
+                    <td class="cell-primary">@account.FullName</td>
+                    <td class="cell-muted">@account.Email</td>
+                    <td class="cell-muted">@(string.IsNullOrWhiteSpace(account.PhoneNumber) ? "—" : account.PhoneNumber)</td>
+                    <td>
+                        @if (string.IsNullOrWhiteSpace(account.Role))
+                        {
+                            <AdminBadge Text="No role" Variant="muted" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="@account.Role" Variant="muted" />
+                        }
+                    </td>
+                    <td>
+                        @if (account.IsActive)
+                        {
+                            <AdminBadge Text="Active" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Disabled" Variant="warning" />
+                        }
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => OpenForEdit(account)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(account)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_accounts.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No accounts yet.</div>
+    }
+</div>
+
+@if (_formVisible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="account-form-title">
+        <div class="admin-modal__dialog">
+            <div class="admin-modal__head">
+                <h2 id="account-form-title">@(_model.Id is null ? "Add Account" : "Edit Account")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="() => _formVisible = false">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                <div class="form-grid form-grid--2">
+                    <div>
+                        <label class="form-label-admin" for="acc-name">Full name *</label>
+                        <input id="acc-name" class="form-control-admin" @bind="_model.FullName" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="acc-email">Email *</label>
+                        <input id="acc-email" class="form-control-admin" type="email" @bind="_model.Email"
+                               disabled="@(_model.Id is not null)" />
+                        @if (_model.Id is not null)
+                        {
+                            <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                                The sign-in email cannot be changed here.
+                            </div>
+                        }
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="acc-phone">Phone</label>
+                        <input id="acc-phone" class="form-control-admin" @bind="_model.PhoneNumber" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="acc-role">Role *</label>
+                        <select id="acc-role" class="form-control-admin" @bind="_model.Role">
+                            @foreach (var role in _roles.Where(r => r.Name is "Admin" or "SuperAdmin"))
+                            {
+                                <option value="@role.Name">@role.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="acc-password">
+                            @(_model.Id is null ? "Password *" : "New password")
+                        </label>
+                        <input id="acc-password" class="form-control-admin" type="password"
+                               @bind="_model.Password" autocomplete="new-password" />
+                        @if (_model.Id is not null)
+                        {
+                            <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                                Leave blank to keep the current password.
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @if (_model.Id is not null)
+                {
+                    <label class="form-check-admin" style="margin-top:16px;">
+                        <input type="checkbox" @bind="_model.IsActive" /> Account is active
+                    </label>
+                }
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="() => _formVisible = false"
+                        disabled="@_saving">
+                    Cancel
+                </button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete account?"
+              Message="@($"Delete \"{_deleteTarget?.Email}\"? They will lose access immediately.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private sealed class FormModel
+    {
+        public string? Id { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string Role { get; set; } = "Admin";
+        public string? Password { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+
+    private List<AccountDto> _accounts = [];
+    private List<RoleDto> _roles = [];
+    private FormModel _model = new();
+    private List<string> _errors = [];
+    private string? _pageError;
+
+    private bool _formVisible;
+    private bool _saving;
+
+    private ConfirmModal _confirmModal = default!;
+    private AccountDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        // Sequential, not Task.WhenAll: both queries go through IdentityService's
+        // UserManager/RoleManager, which share one scoped DbContext (see data-access.md).
+        _accounts = await Sender.Send(new GetAccountsQuery());
+        _roles = await Sender.Send(new GetRolesQuery());
+    }
+
+    private void OpenForCreate()
+    {
+        _model = new FormModel { Role = "Admin" };
+        _errors = [];
+        _formVisible = true;
+    }
+
+    private void OpenForEdit(AccountDto account)
+    {
+        _model = new FormModel
+        {
+            Id = account.Id,
+            FullName = account.FullName,
+            Email = account.Email,
+            PhoneNumber = account.PhoneNumber,
+            Role = string.IsNullOrWhiteSpace(account.Role) ? "Admin" : account.Role,
+            IsActive = account.IsActive
+        };
+        _errors = [];
+        _formVisible = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            if (_model.Id is null)
+            {
+                var created = await Sender.Send(new CreateAccountCommand(
+                    _model.Email ?? string.Empty,
+                    _model.FullName ?? string.Empty,
+                    _model.Password ?? string.Empty,
+                    _model.Role,
+                    _model.PhoneNumber));
+
+                if (!created.IsSuccess)
+                {
+                    _errors = Messages(created.ValidationErrors.Select(e => e.ErrorMessage), created.Errors,
+                        "Could not create the account.");
+                    return;
+                }
+            }
+            else
+            {
+                var updated = await Sender.Send(new UpdateAccountCommand(
+                    _model.Id,
+                    _model.FullName ?? string.Empty,
+                    _model.Password,
+                    _model.Role,
+                    _model.IsActive,
+                    _model.PhoneNumber));
+
+                if (!updated.IsSuccess)
+                {
+                    _errors = Messages(updated.ValidationErrors.Select(e => e.ErrorMessage), updated.Errors,
+                        "Could not update the account.");
+                    return;
+                }
+            }
+
+            _formVisible = false;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static List<string> Messages(
+        IEnumerable<string> validationErrors, IEnumerable<string> errors, string fallback) =>
+        validationErrors.Concat(errors)
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .DefaultIfEmpty(fallback)
+            .ToList();
+
+    private void AskDelete(AccountDto account)
+    {
+        _pageError = null;
+        _deleteTarget = account;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteAccountCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _pageError = result.Errors.FirstOrDefault() ?? "Could not delete the account.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

@@ -1,0 +1,50 @@
+@page "/admin/login"
+@layout AdminLoginLayout
+
+<PageTitle>Sign In | NieFarm Admin</PageTitle>
+
+<div class="login-card">
+    <div class="login-brand">
+        <span class="admin-sidebar__brand-mark">
+            <span class="material-symbols-outlined" aria-hidden="true">eco</span>
+        </span>
+        <span class="login-brand__text">NieFarm Admin</span>
+    </div>
+    <p class="login-hint">Sign in to manage the catalog, content and orders.</p>
+
+    @if (Error is not null)
+    {
+        <div class="form-alert form-alert--error">@ErrorMessage</div>
+    }
+
+    @*
+        A plain HTML form, posted to the Razor Page that owns SignInManager. A Blazor
+        EditForm cannot set the auth cookie, because the circuit has no HTTP response.
+    *@
+    <form action="/pages/admin/login" method="post">
+        <div class="login-field">
+            <label class="form-label-admin" for="Email">Email</label>
+            <input class="form-control-admin" id="Email" name="Email" type="email"
+                   placeholder="you@@niefarm.vn" required autofocus autocomplete="username" />
+        </div>
+        <div class="login-field">
+            <label class="form-label-admin" for="Password">Password</label>
+            <input class="form-control-admin" id="Password" name="Password" type="password"
+                   placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <label class="login-remember">
+            <input type="checkbox" name="RememberMe" value="true" /> Remember me
+        </label>
+        <button class="btn-admin login-submit" type="submit">Sign In</button>
+    </form>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+
+    private string ErrorMessage => Error switch
+    {
+        "locked" => "This account is temporarily locked after too many failed attempts. Try again later.",
+        _ => "Invalid email or password. Please try again."
+    };
+}

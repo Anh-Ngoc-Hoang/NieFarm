@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NieFarm.Application/NieFarm.Application.csproj" />
+    <Project Path="src/NieFarm.Domain/NieFarm.Domain.csproj" />
+    <Project Path="src/NieFarm.Infrastructure/NieFarm.Infrastructure.csproj" />
+    <Project Path="src/NieFarm.Web/NieFarm.Web.csproj" />
+  </Folder>
+</Solution>

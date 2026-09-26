@@ -1,0 +1,57 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+
+<header class="admin-topbar">
+    <button class="admin-topbar__toggle" type="button" @onclick="OnToggleSidebar" aria-label="Toggle menu">
+        <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+    </button>
+
+    <div class="admin-topbar__spacer"></div>
+
+    <button class="admin-topbar__user" type="button" @onclick="ToggleMenu"
+            aria-haspopup="true" aria-expanded="@_menuOpen">
+        <span class="admin-avatar">@_initials</span>
+        <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+    </button>
+
+    @if (_menuOpen)
+    {
+        <ul class="admin-menu">
+            <li><span class="admin-menu__label">@_userName</span></li>
+            <li class="admin-menu__divider"></li>
+            <li><a href="/">View site</a></li>
+            <li><a href="/admin/accounts">Accounts</a></li>
+            <li class="admin-menu__divider"></li>
+            @* A full page load: sign-out has to reach the Razor Page that clears the cookie. *@
+            <li><a href="/pages/admin/logout">Sign out</a></li>
+        </ul>
+    }
+</header>
+
+@code {
+    [Parameter] public EventCallback OnToggleSidebar { get; set; }
+
+    private bool _menuOpen;
+    private string _userName = "Admin";
+    private string _initials = "A";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        // FullName is added by AppUserClaimsPrincipalFactory; fall back to the sign-in name.
+        _userName = state.User.FindFirst("FullName")?.Value
+                    ?? state.User.Identity?.Name
+                    ?? "Admin";
+
+        _initials = string.Concat(
+            _userName.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Take(2)
+                .Select(word => char.ToUpperInvariant(word[0])));
+
+        if (_initials.Length == 0)
+            _initials = "A";
+    }
+
+    private void ToggleMenu() => _menuOpen = !_menuOpen;
+}

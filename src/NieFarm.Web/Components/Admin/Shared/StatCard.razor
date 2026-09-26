@@ -1,0 +1,17 @@
+<div class="admin-card">
+    <div class="stat-card">
+        <div class="stat-card__icon">
+            <span class="material-symbols-outlined" aria-hidden="true">@Icon</span>
+        </div>
+        <div>
+            <div class="stat-card__value">@Value</div>
+            <div class="stat-card__label">@Label</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+}

@@ -1,0 +1,64 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.Authorization
+@using NieFarm.Infrastructure.Identity
+@inject NavigationManager Navigation
+
+<HeadContent>
+    <link rel="stylesheet" href="@Assets["admin/admin.css"]" />
+</HeadContent>
+
+<AuthorizeView Roles="@AdminRolesValue">
+    <Authorized>
+        <div class="admin-app @(_sidebarOpen ? "sidebar-open" : null)" @onkeydown="HandleKeyDown">
+            <div class="admin-backdrop" @onclick="CloseSidebar"></div>
+            <AdminSidebar />
+            <div class="admin-main">
+                <AdminTopbar OnToggleSidebar="ToggleSidebar" />
+                <main class="admin-content">
+                    @Body
+                </main>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <RedirectToLogin />
+    </NotAuthorized>
+</AuthorizeView>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private const string AdminRolesValue = $"{AdminRoles.Admin},{AdminRoles.SuperAdmin}";
+
+    private bool _sidebarOpen;
+
+    protected override void OnInitialized() => Navigation.LocationChanged += HandleLocationChanged;
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+
+    private void CloseSidebar() => _sidebarOpen = false;
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CloseSidebar();
+    }
+
+    // Navigating always dismisses the mobile drawer. Keeping this in component state means
+    // it survives circuit navigation instead of accumulating document-level JS handlers.
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (!_sidebarOpen)
+            return;
+
+        _sidebarOpen = false;
+        StateHasChanged();
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= HandleLocationChanged;
+}

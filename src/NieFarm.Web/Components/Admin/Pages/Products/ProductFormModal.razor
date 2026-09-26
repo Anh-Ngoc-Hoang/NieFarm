@@ -1,0 +1,1006 @@
+@using NieFarm.Application.Common.Images
+@using NieFarm.Application.Common.Interfaces
+@using NieFarm.Application.Features.Admin.ProductCategories.Dtos
+@using NieFarm.Application.Features.Admin.Products.Commands
+@using NieFarm.Application.Features.Admin.Products.Dtos
+@using NieFarm.Application.Features.Admin.Products.Queries
+@inject ISender Sender
+@inject IImageStorage ImageStorage
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="product-form-title">
+        <div class="admin-modal__dialog admin-modal__dialog--wide">
+            <div class="admin-modal__head">
+                <h2 id="product-form-title">@(_model.Id is null ? "Add Product" : "Edit Product")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="CancelAsync">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            @* Outside the scrollable body, so it stays put while a long variant table scrolls. *@
+            <div class="admin-tabs" role="tablist" aria-label="Product form sections">
+                @foreach (var tab in Tabs)
+                {
+                    var isActive = _activeTab == tab.Key;
+                    <button type="button" role="tab"
+                            id="@($"product-tab-{tab.Key}")"
+                            class="admin-tab @(isActive ? "is-active" : null)"
+                            aria-selected="@(isActive ? "true" : "false")"
+                            aria-controls="@($"product-pane-{tab.Key}")"
+                            @onclick="() => _activeTab = tab.Key">
+                        @tab.Label
+                        @if (HasErrorIn(tab.Key))
+                        {
+                            <span class="admin-tab__dot" aria-label="This section has errors"></span>
+                        }
+                    </button>
+                }
+            </div>
+
+            <div class="admin-modal__body">
+                @* ---------------- Tab 1 — General ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.General ? "is-active" : null)"
+                     id="product-pane-General" role="tabpanel"
+                     aria-labelledby="product-tab-General">
+                <div class="form-grid form-grid--2">
+                    <div>
+                        <label class="form-label-admin" for="p-name">Name *</label>
+                        <input id="p-name" class="form-control-admin" @bind="_model.Name" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="p-slug">Slug</label>
+                        <input id="p-slug" class="form-control-admin" @bind="_model.Slug"
+                               placeholder="Leave blank to generate from the name" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="p-category">Category *</label>
+                        <select id="p-category" class="form-control-admin" @bind="_model.CategoryId">
+                            <option value="0">Select a category…</option>
+                            @foreach (var category in Categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="p-price">Price (₫) *</label>
+                        <input id="p-price" class="form-control-admin" type="number" min="0" step="1000"
+                               @bind="_model.Price" />
+                        @if (_variants.Count > 0)
+                        {
+                            <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                                Base price — used when the product has no options, and as the
+                                default for new combinations.
+                            </div>
+                        }
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="p-old-price">Old price (optional, strike-through)</label>
+                        <input id="p-old-price" class="form-control-admin" type="number" min="0" step="1000"
+                               @bind="_model.OldPrice" />
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            Shown struck through next to the price on the storefront. Must be
+                            higher than the price.
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="p-badge">Badge</label>
+                        <input id="p-badge" class="form-control-admin" @bind="_model.Badge"
+                               placeholder="Mới, Bán chạy…" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="p-sort">Sort order</label>
+                        <input id="p-sort" class="form-control-admin" type="number" min="0"
+                               @bind="_model.SortOrder" />
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;">
+                    @* Unmounted with the modal so each open gets a fresh InputFile. *@
+                    <SingleImageField @ref="_imageField"
+                                      Label="Product image"
+                                      Subfolder="@ProductImageLimits.Subfolder"
+                                      MaxBytes="ProductImageLimits.MaxImageBytes"
+                                      Value="@_model.ImageUrl"
+                                      ValueChanged="OnImageChanged"
+                                      PersistedValue="@_persistedImageUrl"
+                                      Disabled="_saving"
+                                      UploadingChanged="value => _uploading = value" />
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin" for="p-alt">Image alt text</label>
+                    <input id="p-alt" class="form-control-admin" @bind="_model.ImageAlt"
+                           placeholder="Describe the image for screen readers" />
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin">Additional gallery images</label>
+                    <div class="cell-muted" style="font-size:12px;margin-bottom:6px;">
+                        Shown in the image strip on the product page, after the main product
+                        image. Alt text is taken from the main image's alt text. JPG, PNG, WebP
+                        or GIF; max 5 MB each; up to @ProductImageLimits.MaxImages images.
+                    </div>
+
+                    @if (_galleryImages.Count > 0)
+                    {
+                        <div class="image-grid">
+                            @for (var i = 0; i < _galleryImages.Count; i++)
+                            {
+                                var idx = i;
+                                <div class="image-grid__item">
+                                    <img src="@_galleryImages[idx]" alt="Gallery image @(idx + 1)"
+                                         style="width:100%;height:100%;object-fit:cover;" />
+                                    <button type="button" class="btn-icon btn-icon--danger image-grid__remove"
+                                            title="Remove" disabled="@(_saving || _galleryUploading)"
+                                            @onclick="() => RemoveGalleryImageAsync(idx)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <InputFile @key="_galleryInputKey" multiple OnChange="OnGalleryImagesSelected"
+                               accept="@string.Join(",", ProductImageLimits.AllowedContentTypes)"
+                               class="form-control-admin" disabled="@(_saving || _galleryUploading)" />
+
+                    @if (_galleryUploading)
+                    {
+                        <div class="cell-muted" style="font-size:13px;margin-top:4px;">Uploading…</div>
+                    }
+
+                    @if (_galleryError is not null)
+                    {
+                        <div class="form-error">@_galleryError</div>
+                    }
+                </div>
+
+                <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:16px;">
+                    <label class="form-check-admin">
+                        <input type="checkbox" @bind="_model.IsVisible" /> Visible on the site
+                    </label>
+                    <label class="form-check-admin">
+                        <input type="checkbox" @bind="_model.IsFeatured" /> Featured on the home page
+                    </label>
+                </div>
+                </div>
+
+                @* ---------------- Tab 2 — Content ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.Content ? "is-active" : null)"
+                     id="product-pane-Content" role="tabpanel"
+                     aria-labelledby="product-tab-Content">
+
+                    <label class="form-label-admin">Summary</label>
+                    <div class="cell-muted" style="font-size:12px;margin-bottom:6px;">
+                        The short blurb on product cards. Keep it to a sentence or two.
+                    </div>
+                    @* Keyed so reopening the modal on another product remounts the editor —
+                       Quill never re-reads Value after it initialises. *@
+                    <RichTextEditor @key="@($"summary-{_editorKey}")"
+                                    Value="@_model.Summary"
+                                    ValueChanged="value => _model.Summary = value"
+                                    Toolbar="RichTextEditor.ToolbarKind.Minimal"
+                                    MinHeight="120"
+                                    Placeholder="Cà phê Arabica trồng ở độ cao 1.500m…" />
+
+                    <div style="margin-top:24px;">
+                        <label class="form-label-admin">Description</label>
+                        <div class="cell-muted" style="font-size:12px;margin-bottom:6px;">
+                            The full story shown on the product page.
+                        </div>
+                        <RichTextEditor @key="@($"description-{_editorKey}")"
+                                        Value="@_model.Description"
+                                        ValueChanged="value => _model.Description = value"
+                                        Toolbar="RichTextEditor.ToolbarKind.Full"
+                                        MinHeight="280"
+                                        Placeholder="Mô tả chi tiết sản phẩm…" />
+                    </div>
+                </div>
+
+                @* ---------------- Tab 3 — Specs & features ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.Specs ? "is-active" : null)"
+                     id="product-pane-Specs" role="tabpanel"
+                     aria-labelledby="product-tab-Specs">
+
+                    <label class="form-label-admin">Specifications</label>
+                    <div class="cell-muted" style="font-size:12px;margin-bottom:8px;">
+                        The "Thông số kỹ thuật" table on the product page — origin, weight,
+                        roast level and so on.
+                    </div>
+
+                    @foreach (var spec in _specs)
+                    {
+                        <div class="repeat-row" @key="spec">
+                            <input class="form-control-admin" value="@spec.Label"
+                                   placeholder="Label — Xuất xứ…"
+                                   @onchange="e => spec.Label = e.Value?.ToString() ?? string.Empty" />
+                            <input class="form-control-admin" value="@spec.Value"
+                                   placeholder="Value — Đắk Lắk…"
+                                   @onchange="e => spec.Value = e.Value?.ToString() ?? string.Empty" />
+                            <button class="btn-icon btn-icon--danger" type="button" title="Remove specification"
+                                    @onclick="() => _specs.Remove(spec)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    }
+
+                    <button class="btn-admin-outline btn-admin--sm" type="button"
+                            disabled="@(_specs.Count >= ProductSpecLimits.MaxSpecs)"
+                            @onclick="() => _specs.Add(new SpecRow())">
+                        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Specification
+                    </button>
+
+                    <div style="margin-top:28px;">
+                        <label class="form-label-admin">Key Features</label>
+                        <div class="cell-muted" style="font-size:12px;margin-bottom:8px;">
+                            The "Đặc điểm nổi bật" highlights — one short line each.
+                        </div>
+
+                        @for (var fi = 0; fi < _features.Count; fi++)
+                        {
+                            var featureIndex = fi;
+                            <div class="repeat-row">
+                                <input class="form-control-admin" value="@_features[featureIndex]"
+                                       placeholder="Rang mộc, không pha trộn…"
+                                       @onchange="e => _features[featureIndex] = e.Value?.ToString() ?? string.Empty" />
+                                <button class="btn-icon btn-icon--danger" type="button" title="Remove feature"
+                                        @onclick="() => _features.RemoveAt(featureIndex)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
+                            </div>
+                        }
+
+                        <button class="btn-admin-outline btn-admin--sm" type="button"
+                                disabled="@(_features.Count >= ProductSpecLimits.MaxFeatures)"
+                                @onclick="() => _features.Add(string.Empty)">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Feature
+                        </button>
+                    </div>
+                </div>
+
+                @* ---------------- Tab 4 — Options & variants ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.Options ? "is-active" : null)"
+                     id="product-pane-Options" role="tabpanel"
+                     aria-labelledby="product-tab-Options">
+                <div class="variant-section">
+                    <div class="variant-section__head">
+                        <h3>Options &amp; Variants</h3>
+                        <p class="cell-muted">
+                            Add an option such as <strong>Đơn vị</strong> or
+                            <strong>Mức độ xay</strong> to sell this product in several
+                            combinations, each with its own price. Leave empty for a single price.
+                        </p>
+                    </div>
+
+                    @if (_variantError is not null)
+                    {
+                        <div class="form-alert form-alert--error">@_variantError</div>
+                    }
+
+                    <div class="option-editor">
+                        @for (var oi = 0; oi < _options.Count; oi++)
+                        {
+                            var optionIndex = oi;
+                            var option = _options[optionIndex];
+
+                            <div class="option-row" @key="option">
+                                <div class="option-row__head">
+                                    <input class="form-control-admin" value="@option.Name"
+                                           placeholder="Option name — Đơn vị, Mức độ xay…"
+                                           @onchange="e => OnOptionNameChangedAsync(option, e)" />
+                                    <button class="btn-icon btn-icon--danger" type="button" title="Remove option"
+                                            @onclick="() => RemoveOptionAsync(optionIndex)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                    </button>
+                                </div>
+
+                                <div class="option-row__values">
+                                    @for (var vi = 0; vi < option.Values.Count; vi++)
+                                    {
+                                        var valueIndex = vi;
+                                        <div class="value-chip">
+                                            <input class="form-control-admin" value="@option.Values[valueIndex]"
+                                                   placeholder="Value — 500g, Xay mịn…"
+                                                   @onchange="e => OnOptionValueChangedAsync(option, valueIndex, e)" />
+                                            <button class="btn-icon btn-icon--danger" type="button" title="Remove value"
+                                                    @onclick="() => RemoveValueAsync(option, valueIndex)">
+                                                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                                            </button>
+                                        </div>
+                                    }
+
+                                    <button class="btn-admin-outline btn-admin--sm" type="button"
+                                            disabled="@(option.Values.Count >= ProductVariantLimits.MaxValuesPerOption)"
+                                            @onclick="() => AddValueAsync(option)">
+                                        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Value
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                        <button class="btn-admin-outline" type="button"
+                                disabled="@(_options.Count >= ProductVariantLimits.MaxOptions)"
+                                @onclick="AddOptionAsync">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Option
+                        </button>
+                    </div>
+
+                    @if (_variants.Count > 0)
+                    {
+                        <div class="variant-table-wrap">
+                            <table class="variant-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var option in NamedOptions())
+                                        {
+                                            <th>@option.Name</th>
+                                        }
+                                        <th style="width:150px;">Price (₫) *</th>
+                                        <th style="width:220px;">Image</th>
+                                        <th style="width:110px;">Available</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var row in _variants)
+                                    {
+                                        @* Keyed on the combination so a SingleImageField is never
+                                           reused across two different variants. *@
+                                        <tr @key="row.LabelKey">
+                                            @for (var li = 0; li < row.ValueLabels.Count; li++)
+                                            {
+                                                var label = row.ValueLabels[li];
+                                                <td data-label="@LabelFor(li)" class="cell-primary">@label</td>
+                                            }
+                                            <td data-label="Price">
+                                                <input class="form-control-admin" type="number" min="0" step="1000"
+                                                       @bind="row.Price" />
+                                            </td>
+                                            <td data-label="Image">
+                                                <SingleImageField Value="@row.ImageUrl"
+                                                                  ValueChanged="url => row.ImageUrl = url"
+                                                                  PersistedValue="@row.PersistedImageUrl"
+                                                                  Subfolder="@ProductImageLimits.Subfolder"
+                                                                  MaxBytes="ProductImageLimits.MaxImageBytes"
+                                                                  Label="@null"
+                                                                  HelpText="Optional — overrides the main photo."
+                                                                  Disabled="_saving"
+                                                                  UploadingChanged="OnVariantUploadingChanged" />
+                                            </td>
+                                            <td data-label="Available">
+                                                <label class="form-check-admin">
+                                                    <input type="checkbox" @bind="row.IsAvailable" />
+                                                    <span class="variant-table__available-text">In stock</span>
+                                                </label>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+                </div>
+            </div>
+
+            @* Pinned between the body and the footer: an error about a field on another tab
+               must not be scrolled out of sight. *@
+            @if (_errors.Count > 0)
+            {
+                <div class="admin-modal__errors">
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="CancelAsync" disabled="@_saving">
+                    Cancel
+                </button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync"
+                        disabled="@(_saving || _uploading || _variantUploads > 0 || _galleryUploading)">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<ProductCategoryDto> Categories { get; set; } = [];
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private enum FormTab { General, Content, Specs, Options }
+
+    private static readonly (FormTab Key, string Label)[] Tabs =
+    [
+        (FormTab.General, "General"),
+        (FormTab.Content, "Content"),
+        (FormTab.Specs, "Specs & Features"),
+        (FormTab.Options, "Options & Variants")
+    ];
+
+    /// <summary>
+    /// Words that place a server error on a tab, so the dot marker can point at it. Server
+    /// errors are a flat list of sentences with no field mapping, so this is a hint for the
+    /// eye — never a gate on submitting.
+    ///
+    /// Most specific first, and each error is claimed by one tab only: "Variant price cannot be
+    /// negative" mentions a price but belongs to Options, not General.
+    /// </summary>
+    private static readonly (FormTab Tab, string[] Hints)[] ErrorHints =
+    [
+        (FormTab.Options, ["option", "variant", "combination"]),
+        // Ahead of General: "A specification label is too long" must not be claimed by a
+        // General hint before this row is reached.
+        (FormTab.Specs, ["specification", "key feature"]),
+        (FormTab.Content, ["summary", "description"]),
+        (FormTab.General, ["name", "slug", "category", "price", "sort order", "badge", "image", "gallery"])
+    ];
+
+    private bool HasErrorIn(FormTab tab) => _errors.Any(error => TabFor(error) == tab);
+
+    private static FormTab? TabFor(string error)
+    {
+        foreach (var (tab, hints) in ErrorHints)
+        {
+            if (hints.Any(hint => error.Contains(hint, StringComparison.OrdinalIgnoreCase)))
+                return tab;
+        }
+
+        return null;
+    }
+
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public int CategoryId { get; set; }
+        public decimal Price { get; set; }
+        public decimal? OldPrice { get; set; }
+        public string ImageUrl { get; set; } = string.Empty;
+        public string ImageAlt { get; set; } = string.Empty;
+        public string Summary { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Badge { get; set; } = string.Empty;
+        public bool IsFeatured { get; set; }
+        public bool IsVisible { get; set; } = true;
+        public int SortOrder { get; set; }
+    }
+
+    /// <summary>A specification row while it is being edited. Mutable, so @key can track it.</summary>
+    private sealed class SpecRow
+    {
+        public string Label { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+    }
+
+    // Classes, not records: rows are edited field by field and each carries its own image state.
+    private sealed class OptionRow
+    {
+        public string Name { get; set; } = string.Empty;
+        public List<string> Values { get; set; } = [];
+    }
+
+    private sealed class VariantRow
+    {
+        public List<int> ValueIndexes { get; set; } = [];
+        public List<string> ValueLabels { get; set; } = [];
+        public decimal Price { get; set; }
+        public string ImageUrl { get; set; } = string.Empty;
+        public string PersistedImageUrl { get; set; } = string.Empty;
+        public bool IsAvailable { get; set; } = true;
+
+        public string LabelKey => string.Join(" / ", ValueLabels);
+        public string IndexKey => string.Join('|', ValueIndexes);
+    }
+
+    private FormModel _model = new();
+    private SingleImageField? _imageField;
+    private string _persistedImageUrl = string.Empty;
+    private List<string> _errors = [];
+    private bool _visible;
+    private bool _saving;
+    private bool _uploading;
+
+    private List<string> _galleryImages = [];
+    private HashSet<string> _persistedGalleryImages = new(StringComparer.OrdinalIgnoreCase);
+    private string _galleryInputKey = string.Empty;
+    private bool _galleryUploading;
+    private string? _galleryError;
+
+    private FormTab _activeTab = FormTab.General;
+
+    /// <summary>
+    /// Regenerated on every open so both editors remount. Quill seeds itself from Value once
+    /// and never re-reads it, so without a fresh key an edit would open showing the previously
+    /// edited product's copy.
+    /// </summary>
+    private Guid _editorKey = Guid.NewGuid();
+
+    private List<SpecRow> _specs = [];
+    private List<string> _features = [];
+
+    private List<OptionRow> _options = [];
+    private List<VariantRow> _variants = [];
+    private string? _variantError;
+    private int _variantUploads;
+
+    /// <summary>Value counts per option at the last rebuild, so a pure rename can be detected.</summary>
+    private List<int> _lastShape = [];
+
+    public void OpenForCreate()
+    {
+        _model = new FormModel { CategoryId = Categories.FirstOrDefault()?.Id ?? 0 };
+        _persistedImageUrl = string.Empty;
+        _errors = [];
+        ResetVariantState();
+        ResetFormChrome();
+        _specs = SeedSpecs(null);
+        _features = SeedFeatures(null);
+        _galleryImages = [];
+        _persistedGalleryImages = new(StringComparer.OrdinalIgnoreCase);
+        _galleryInputKey = Guid.NewGuid().ToString();
+        _galleryUploading = false;
+        _galleryError = null;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public async Task OpenForEditAsync(int id)
+    {
+        var product = await Sender.Send(new GetProductForEditQuery(id));
+        if (product is null)
+            return;
+
+        _model = new FormModel
+        {
+            Id = product.Id,
+            Name = product.Name,
+            Slug = product.Slug,
+            CategoryId = product.CategoryId,
+            Price = product.Price,
+            OldPrice = product.OldPrice,
+            ImageUrl = product.ImageUrl,
+            ImageAlt = product.ImageAlt,
+            Summary = product.Summary,
+            Description = product.Description,
+            Badge = product.Badge,
+            IsFeatured = product.IsFeatured,
+            IsVisible = product.IsVisible,
+            SortOrder = product.SortOrder
+        };
+
+        _persistedImageUrl = product.ImageUrl;
+        _errors = [];
+        ResetVariantState();
+        ResetFormChrome();
+        _specs = SeedSpecs(product.Specs);
+        _features = SeedFeatures(product.Features);
+        _galleryImages = [.. product.GalleryImageUrls];
+        _persistedGalleryImages = new(product.GalleryImageUrls, StringComparer.OrdinalIgnoreCase);
+        _galleryInputKey = Guid.NewGuid().ToString();
+        _galleryUploading = false;
+        _galleryError = null;
+
+        _options = product.Options
+            .Select(o => new OptionRow { Name = o.Name, Values = [.. o.Values] })
+            .ToList();
+
+        // The stored matrix is already complete, so it is loaded as-is rather than regenerated.
+        _variants = product.Variants
+            .Select(v => new VariantRow
+            {
+                ValueIndexes = [.. v.ValueIndexes],
+                ValueLabels = [.. v.ValueIndexes.Select((valueIndex, optionIndex) =>
+                    _options[optionIndex].Values[valueIndex])],
+                Price = v.Price,
+                ImageUrl = v.ImageUrl ?? string.Empty,
+                PersistedImageUrl = v.ImageUrl ?? string.Empty,
+                IsAvailable = v.IsAvailable
+            })
+            .ToList();
+
+        _lastShape = _options.Select(o => o.Values.Count).ToList();
+
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private void ResetVariantState()
+    {
+        _options = [];
+        _variants = [];
+        _lastShape = [];
+        _variantError = null;
+        _variantUploads = 0;
+    }
+
+    /// <summary>Every open starts on the first tab with fresh editors.</summary>
+    private void ResetFormChrome()
+    {
+        _activeTab = FormTab.General;
+        _editorKey = Guid.NewGuid();
+    }
+
+    // A blank starter row so the section is never an empty dead end; the domain drops it on save
+    // if it is left untouched.
+    private static List<SpecRow> SeedSpecs(IEnumerable<ProductSpecInput>? stored)
+    {
+        var rows = (stored ?? [])
+            .Select(s => new SpecRow { Label = s.Label, Value = s.Value })
+            .ToList();
+
+        return rows.Count > 0 ? rows : [new SpecRow()];
+    }
+
+    private static List<string> SeedFeatures(IEnumerable<string>? stored)
+    {
+        var rows = (stored ?? []).ToList();
+        return rows.Count > 0 ? rows : [string.Empty];
+    }
+
+    private void OnImageChanged(string url) => _model.ImageUrl = url;
+
+    private void OnVariantUploadingChanged(bool uploading)
+        => _variantUploads = Math.Max(0, _variantUploads + (uploading ? 1 : -1));
+
+    // ---------- Gallery editing ----------
+
+    private async Task OnGalleryImagesSelected(InputFileChangeEventArgs e)
+    {
+        _galleryError = null;
+        _galleryUploading = true;
+
+        try
+        {
+            IReadOnlyList<IBrowserFile> files;
+            try
+            {
+                files = e.GetMultipleFiles(ProductImageLimits.MaxImages);
+            }
+            catch (InvalidOperationException)
+            {
+                _galleryError = $"You can select at most {ProductImageLimits.MaxImages} images at once.";
+                return;
+            }
+
+            foreach (var file in files)
+            {
+                if (_galleryImages.Count >= ProductImageLimits.MaxImages)
+                {
+                    _galleryError = $"A product can have at most {ProductImageLimits.MaxImages} gallery images.";
+                    break;
+                }
+
+                if (!ProductImageLimits.AllowedContentTypes.Contains(file.ContentType))
+                {
+                    _galleryError = $"\"{file.Name}\" is not a supported image type.";
+                    continue;
+                }
+
+                if (file.Size > ProductImageLimits.MaxImageBytes)
+                {
+                    _galleryError = $"\"{file.Name}\" exceeds the {ProductImageLimits.MaxImageBytes / 1024 / 1024} MB limit.";
+                    continue;
+                }
+
+                try
+                {
+                    await using var stream = file.OpenReadStream(ProductImageLimits.MaxImageBytes);
+                    _galleryImages.Add(await ImageStorage.SaveAsync(stream, file.Name, ProductImageLimits.Subfolder));
+                }
+                catch (Exception)
+                {
+                    _galleryError = $"Failed to upload \"{file.Name}\".";
+                    continue;
+                }
+
+                StateHasChanged();
+            }
+        }
+        finally
+        {
+            _galleryUploading = false;
+            _galleryInputKey = Guid.NewGuid().ToString();
+        }
+    }
+
+    private async Task RemoveGalleryImageAsync(int idx)
+    {
+        if (idx < 0 || idx >= _galleryImages.Count)
+            return;
+
+        var url = _galleryImages[idx];
+        _galleryImages.RemoveAt(idx);
+
+        if (!_persistedGalleryImages.Contains(url) && ManagedImages.IsManagedImage(url, ProductImageLimits.Subfolder))
+            await ImageStorage.DeleteAsync(url); // never persisted, so a pure browser-session orphan
+    }
+
+    // ---------- Option editing ----------
+
+    private Task AddOptionAsync()
+    {
+        if (_options.Count >= ProductVariantLimits.MaxOptions)
+            return Task.CompletedTask;
+
+        _options.Add(new OptionRow { Values = [string.Empty] });
+        return RebuildVariantMatrixAsync();
+    }
+
+    private Task RemoveOptionAsync(int optionIndex)
+    {
+        _options.RemoveAt(optionIndex);
+        return RebuildVariantMatrixAsync();
+    }
+
+    private Task OnOptionNameChangedAsync(OptionRow option, ChangeEventArgs e)
+    {
+        option.Name = e.Value?.ToString() ?? string.Empty;
+        return RebuildVariantMatrixAsync();
+    }
+
+    private Task AddValueAsync(OptionRow option)
+    {
+        if (option.Values.Count >= ProductVariantLimits.MaxValuesPerOption)
+            return Task.CompletedTask;
+
+        option.Values.Add(string.Empty);
+        return RebuildVariantMatrixAsync();
+    }
+
+    private Task RemoveValueAsync(OptionRow option, int valueIndex)
+    {
+        option.Values.RemoveAt(valueIndex);
+        return RebuildVariantMatrixAsync();
+    }
+
+    private Task OnOptionValueChangedAsync(OptionRow option, int valueIndex, ChangeEventArgs e)
+    {
+        option.Values[valueIndex] = e.Value?.ToString() ?? string.Empty;
+        return RebuildVariantMatrixAsync();
+    }
+
+    /// <summary>Options that currently contribute a column, in display order.</summary>
+    private List<OptionRow> NamedOptions() =>
+        _options.Where(o => !string.IsNullOrWhiteSpace(o.Name)
+                            && o.Values.Any(v => !string.IsNullOrWhiteSpace(v)))
+                .ToList();
+
+    private string LabelFor(int columnIndex)
+    {
+        var named = NamedOptions();
+        return columnIndex < named.Count ? named[columnIndex].Name.Trim() : string.Empty;
+    }
+
+    /// <summary>
+    /// Regenerates the full combination table after any option edit, carrying over what the
+    /// admin already typed. Rows are matched on their value labels first; if the matrix still
+    /// has the same shape, the positional tuple is a second chance — that is what keeps a row's
+    /// price when a value is merely renamed.
+    /// </summary>
+    private async Task RebuildVariantMatrixAsync()
+    {
+        var normalised = _options
+            .Select(o => (
+                Name: o.Name.Trim(),
+                Values: o.Values.Select(v => v.Trim()).Where(v => v.Length > 0).ToList()))
+            .Where(o => o.Name.Length > 0 && o.Values.Count > 0)
+            .ToList();
+
+        if (normalised.Count == 0)
+        {
+            await DiscardPendingUploadsAsync(_variants);
+            _variants = [];
+            _lastShape = [];
+            _variantError = null;
+            return;
+        }
+
+        var counts = normalised.Select(o => o.Values.Count).ToList();
+        var total = counts.Aggregate(1, (acc, c) => acc * c);
+
+        if (total > ProductVariantLimits.MaxVariants)
+        {
+            // Leave the existing rows alone — the admin has to shrink the options first.
+            _variantError =
+                $"That is {total} combinations — the maximum is {ProductVariantLimits.MaxVariants}. Reduce the number of option values.";
+            return;
+        }
+
+        var shapeUnchanged = _lastShape.SequenceEqual(counts);
+
+        var byLabel = new Dictionary<string, VariantRow>();
+        var byIndex = new Dictionary<string, VariantRow>();
+        foreach (var row in _variants)
+        {
+            byLabel.TryAdd(row.LabelKey, row);
+            byIndex.TryAdd(row.IndexKey, row);
+        }
+
+        var rebuilt = new List<VariantRow>(total);
+        var reused = new HashSet<VariantRow>();
+
+        for (var n = 0; n < total; n++)
+        {
+            // Decompose n into one value index per option; the last option varies fastest.
+            var indexes = new int[normalised.Count];
+            var remainder = n;
+            for (var o = normalised.Count - 1; o >= 0; o--)
+            {
+                indexes[o] = remainder % counts[o];
+                remainder /= counts[o];
+            }
+
+            var labels = indexes.Select((valueIndex, optionIndex) =>
+                normalised[optionIndex].Values[valueIndex]).ToList();
+
+            var labelKey = string.Join(" / ", labels);
+            var indexKey = string.Join('|', indexes);
+
+            if (!byLabel.TryGetValue(labelKey, out var match)
+                && (!shapeUnchanged || !byIndex.TryGetValue(indexKey, out match)))
+            {
+                match = null;
+            }
+
+            if (match is not null && !reused.Add(match))
+                match = null;
+
+            rebuilt.Add(new VariantRow
+            {
+                ValueIndexes = [.. indexes],
+                ValueLabels = labels,
+                Price = match?.Price ?? _model.Price,
+                ImageUrl = match?.ImageUrl ?? string.Empty,
+                PersistedImageUrl = match?.PersistedImageUrl ?? string.Empty,
+                IsAvailable = match?.IsAvailable ?? true
+            });
+        }
+
+        await DiscardPendingUploadsAsync(_variants.Where(r => !reused.Contains(r)));
+
+        _variants = rebuilt;
+        _lastShape = counts;
+        _variantError = null;
+    }
+
+    /// <summary>
+    /// Deletes uploads belonging to rows that are going away, but only ones that were never
+    /// saved. A persisted image stays on disk until the save handler retires it, so cancelling
+    /// the modal can never destroy a live image.
+    /// </summary>
+    private async Task DiscardPendingUploadsAsync(IEnumerable<VariantRow> rows)
+    {
+        var orphans = rows
+            .Where(r => !string.IsNullOrWhiteSpace(r.ImageUrl)
+                        && !string.Equals(r.ImageUrl, r.PersistedImageUrl, StringComparison.OrdinalIgnoreCase)
+                        && ManagedImages.IsManagedImage(r.ImageUrl, ProductImageLimits.Subfolder))
+            .Select(r => r.ImageUrl)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (orphans.Count > 0)
+            await ImageStorage.DeleteManyAsync(orphans);
+    }
+
+    /// <summary>
+    /// Builds the options and the variants from one snapshot, so a variant's indexes can never
+    /// point past the trimmed option list that goes with them.
+    /// </summary>
+    private (List<ProductOptionInput> Options, List<ProductVariantInput> Variants) BuildPayload()
+    {
+        var normalised = _options
+            .Select(o => (
+                Name: o.Name.Trim(),
+                Values: o.Values.Select(v => v.Trim()).Where(v => v.Length > 0).ToList()))
+            .Where(o => o.Name.Length > 0 && o.Values.Count > 0)
+            .ToList();
+
+        if (normalised.Count == 0)
+            return ([], []);
+
+        var options = normalised
+            .Select(o => new ProductOptionInput(o.Name, o.Values))
+            .ToList();
+
+        var variants = _variants
+            .Select(r => new ProductVariantInput(
+                [.. r.ValueIndexes],
+                r.Price,
+                string.IsNullOrWhiteSpace(r.ImageUrl) ? null : r.ImageUrl,
+                r.IsAvailable))
+            .ToList();
+
+        return (options, variants);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var (options, variants) = BuildPayload();
+            var specs = _specs.Select(r => new ProductSpecInput(r.Label, r.Value)).ToList();
+            var features = _features.ToList();
+
+            var result = await Sender.Send(new SaveProductCommand(
+                _model.Id,
+                _model.Name ?? string.Empty,
+                _model.Slug,
+                _model.CategoryId,
+                _model.Price,
+                _model.OldPrice,
+                _model.ImageUrl ?? string.Empty,
+                _model.ImageAlt ?? string.Empty,
+                _model.Summary ?? string.Empty,
+                _model.Description ?? string.Empty,
+                _model.Badge ?? string.Empty,
+                _model.IsFeatured,
+                _model.IsVisible,
+                _model.SortOrder,
+                options,
+                variants,
+                specs,
+                features,
+                _galleryImages.ToList()));
+
+            if (!result.IsSuccess)
+            {
+                _errors = CollectErrors(result);
+                return;
+            }
+
+            // The uploads are now the stored values, so nothing may treat them as orphans.
+            _persistedImageUrl = _model.ImageUrl ?? string.Empty;
+            foreach (var row in _variants)
+                row.PersistedImageUrl = row.ImageUrl;
+            _persistedGalleryImages = new(_galleryImages, StringComparer.OrdinalIgnoreCase);
+
+            _visible = false;
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static List<string> CollectErrors(Ardalis.Result.Result<int> result)
+    {
+        var messages = result.ValidationErrors.Select(e => e.ErrorMessage)
+            .Concat(result.Errors)
+            .Where(m => !string.IsNullOrWhiteSpace(m))
+            .ToList();
+
+        return messages.Count > 0 ? messages : ["Could not save the product."];
+    }
+
+    private async Task CancelAsync()
+    {
+        // Removes uploads that were never persisted, before the fields unmount. The variant
+        // fields are swept centrally rather than through N component refs.
+        if (_imageField is not null)
+            await _imageField.DiscardAsync();
+
+        await DiscardPendingUploadsAsync(_variants);
+
+        var galleryOrphans = _galleryImages
+            .Where(url => !_persistedGalleryImages.Contains(url)
+                          && ManagedImages.IsManagedImage(url, ProductImageLimits.Subfolder))
+            .ToList();
+        if (galleryOrphans.Count > 0)
+            await ImageStorage.DeleteManyAsync(galleryOrphans);
+
+        _visible = false;
+    }
+}

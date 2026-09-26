@@ -1,0 +1,205 @@
+@page "/cua-hang"
+@using NieFarm.Application.Features.Products.Dtos
+@using NieFarm.Application.Features.Products.Queries
+@inject ISender Sender
+
+<PageTitle>Cửa hàng - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="description"
+          content="Bộ sưu tập cà phê hạt rang mộc nguyên bản và dụng cụ pha chế chuyên dụng của Nie Farm, tuyển chọn từ nông trại đến tách cà phê của bạn." />
+</HeadContent>
+
+@* Hero *@
+<section class="py-16 px-gutter">
+    <div class="max-w-container-max mx-auto text-center">
+        <h1 class="text-headline-lg-mobile md:text-headline-lg text-deep-red mb-4">Cửa hàng Sản phẩm</h1>
+        <p class="text-body-lg text-on-surface-variant max-w-2xl mx-auto">
+            Khám phá bộ sưu tập cà phê hạt rang mộc nguyên bản và dụng cụ pha chế chuyên dụng, được tuyển
+            chọn kỹ lưỡng từ nông trại đến tách cà phê của bạn.
+        </p>
+    </div>
+</section>
+
+<section class="pb-section-padding-y px-gutter">
+    <div class="max-w-container-max mx-auto flex flex-col md:flex-row gap-8">
+
+        @* Filters *@
+        @if (_categories.Count > 0)
+        {
+            <aside class="w-full md:w-64 flex-shrink-0">
+                <div class="bg-white p-6 rounded-lg border border-soft-border sticky top-28">
+                    <h2 class="text-headline-sm text-on-background mb-6 border-b border-soft-border pb-2">Bộ Lọc</h2>
+
+                    <fieldset class="mb-6 last:mb-0">
+                        <legend class="text-label-bold font-semibold text-on-surface-variant mb-3">Danh Mục</legend>
+                        <div class="space-y-2">
+                            @foreach (var category in _categories)
+                            {
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="rounded border-soft-border text-forest-green focus:ring-forest-green"
+                                           checked="@_selectedCategoryIds.Contains(category.Id)"
+                                           @onchange="e => ToggleCategory(category.Id, e)" />
+                                    <span class="text-body-sm text-on-surface">@category.Name</span>
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                </div>
+            </aside>
+        }
+
+        @* Product grid *@
+        <div class="flex-grow">
+            <div class="flex flex-wrap gap-4 justify-between items-center mb-6">
+                @if (_products.Count > 0)
+                {
+                    <p class="text-body-sm text-on-surface-variant">
+                        Hiển thị 1-@_products.Count trong @_products.Count sản phẩm
+                    </p>
+                }
+                else
+                {
+                    <span></span>
+                }
+                <label class="flex items-center gap-2">
+                    <span class="sr-only">Sắp xếp theo</span>
+                    <select class="border-soft-border rounded-lg text-sm py-2 pl-3 pr-8 focus:border-forest-green focus:ring-forest-green text-on-surface bg-white"
+                            @bind="_sort" @bind:after="ReloadProductsAsync">
+                        @foreach (var option in SortOptions)
+                        {
+                            <option value="@option.Value">@option.Label</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            @if (_products.Count == 0)
+            {
+                <div class="bg-white border border-soft-border rounded-lg p-12 text-center">
+                    <p class="text-body-md text-on-surface-variant mb-4">
+                        Không tìm thấy sản phẩm phù hợp với bộ lọc.
+                    </p>
+                    <button type="button" class="btn-brand rounded-lg font-semibold text-body-sm px-6 py-2.5"
+                            @onclick="ClearFiltersAsync">
+                        Xóa bộ lọc
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    @foreach (var product in _products)
+                    {
+                        <article class="bg-white border border-soft-border rounded-lg overflow-hidden flex flex-col h-full card-hover">
+                            <a class="aspect-square w-full relative bg-surface-container-low block"
+                               href="@($"/san-pham/{product.Slug}")">
+                                <img class="w-full h-full object-cover absolute inset-0"
+                                     src="@product.ImageUrl" alt="@product.ImageAlt" />
+                                @if (product.Badge is not null)
+                                {
+                                    <span class="absolute top-2 right-2 px-2 py-1 rounded text-xs font-bold bg-forest-green text-white">
+                                        @product.Badge
+                                    </span>
+                                }
+                            </a>
+                            <div class="p-4 flex flex-col flex-grow">
+                                <p class="text-xs font-semibold text-forest-green mb-1">@product.CategoryName</p>
+                                <h3 class="text-[20px] font-semibold text-on-background mb-2">
+                                    <a class="hover:text-deep-red transition-colors duration-250"
+                                       href="@($"/san-pham/{product.Slug}")">@product.Name</a>
+                                </h3>
+                                <div class="mt-auto">
+                                    <p class="text-lg font-bold text-on-background mb-4">@Money.Vnd(product.Price)</p>
+                                    <button type="button"
+                                            class="w-full py-2.5 btn-brand rounded-lg font-semibold text-body-sm flex items-center justify-center gap-2">
+                                        <span class="material-symbols-outlined text-lg" aria-hidden="true">shopping_cart</span>
+                                        Thêm vào giỏ
+                                    </button>
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+
+            @* Pagination — a single page while the catalog is design placeholder data. *@
+            <nav class="mt-12 flex justify-center gap-2" aria-label="Phân trang">
+                <button type="button" disabled
+                        class="w-10 h-10 rounded border border-soft-border flex items-center justify-center text-on-surface disabled:opacity-40">
+                    <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+                    <span class="sr-only">Trang trước</span>
+                </button>
+                <span aria-current="page"
+                      class="w-10 h-10 rounded border border-forest-green bg-forest-green text-white flex items-center justify-center font-semibold">1</span>
+                <button type="button" disabled
+                        class="w-10 h-10 rounded border border-soft-border flex items-center justify-center text-on-surface disabled:opacity-40">
+                    <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    <span class="sr-only">Trang sau</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+</section>
+
+@code {
+    private static readonly (ShopSortOrder Value, string Label)[] SortOptions =
+    [
+        (ShopSortOrder.Newest, "Mới nhất"),
+        (ShopSortOrder.PriceAscending, "Giá: Thấp đến Cao"),
+        (ShopSortOrder.PriceDescending, "Giá: Cao đến Thấp")
+    ];
+
+    private readonly HashSet<int> _selectedCategoryIds = [];
+    private ShopSortOrder _sort = ShopSortOrder.Newest;
+    private IReadOnlyList<ProductCategoryFilterDto> _categories = [];
+    private IReadOnlyList<ProductCardDto> _products = [];
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Safe to run in parallel — each IReadRepositoryBase handler gets its own DbContext
+        // (data-access.md).
+        var categoriesTask = Sender.Send(new GetShopCategoriesQuery());
+        var productsTask = Sender.Send(new GetShopProductsQuery());
+        await Task.WhenAll(categoriesTask, productsTask);
+
+        _categories = await categoriesTask;
+        _products = await productsTask;
+    }
+
+    private async Task ToggleCategory(int categoryId, ChangeEventArgs args)
+    {
+        if (args.Value is true)
+        {
+            _selectedCategoryIds.Add(categoryId);
+        }
+        else
+        {
+            _selectedCategoryIds.Remove(categoryId);
+        }
+
+        await ReloadProductsAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _selectedCategoryIds.Clear();
+        await ReloadProductsAsync();
+    }
+
+    private async Task ReloadProductsAsync()
+    {
+        if (_loading)
+            return;
+
+        _loading = true;
+        try
+        {
+            _products = await Sender.Send(new GetShopProductsQuery(_selectedCategoryIds.ToArray(), _sort));
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

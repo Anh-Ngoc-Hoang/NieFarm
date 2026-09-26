@@ -1,0 +1,73 @@
+@page "/admin"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Dashboard.Dtos
+@using NieFarm.Application.Features.Admin.Dashboard.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Dashboard" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Dashboard</h1>
+        <p>An overview of the catalog, content and recent sales.</p>
+    </div>
+</div>
+
+@if (_stats is null)
+{
+    <div class="admin-card"><div class="admin-card__body cell-muted">Loading…</div></div>
+}
+else
+{
+    <div class="admin-grid admin-grid--stats" style="margin-bottom:20px;">
+        <StatCard Icon="inventory_2" Label="Products" Value="@_stats.ProductCount.ToString()" />
+        <StatCard Icon="article" Label="Articles" Value="@_stats.ArticleCount.ToString()" />
+        <StatCard Icon="receipt_long" Label="Orders" Value="@_stats.OrderCount.ToString()" />
+        <StatCard Icon="payments" Label="Completed revenue" Value="@Money.Vnd(_stats.CompletedRevenue)" />
+    </div>
+
+    <AdminCard Title="Recent orders">
+        @if (_stats.RecentOrders.Count == 0)
+        {
+            <div class="admin-card__body cell-muted">No orders yet.</div>
+        }
+        else
+        {
+            <div style="overflow-x:auto;">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Customer</th>
+                            <th>Status</th>
+                            <th style="width:150px;">Total</th>
+                            <th style="width:170px;">Placed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var order in _stats.RecentOrders)
+                        {
+                            <tr>
+                                <td class="cell-primary">
+                                    <a href="@($"/admin/orders/{order.Id}")">@order.Code</a>
+                                </td>
+                                <td>@order.CustomerName</td>
+                                <td><AdminBadge Text="@order.Status" Variant="muted" /></td>
+                                <td class="cell-primary">@Money.Vnd(order.Total)</td>
+                                <td class="cell-muted">@order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </AdminCard>
+}
+
+@code {
+    private DashboardStatsDto? _stats;
+
+    protected override async Task OnInitializedAsync() =>
+        _stats = await Sender.Send(new GetDashboardStatsQuery());
+}

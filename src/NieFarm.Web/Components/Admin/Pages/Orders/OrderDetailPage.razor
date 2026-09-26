@@ -1,0 +1,200 @@
+@page "/admin/orders/{Id:int}"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Orders.Commands
+@using NieFarm.Application.Features.Admin.Orders.Dtos
+@using NieFarm.Application.Features.Admin.Orders.Queries
+@using NieFarm.Domain.Enums
+@inject ISender Sender
+@inject NewOrderCountState OrderCountState
+
+<AdminPageTitle Title="@(_order is null ? "Order" : $"Order {_order.Code}")" />
+
+@if (_order is null)
+{
+    <div class="admin-card">
+        <div class="admin-card__body cell-muted">
+            @(_loaded ? "This order does not exist." : "Loading…")
+        </div>
+    </div>
+}
+else
+{
+    <div class="admin-page-head">
+        <div class="admin-page-head__titles">
+            <h1>Order @_order.Code</h1>
+            <p>Placed @_order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</p>
+        </div>
+        <a class="btn-admin-outline" href="/admin/orders">
+            <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span> Back to orders
+        </a>
+    </div>
+
+    @if (_statusError is not null)
+    {
+        <div class="form-alert form-alert--error">@_statusError</div>
+    }
+
+    <AdminCard Title="Status">
+        <div class="admin-card__body" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+            <AdminBadge Text="@_order.Status.ToString()" Variant="@OrdersPage.StatusVariant(_order.Status)" />
+            <AdminBadge Text="@PaymentMethodText(_order.PaymentMethod)" Variant="muted" />
+            <select class="form-control-admin" style="max-width:220px;" @bind="_selectedStatus">
+                @foreach (var status in Enum.GetValues<OrderStatus>())
+                {
+                    <option value="@status">@status</option>
+                }
+            </select>
+            <button class="btn-admin" type="button" @onclick="UpdateStatusAsync"
+                    disabled="@(_saving || _selectedStatus == _order.Status)">
+                @(_saving ? "Saving…" : "Update status")
+            </button>
+        </div>
+    </AdminCard>
+
+    <div class="admin-grid" style="grid-template-columns:1fr;">
+        <AdminCard Title="Customer">
+            <div class="admin-card__body">
+                <dl style="margin:0;display:grid;grid-template-columns:160px 1fr;gap:10px 16px;">
+                    <dt class="cell-muted">Name</dt>
+                    <dd style="margin:0;">@_order.CustomerName</dd>
+
+                    <dt class="cell-muted">Phone</dt>
+                    <dd style="margin:0;">@_order.Phone</dd>
+
+                    <dt class="cell-muted">Email</dt>
+                    <dd style="margin:0;">@(string.IsNullOrWhiteSpace(_order.Email) ? "—" : _order.Email)</dd>
+
+                    <dt class="cell-muted">Shipping address</dt>
+                    <dd style="margin:0;">@_order.ShippingAddress</dd>
+
+                    <dt class="cell-muted">Note</dt>
+                    <dd style="margin:0;">@(string.IsNullOrWhiteSpace(_order.Note) ? "—" : _order.Note)</dd>
+                </dl>
+            </div>
+        </AdminCard>
+
+        <AdminCard Title="Items">
+            <div style="overflow-x:auto;">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th style="width:64px;">Image</th>
+                            <th>Product</th>
+                            <th style="width:150px;">Unit price</th>
+                            <th style="width:90px;">Qty</th>
+                            <th style="width:150px;">Line total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var line in _order.Lines)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="table-thumb">
+                                        @if (!string.IsNullOrWhiteSpace(line.ImageUrl))
+                                        {
+                                            <img src="@line.ImageUrl" alt="@line.ProductName" />
+                                        }
+                                        else
+                                        {
+                                            <span class="material-symbols-outlined cell-muted" aria-hidden="true">coffee</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="cell-primary">
+                                    @line.ProductName
+                                    @if (!string.IsNullOrWhiteSpace(line.Variant))
+                                    {
+                                        <div class="cell-muted" style="font-size:12px;">@line.Variant</div>
+                                    }
+                                </td>
+                                <td>@Money.Vnd(line.UnitPrice)</td>
+                                <td>@line.Quantity</td>
+                                <td class="cell-primary">@Money.Vnd(line.LineTotal)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="admin-card__body" style="display:flex;justify-content:flex-end;">
+                <dl style="margin:0;display:grid;grid-template-columns:auto auto;gap:8px 32px;min-width:280px;">
+                    <dt class="cell-muted">Subtotal</dt>
+                    <dd style="margin:0;text-align:right;">@Money.Vnd(_order.Subtotal)</dd>
+
+                    <dt class="cell-muted">Shipping</dt>
+                    <dd style="margin:0;text-align:right;">@Money.Vnd(_order.ShippingFee)</dd>
+
+                    <dt class="cell-muted">Discount</dt>
+                    <dd style="margin:0;text-align:right;">-@Money.Vnd(_order.Discount)</dd>
+
+                    <dt class="cell-primary">Total</dt>
+                    <dd class="cell-primary" style="margin:0;text-align:right;">@Money.Vnd(_order.Total)</dd>
+                </dl>
+            </div>
+        </AdminCard>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private OrderDetailDto? _order;
+    private OrderStatus _selectedStatus;
+    private string? _statusError;
+    private bool _loaded;
+    private bool _saving;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+
+        if (_order is null)
+            return;
+
+        // Opening an order clears it from the sidebar badge.
+        await Sender.Send(new MarkOrderReadCommand(Id));
+        await OrderCountState.RefreshAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _order = await Sender.Send(new GetOrderDetailQuery(Id));
+        _selectedStatus = _order?.Status ?? OrderStatus.New;
+        _loaded = true;
+    }
+
+    private static string PaymentMethodText(PaymentMethod method) => method switch
+    {
+        PaymentMethod.CashOnDelivery => "Cash on Delivery",
+        PaymentMethod.BankTransfer => "Bank Transfer",
+        _ => method.ToString()
+    };
+
+    private async Task UpdateStatusAsync()
+    {
+        _saving = true;
+        _statusError = null;
+
+        try
+        {
+            var result = await Sender.Send(new UpdateOrderStatusCommand(Id, _selectedStatus));
+
+            if (!result.IsSuccess)
+            {
+                _statusError = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+                    ?? "Could not update the status.";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

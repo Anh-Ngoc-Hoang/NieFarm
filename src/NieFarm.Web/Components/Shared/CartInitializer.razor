@@ -1,0 +1,33 @@
+@* Renders nothing. Included by both PublicLayout and CheckoutLayout so a shopper landing
+   directly on /thanh-toan (which renders no SiteHeader) still merges/seeds the cart exactly
+   once per circuit — the NieFarm-specific adaptation of OfficeCoffee's CartBadge, forced by
+   CheckoutLayout not rendering a header. *@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NieFarm.Web.Services.Cart.CartState CartState
+
+@code {
+    [CascadingParameter(Name = "CartAnonymousId")] public string? CartAnonymousId { get; set; }
+    [CascadingParameter] public Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The cart mutation (the guest->user merge inside CartState.EnsureInitializedAsync)
+        // must only run from interactive rendering — the whole app prerenders first, and
+        // OnInitializedAsync would otherwise run it twice.
+        if (firstRender)
+        {
+            var userId = await ResolveUserIdAsync();
+            await CartState.EnsureInitializedAsync(userId, CartAnonymousId);
+        }
+    }
+
+    private async Task<string?> ResolveUserIdAsync()
+    {
+        if (AuthState is null)
+            return null;
+
+        var state = await AuthState;
+        return state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    }
+}

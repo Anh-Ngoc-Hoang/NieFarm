@@ -1,0 +1,20 @@
+<div class="admin-card @CssClass">
+    @if (Title is not null)
+    {
+        <div class="admin-card__head">
+            <h2>@Title</h2>
+            @if (HeaderRight is not null)
+            {
+                <div style="margin-left:auto;">@HeaderRight</div>
+            }
+        </div>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? HeaderRight { get; set; }
+    [Parameter] public string CssClass { get; set; } = string.Empty;
+}

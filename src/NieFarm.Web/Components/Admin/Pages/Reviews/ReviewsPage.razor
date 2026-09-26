@@ -1,0 +1,209 @@
+@page "/admin/reviews"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Reviews.Commands
+@using NieFarm.Application.Features.Admin.Reviews.Dtos
+@using NieFarm.Application.Features.Admin.Reviews.Queries
+@using NieFarm.Domain.Enums
+@using NieFarm.Web.Services.Admin
+@inject ISender Sender
+@inject PendingReviewCountState ReviewCountState
+
+<AdminPageTitle Title="Reviews" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Reviews</h1>
+        <p>Customer reviews awaiting moderation.</p>
+    </div>
+</div>
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by product or author…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+    <select class="form-control-admin" style="max-width:200px;"
+            @bind="_statusFilter" @bind:after="ReloadAsync">
+        <option value="">All statuses</option>
+        @foreach (var status in Enum.GetValues<ReviewStatus>())
+        {
+            <option value="@status">@status</option>
+        }
+    </select>
+</div>
+
+@if (_actionError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-bottom:16px;">@_actionError</div>
+}
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Author</th>
+                <th style="width:110px;">Rating</th>
+                <th>Comment</th>
+                <th style="width:150px;">Submitted</th>
+                <th style="width:110px;">Status</th>
+                <th style="width:170px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var review in _filtered)
+            {
+                <tr>
+                    <td class="cell-primary">@review.ProductName</td>
+                    <td>@review.AuthorName</td>
+                    <td><StarRating Value="@review.Rating" SizeClass="text-sm" /></td>
+                    <td>
+                        <button type="button" style="background:none;border:none;padding:0;cursor:pointer;text-align:left;"
+                                class="cell-primary" title="Edit comment"
+                                @onclick="() => _detailModal.Open(review)">
+                            @Truncate(review.Comment)
+                        </button>
+                        @if (review.CommentEditedAt is not null)
+                        {
+                            <div class="cell-muted" style="font-size:12px;">Edited</div>
+                        }
+                    </td>
+                    <td class="cell-muted">@review.CreatedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td><AdminBadge Text="@review.Status.ToString()" Variant="@StatusVariant(review.Status)" /></td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit comment"
+                                    @onclick="() => _detailModal.Open(review)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            @if (review.Status is ReviewStatus.Pending or ReviewStatus.Rejected)
+                            {
+                                <button class="btn-icon" type="button" title="Approve"
+                                        @onclick="() => ApproveAsync(review)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                                </button>
+                            }
+                            @if (review.Status is ReviewStatus.Pending or ReviewStatus.Approved)
+                            {
+                                <button class="btn-icon" type="button" title="Reject"
+                                        @onclick="() => RejectAsync(review)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">block</span>
+                                </button>
+                            }
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(review)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No reviews found.</div>
+    }
+</div>
+
+<ReviewDetailModal @ref="_detailModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete review?"
+              Message="Delete review? This cannot be undone."
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<ReviewAdminListDto> _all = [];
+    private List<ReviewAdminListDto> _filtered = [];
+
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+    private string? _actionError;
+
+    private ReviewDetailModal _detailModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private ReviewAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        var status = Enum.TryParse<ReviewStatus>(_statusFilter, out var parsed) ? parsed : (ReviewStatus?)null;
+        _all = await Sender.Send(new GetReviewsAdminQuery(status));
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(r =>
+            string.IsNullOrWhiteSpace(_search)
+            || r.ProductName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || r.AuthorName.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private async Task ApproveAsync(ReviewAdminListDto review)
+    {
+        _actionError = null;
+        var result = await Sender.Send(new ApproveReviewCommand(review.Id));
+        if (!result.IsSuccess)
+        {
+            _actionError = result.Errors.FirstOrDefault() ?? "Could not approve the review.";
+            return;
+        }
+
+        await ReloadAsync();
+        await ReviewCountState.RefreshAsync();
+    }
+
+    private async Task RejectAsync(ReviewAdminListDto review)
+    {
+        _actionError = null;
+        var result = await Sender.Send(new RejectReviewCommand(review.Id));
+        if (!result.IsSuccess)
+        {
+            _actionError = result.Errors.FirstOrDefault() ?? "Could not reject the review.";
+            return;
+        }
+
+        await ReloadAsync();
+        await ReviewCountState.RefreshAsync();
+    }
+
+    private void AskDelete(ReviewAdminListDto review)
+    {
+        _actionError = null;
+        _deleteTarget = review;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteReviewCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = result.Errors.FirstOrDefault() ?? "Could not delete the review.";
+            return;
+        }
+
+        await ReloadAsync();
+        await ReviewCountState.RefreshAsync();
+    }
+
+    private static string Truncate(string text, int max = 80) =>
+        text.Length <= max ? text : text[..max] + "…";
+
+    internal static string StatusVariant(ReviewStatus status) => status switch
+    {
+        ReviewStatus.Pending => "warning",
+        ReviewStatus.Approved => "success",
+        _ => "muted"
+    };
+}

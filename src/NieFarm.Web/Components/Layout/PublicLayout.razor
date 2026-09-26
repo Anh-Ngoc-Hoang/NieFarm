@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+
+<div class="min-h-screen flex flex-col bg-cream-ivory text-on-background antialiased">
+    <CartInitializer />
+    <SiteHeader />
+
+    @* pt-20 clears the fixed 80px header. *@
+    <main class="flex-grow pt-20">
+        @Body
+    </main>
+
+    <SiteFooter />
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Đã xảy ra lỗi không mong muốn.
+    <a href="." class="reload">Tải lại</a>
+    <span class="dismiss">🗙</span>
+</div>

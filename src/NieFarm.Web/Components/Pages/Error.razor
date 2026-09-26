@@ -1,0 +1,35 @@
+@page "/Error"
+@using System.Diagnostics
+
+<PageTitle>Đã xảy ra lỗi - Nie Farm Việt Nam</PageTitle>
+
+<section class="max-w-3xl mx-auto px-gutter py-section-padding-y text-center">
+    <span class="material-symbols-outlined text-[64px] text-amber-gold mb-4" aria-hidden="true">error</span>
+    <h1 class="text-headline-md text-deep-red mb-6">Đã xảy ra lỗi</h1>
+    <p class="text-body-lg text-on-surface-variant mb-10">
+        Rất tiếc, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau ít phút.
+    </p>
+
+    @if (ShowRequestId)
+    {
+        <p class="text-body-sm text-on-surface-variant mb-10">
+            Mã yêu cầu: <code class="bg-surface-container px-2 py-1 rounded">@RequestId</code>
+        </p>
+    }
+
+    <a class="btn-brand inline-flex px-8 py-3 rounded-lg font-label-bold text-label-bold" href="/">
+        Về trang chủ
+    </a>
+</section>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

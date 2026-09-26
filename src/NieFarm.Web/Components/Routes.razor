@@ -1,0 +1,35 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<CascadingValue Value="CartAnonymousId" Name="CartAnonymousId">
+    <Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+        <Found Context="routeData">
+            @* AuthorizeRouteView so [Authorize] on a page is honoured during interactive
+               navigation too, not only by endpoint authorization on the first request. *@
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.PublicLayout)">
+                <NotAuthorized>
+                    @if (context.User.Identity?.IsAuthenticated == false)
+                    {
+                        <RedirectToLogin />
+                    }
+                    else
+                    {
+                        <section class="max-w-3xl mx-auto px-gutter py-section-padding-y text-center">
+                            <h1 class="text-headline-md text-deep-red mb-4">Không có quyền truy cập</h1>
+                            <p class="text-body-lg text-on-surface-variant">
+                                Tài khoản của bạn không có quyền xem trang này.
+                            </p>
+                        </section>
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+    </Router>
+</CascadingValue>
+
+@code {
+    // Root-component parameter set by App.razor (statically rendered, reads the anonymous
+    // cart id from HttpContext.Items) — see App.razor for why a <CascadingValue> there would
+    // not work.
+    [Parameter] public string? CartAnonymousId { get; set; }
+}

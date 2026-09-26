@@ -1,0 +1,166 @@
+@*
+    Single-image upload field for admin forms.
+
+    Ownership rules, mirrored from the OfficeCoffee component:
+    - This component deletes browser-session orphans: replacing a pending upload, clicking
+      remove, and DiscardAsync() each delete the pending file iff it was never persisted
+      (Value != PersistedValue) and it lives under this field's own managed subfolder.
+    - The parent owns PersistedValue: keep it equal to the stored value, and update it right
+      after a successful save.
+    - The parent must call DiscardAsync() when cancelling, before this component unmounts.
+
+    Render it inside an @if that unmounts when the modal closes, so each open gets a fresh
+    InputFile instance.
+*@
+@using NieFarm.Application.Common.Images
+@inject IImageStorage ImageStorage
+
+@if (!string.IsNullOrWhiteSpace(Label))
+{
+    <label class="form-label-admin">@Label</label>
+}
+
+@if (!string.IsNullOrWhiteSpace(Value))
+{
+    <div class="image-preview">
+        <img src="@Value" alt="@Label" />
+        <button type="button" class="btn-icon btn-icon--danger image-preview__remove" title="Remove"
+                disabled="@(Disabled || _uploading)" @onclick="RemoveImage">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+    </div>
+}
+
+<InputFile @key="_inputKey" OnChange="OnFileSelected" accept="@AcceptAttribute"
+           class="form-control-admin" disabled="@(Disabled || _uploading)" />
+
+<div class="cell-muted" style="font-size:12px;margin-top:4px;">@HelpTextValue</div>
+
+@if (_uploading)
+{
+    <div class="cell-muted" style="font-size:13px;">Uploading…</div>
+}
+
+@if (_error is not null)
+{
+    <div class="form-error">@_error</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    /// <summary>The value currently stored in the database; a differing Value is an unsaved upload.</summary>
+    [Parameter] public string PersistedValue { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired] public string Subfolder { get; set; } = string.Empty;
+    [Parameter] public string? Label { get; set; } = "Image";
+    [Parameter] public string? HelpText { get; set; }
+    [Parameter] public long MaxBytes { get; set; } = ManagedImages.MaxImageBytes;
+    [Parameter] public IReadOnlyList<string> AllowedContentTypes { get; set; } = ManagedImages.AllowedContentTypes;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<bool> UploadingChanged { get; set; }
+
+    private string _inputKey = string.Empty;
+    private bool _uploading;
+    private string? _error;
+
+    public bool IsUploading => _uploading;
+
+    private string AcceptAttribute => string.Join(",", AllowedContentTypes);
+
+    private string HelpTextValue => HelpText ?? BuildDefaultHelpText();
+
+    protected override void OnInitialized() => _inputKey = Guid.NewGuid().ToString();
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _uploading = true;
+        await UploadingChanged.InvokeAsync(true);
+
+        try
+        {
+            if (!AllowedContentTypes.Contains(e.File.ContentType))
+            {
+                _error = $"\"{e.File.Name}\" is not a supported image type.";
+                return;
+            }
+
+            if (e.File.Size > MaxBytes)
+            {
+                _error = $"\"{e.File.Name}\" exceeds the {MaxBytes / 1024 / 1024} MB limit.";
+                return;
+            }
+
+            string url;
+            try
+            {
+                await using var stream = e.File.OpenReadStream(MaxBytes);
+                url = await ImageStorage.SaveAsync(stream, e.File.Name, Subfolder);
+            }
+            catch (Exception)
+            {
+                _error = $"Failed to upload \"{e.File.Name}\".";
+                return;
+            }
+
+            var previous = Value;
+            if (previous != PersistedValue && ManagedImages.IsManagedImage(previous, Subfolder))
+                await ImageStorage.DeleteAsync(previous); // throwaway upload, safe to delete now
+
+            Value = url;
+            await ValueChanged.InvokeAsync(url);
+        }
+        finally
+        {
+            _uploading = false;
+            _inputKey = Guid.NewGuid().ToString();
+            await UploadingChanged.InvokeAsync(false);
+        }
+    }
+
+    private async Task RemoveImage()
+    {
+        if (Value != PersistedValue && ManagedImages.IsManagedImage(Value, Subfolder))
+            await ImageStorage.DeleteAsync(Value); // never persisted, so a pure orphan
+
+        Value = string.Empty;
+        await ValueChanged.InvokeAsync(string.Empty);
+        _error = null;
+    }
+
+    /// <summary>
+    /// Deletes the current value iff it is an unsaved managed upload, then clears it.
+    /// Call from the parent's cancel handler before unmounting. Safe to call twice.
+    /// </summary>
+    public async Task DiscardAsync()
+    {
+        if (Value != PersistedValue && ManagedImages.IsManagedImage(Value, Subfolder))
+            await ImageStorage.DeleteAsync(Value);
+
+        Value = string.Empty;
+        await ValueChanged.InvokeAsync(string.Empty);
+    }
+
+    private string BuildDefaultHelpText()
+    {
+        var labels = AllowedContentTypes.Select(type => type switch
+        {
+            "image/jpeg" => "JPG",
+            "image/png" => "PNG",
+            "image/webp" => "WebP",
+            "image/gif" => "GIF",
+            _ => type
+        }).ToList();
+
+        var joined = labels.Count switch
+        {
+            0 => string.Empty,
+            1 => labels[0],
+            _ => string.Join(", ", labels.Take(labels.Count - 1)) + " or " + labels[^1]
+        };
+
+        return $"{joined}; max {MaxBytes / 1024 / 1024} MB.";
+    }
+}

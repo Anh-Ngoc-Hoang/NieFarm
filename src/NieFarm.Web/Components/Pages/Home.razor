@@ -1,0 +1,156 @@
+@page "/"
+
+<PageTitle>Nie Farm Việt Nam - Nâng Tầm Vị Thế Cà Phê Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="description"
+          content="Nie Farm Việt Nam mang đến giải pháp toàn diện cho quy trình chế biến và nâng cao chất lượng hạt cà phê nhân xanh, hướng tới nền nông nghiệp bền vững." />
+</HeadContent>
+
+@* Hero *@
+<section class="relative overflow-hidden">
+    <div class="max-w-container-max mx-auto px-gutter py-section-padding-y grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+        <div class="z-10 order-2 md:order-1">
+            <h1 class="text-headline-lg-mobile md:text-headline-lg text-on-background mb-6">
+                Nâng Tầm Vị Thế<br /><span class="text-amber-gold">Cà Phê Việt Nam</span>
+            </h1>
+            <p class="text-body-lg text-on-surface-variant mb-8 max-w-lg">
+                Mang đến những giải pháp toàn diện cho quy trình chế biến và nâng cao chất lượng hạt cà phê
+                nhân xanh, hướng tới một nền nông nghiệp bền vững và chuyên nghiệp.
+            </p>
+            <a class="btn-brand inline-flex px-8 py-4 rounded font-label-bold text-label-bold" href="#tam-nhin">
+                Khám phá ngay
+            </a>
+        </div>
+        <div class="relative z-10 order-1 md:order-2 h-64 md:h-full min-h-[400px]">
+            <img class="absolute inset-0 w-full h-full object-cover rounded-xl shadow-sm border border-amber-gold"
+                 src="/images/home-1.jpg"
+                 alt="Xưởng rang cà phê hiện đại của Nie Farm với ánh nắng tự nhiên tràn qua ô cửa lớn" />
+        </div>
+    </div>
+    @* Decorative wedge behind the hero; z-0 keeps it above the layout background. *@
+    <div class="absolute top-0 right-0 w-1/2 h-full bg-cream-shade -skew-x-12 translate-x-1/4 z-0"
+         aria-hidden="true"></div>
+</section>
+
+@* Vision & mission *@
+<section class="py-section-padding-y" id="tam-nhin">
+    <div class="max-w-container-max mx-auto px-gutter">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+            <div class="h-[500px] w-full rounded-xl overflow-hidden flat-card">
+                <img class="w-full h-full object-cover" src="/images/home-2.jpg"
+                     alt="Chuyên gia Nie Farm cùng người nông dân kiểm tra quả cà phê chín trong vườn" />
+            </div>
+            <div>
+                <span class="text-label-bold font-semibold text-amber-gold uppercase tracking-wider mb-2 block">
+                    Tầm Nhìn &amp; Sứ Mệnh
+                </span>
+                <h2 class="text-headline-md text-on-background mb-6">
+                    Đồng hành cùng nông dân, chuẩn hóa quy trình.
+                </h2>
+                <p class="text-body-lg text-on-surface-variant mb-6">
+                    Chúng tôi tin rằng hạt cà phê Việt Nam mang trong mình tiềm năng to lớn. Sứ mệnh của
+                    Nie Farm là cung cấp kiến thức, công nghệ và quy trình chuẩn quốc tế để giúp người nông
+                    dân tối ưu hóa giá trị trên từng hạt cà phê.
+                </p>
+                <ul class="space-y-4">
+                    @foreach (var point in SiteContent.MissionPoints)
+                    {
+                        <li class="flex items-start">
+                            <span class="material-symbols-outlined icon-fill text-amber-gold mr-3 mt-1"
+                                  aria-hidden="true">check_circle</span>
+                            <span class="text-body-lg text-on-background">@point</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+@* Featured products *@
+<section class="py-section-padding-y">
+    <div class="max-w-container-max mx-auto px-gutter">
+        <div class="text-center mb-12">
+            <h2 class="text-headline-md text-deep-red mb-4">Sản phẩm nổi bật</h2>
+            <p class="text-body-lg text-on-surface-variant max-w-2xl mx-auto">
+                Những hạt cà phê tinh hoa được tuyển chọn kỹ lưỡng từ nông trại Nie Farm.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            @foreach (var product in SiteContent.FeaturedProducts)
+            {
+                <article class="bg-white rounded-lg border border-soft-border overflow-hidden flex flex-col card-hover">
+                    <a class="aspect-square bg-cream-shade block" href="@($"/san-pham/{product.Slug}")">
+                        <img class="w-full h-full object-cover" src="@product.ImageUrl" alt="@product.ImageAlt" />
+                    </a>
+                    <div class="p-6 flex flex-col flex-grow">
+                        <h3 class="text-headline-sm text-on-background mb-2 line-clamp-2">
+                            <a class="hover:text-deep-red transition-colors duration-250"
+                               href="@($"/san-pham/{product.Slug}")">@product.Name</a>
+                        </h3>
+                        <p class="text-body-lg text-deep-red font-semibold mb-6">@SiteContent.Vnd(product.Price)</p>
+                        <button type="button"
+                                class="w-full btn-brand py-2.5 rounded flex items-center justify-center font-label-bold text-label-bold gap-2 mt-auto">
+                            <span class="material-symbols-outlined text-[20px]" aria-hidden="true">shopping_cart</span>
+                            Thêm vào giỏ
+                        </button>
+                    </div>
+                </article>
+            }
+        </div>
+
+        <div class="text-center mt-12">
+            <a class="btn-secondary-brand inline-flex px-8 py-3 rounded font-label-bold text-label-bold"
+               href="/cua-hang">
+                Xem toàn bộ cửa hàng
+            </a>
+        </div>
+    </div>
+</section>
+
+@* Testimonials *@
+<section class="py-section-padding-y" id="cam-nhan">
+    <div class="max-w-container-max mx-auto px-gutter">
+        <div class="text-center mb-16">
+            <h2 class="text-headline-md text-deep-red">Khách Hàng Nói Gì Về Nie Farm</h2>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            @foreach (var testimonial in SiteContent.Testimonials)
+            {
+                <figure class="bg-white p-8 rounded-xl flat-card border-amber-gold/20 flex flex-col h-full">
+                    <StarRating Value="5" SizeClass="text-base" CssClass="mb-4" />
+                    <blockquote class="text-body-lg text-on-surface-variant mb-8 flex-grow italic">
+                        &ldquo;@testimonial.Quote&rdquo;
+                    </blockquote>
+                    <figcaption class="flex items-center">
+                        <div class="w-12 h-12 rounded-full bg-cream-shade mr-4 flex items-center justify-center overflow-hidden">
+                            <span class="material-symbols-outlined text-on-surface-variant" aria-hidden="true">person</span>
+                        </div>
+                        <div>
+                            <p class="text-label-bold font-semibold text-on-background">@testimonial.Name</p>
+                            <p class="text-body-sm text-on-surface-variant">@testimonial.Role</p>
+                        </div>
+                    </figcaption>
+                </figure>
+            }
+        </div>
+    </div>
+</section>
+
+@* Partners *@
+<section class="py-section-padding-y">
+    <div class="max-w-container-max mx-auto px-gutter text-center">
+        <h2 class="text-label-bold font-semibold text-on-surface-variant uppercase tracking-wider mb-8">
+            Đối tác chiến lược
+        </h2>
+        <div class="flex flex-wrap justify-center items-center gap-8 md:gap-16">
+            @foreach (var partner in SiteContent.Partners)
+            {
+                <div class="w-32 h-16 bg-cream-shade rounded flex items-center justify-center grayscale-hover border border-amber-gold">
+                    <span class="text-label-bold font-semibold text-on-surface-variant">@partner</span>
+                </div>
+            }
+        </div>
+    </div>
+</section>

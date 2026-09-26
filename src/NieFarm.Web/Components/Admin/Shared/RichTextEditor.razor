@@ -1,0 +1,94 @@
+@*
+    Rich-text field for admin forms, backed by Quill.
+
+    Lifecycle rules, mirrored from the OfficeCoffee component:
+    - Quill is initialised once, on first render, and never has Value pushed back into it.
+      To edit a different record, give the component a new @key so it remounts — otherwise it
+      keeps showing the previous record's content.
+    - The root div must stay empty in the Blazor render tree. Quill owns that subtree, and a
+      diff reaching into it would fight the editor.
+
+    If Quill cannot be fetched, the component degrades to a plain textarea bound to the same
+    value, so the form is still usable offline.
+*@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="rich-text @(_failed ? "rich-text--fallback" : null)">
+    @if (_failed)
+    {
+        <textarea class="form-control-admin" style="@($"min-height:{MinHeight}px;")"
+                  placeholder="@Placeholder" value="@Value"
+                  @onchange="OnFallbackChanged"></textarea>
+        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+            The rich-text editor could not be loaded, so this is plain text for now.
+        </div>
+    }
+    else
+    {
+        <div id="@_editorId" class="rich-text__surface" style="@($"min-height:{MinHeight}px;")"></div>
+    }
+</div>
+
+@code {
+    public enum ToolbarKind { Full, Minimal }
+
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public ToolbarKind Toolbar { get; set; } = ToolbarKind.Full;
+    [Parameter] public int MinHeight { get; set; } = 240;
+    [Parameter] public string? Placeholder { get; set; }
+
+    private readonly string _editorId = $"quill-{Guid.NewGuid():N}";
+    private DotNetObjectReference<RichTextEditor>? _dotNetRef;
+    private bool _initialized;
+    private bool _failed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        var ready = await JS.InvokeAsync<bool>(
+            "quillInit", _editorId, _dotNetRef, Value,
+            Toolbar == ToolbarKind.Minimal ? "minimal" : "full", Placeholder);
+
+        if (ready)
+        {
+            _initialized = true;
+        }
+        else
+        {
+            _failed = true;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnContentChanged(string html)
+    {
+        Value = html;
+        await ValueChanged.InvokeAsync(html);
+    }
+
+    private async Task OnFallbackChanged(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString() ?? string.Empty;
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_initialized)
+        {
+            // The circuit may already be gone when the browser tab closes.
+            try { await JS.InvokeVoidAsync("quillDispose", _editorId); }
+            catch (JSDisconnectedException) { }
+            catch (OperationCanceledException) { }
+        }
+
+        _dotNetRef?.Dispose();
+    }
+}

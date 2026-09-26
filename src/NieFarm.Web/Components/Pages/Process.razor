@@ -1,0 +1,85 @@
+@page "/quy-trinh"
+
+<PageTitle>Quy trình sản xuất - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="description"
+          content="Hành trình tạo nên cà phê sạch tại Nie Farm: thu hoạch chín 100%, sơ chế chuyên sâu, phơi giàn trong nhà màng và rang xay kiểm soát nhiệt." />
+</HeadContent>
+
+@* Hero *@
+<section class="relative py-section-padding-y overflow-hidden">
+    <div class="max-w-container-max mx-auto px-gutter relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+        <div>
+            <h1 class="text-headline-lg-mobile md:text-headline-lg text-deep-red mb-6">
+                Hành Trình Tạo Nên Cà Phê Sạch &amp; Chất Lượng Cao
+            </h1>
+            <p class="text-on-surface-variant text-body-lg mb-8 max-w-xl">
+                Tại Nie Farm, mỗi hạt cà phê là kết tinh của sự tỉ mỉ từ nông trại đến ly sứ. Chúng tôi tuân
+                thủ nghiêm ngặt quy trình kiểm soát chất lượng, mang đến hương vị nguyên bản và an toàn
+                tuyệt đối.
+            </p>
+            <a class="btn-brand inline-flex py-3 px-6 rounded font-label-bold text-label-bold" href="#tieu-chuan">
+                Khám Phá Quy Trình
+            </a>
+        </div>
+        <div class="relative h-[500px] rounded-xl overflow-hidden shadow-lg border border-amber-gold">
+            <img class="w-full h-full object-cover" src="/images/process-1.jpg"
+                 alt="Quả cà phê chín đỏ mọng trên cành trong sương sớm vùng cao nguyên" />
+        </div>
+    </div>
+</section>
+
+@* Timeline *@
+<section class="py-section-padding-y" id="tieu-chuan">
+    <div class="max-w-container-max mx-auto px-gutter">
+        <div class="text-center mb-16">
+            <h2 class="text-headline-md text-deep-red mb-4">Tiêu Chuẩn Sản Xuất Khắt Khe</h2>
+            <p class="text-on-surface-variant max-w-2xl mx-auto">
+                Mỗi bước trong quy trình đều được kiểm soát bởi các chuyên gia để đảm bảo chất lượng hạt
+                nhân xanh đạt chuẩn Specialty.
+            </p>
+        </div>
+
+        <ol class="relative timeline-line list-none">
+            @foreach (var step in SiteContent.ProcessSteps)
+            {
+                var reversed = step.Number % 2 == 0;
+                var last = step.Number == SiteContent.ProcessSteps.Length;
+
+                <li class="relative flex flex-col @(reversed ? "md:flex-row-reverse" : "md:flex-row") justify-between items-center w-full @(last ? "" : "mb-24") z-10 group">
+
+                    <div class="w-full md:w-5/12 mb-8 md:mb-0 @(reversed ? "md:text-left md:pl-12" : "md:text-right md:pr-12") pl-20 md:pl-0">
+                        <h3 class="text-headline-sm text-deep-red mb-3">@step.Number. @step.Title</h3>
+                        <p class="text-on-surface-variant">@step.Body</p>
+                    </div>
+
+                    <div class="absolute left-8 md:left-1/2 top-0 md:top-auto -translate-x-1/2 flex items-center justify-center w-16 h-16 rounded-full bg-cream-ivory border-4 border-amber-gold shadow-sm z-20 group-hover:scale-110 transition-transform duration-300">
+                        <span class="text-headline-sm font-bold text-deep-red" aria-hidden="true">
+                            @step.Number.ToString("00")
+                        </span>
+                    </div>
+
+                    <div class="w-full md:w-5/12 pl-20 md:pl-0 @(reversed ? "md:pr-12" : "md:pl-12")">
+                        <div class="rounded-lg overflow-hidden border border-amber-gold shadow-sm group-hover:shadow-md transition-shadow duration-300">
+                            <img class="w-full h-64 object-cover" src="@step.ImageUrl" alt="@step.ImageAlt" />
+                        </div>
+                    </div>
+                </li>
+            }
+        </ol>
+    </div>
+</section>
+
+@* CTA *@
+<section class="py-section-padding-y border-t border-amber-gold">
+    <div class="max-w-3xl mx-auto px-gutter text-center">
+        <h2 class="text-headline-md text-deep-red mb-6">Trải Nghiệm Sự Khác Biệt Của Cà Phê Sạch</h2>
+        <p class="text-on-surface-variant mb-8">
+            Liên hệ ngay với đội ngũ chuyên gia của chúng tôi để nhận mẫu thử và tư vấn giải pháp cà phê
+            phù hợp cho doanh nghiệp của bạn.
+        </p>
+        <a class="btn-brand inline-flex py-3 px-8 rounded-lg font-label-bold text-label-bold" href="#lien-he">
+            Nhận tư vấn miễn phí
+        </a>
+    </div>
+</section>

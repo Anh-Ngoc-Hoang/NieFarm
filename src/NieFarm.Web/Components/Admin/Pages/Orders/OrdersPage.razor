@@ -1,0 +1,113 @@
+@page "/admin/orders"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Orders.Dtos
+@using NieFarm.Application.Features.Admin.Orders.Queries
+@using NieFarm.Domain.Enums
+@inject ISender Sender
+
+<AdminPageTitle Title="Orders" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Orders</h1>
+        <p>Customer orders placed through the storefront.</p>
+    </div>
+</div>
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by code, name or phone…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+    <select class="form-control-admin" style="max-width:220px;"
+            @bind="_statusFilter" @bind:after="ApplyFilters">
+        <option value="">All statuses</option>
+        @foreach (var status in Enum.GetValues<OrderStatus>())
+        {
+            <option value="@status">@status</option>
+        }
+    </select>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:140px;">Code</th>
+                <th>Customer</th>
+                <th style="width:150px;">Phone</th>
+                <th style="width:90px;">Items</th>
+                <th style="width:150px;">Total</th>
+                <th style="width:140px;">Status</th>
+                <th style="width:160px;">Placed</th>
+                <th style="width:90px;text-align:right;">View</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in _filtered)
+            {
+                <tr>
+                    <td class="cell-primary">
+                        <a href="@($"/admin/orders/{order.Id}")">@order.Code</a>
+                        @if (!order.IsRead)
+                        {
+                            <AdminBadge Text="New" Variant="danger" />
+                        }
+                    </td>
+                    <td>@order.CustomerName</td>
+                    <td class="cell-muted">@order.Phone</td>
+                    <td>@order.ItemCount</td>
+                    <td class="cell-primary">@Money.Vnd(order.Total)</td>
+                    <td><AdminBadge Text="@order.Status.ToString()" Variant="@StatusVariant(order.Status)" /></td>
+                    <td class="cell-muted">@order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td>
+                        <div class="row-actions">
+                            <a class="btn-icon" title="Open" href="@($"/admin/orders/{order.Id}")">
+                                <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No orders found.</div>
+    }
+</div>
+
+@code {
+    private List<OrderAdminListDto> _all = [];
+    private List<OrderAdminListDto> _filtered = [];
+
+    private string _search = string.Empty;
+    private string _statusFilter = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _all = await Sender.Send(new GetOrdersAdminQuery());
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(o =>
+            (string.IsNullOrWhiteSpace(_search)
+             || o.Code.Contains(_search, StringComparison.OrdinalIgnoreCase)
+             || o.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+             || o.Phone.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(_statusFilter) || o.Status.ToString() == _statusFilter))
+            .ToList();
+
+    internal static string StatusVariant(OrderStatus status) => status switch
+    {
+        OrderStatus.New => "danger",
+        OrderStatus.Confirmed => "warning",
+        OrderStatus.Delivering => "warning",
+        OrderStatus.Completed => "success",
+        _ => "muted"
+    };
+}

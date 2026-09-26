@@ -1,0 +1,196 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+@inject NewOrderCountState OrderCountState
+@inject PendingReviewCountState ReviewCountState
+
+<aside class="admin-sidebar">
+    <div class="admin-sidebar__brand">
+        <span class="admin-sidebar__brand-mark">
+            <span class="material-symbols-outlined" aria-hidden="true">eco</span>
+        </span>
+        <span class="admin-sidebar__brand-text">NieFarm</span>
+    </div>
+
+    <nav class="admin-sidebar__nav">
+        @foreach (var group in NavGroups)
+        {
+            @if (group.Section is not null)
+            {
+                <div class="admin-nav-section">@group.Section</div>
+            }
+
+            @foreach (var item in group.Items)
+            {
+                @if (item.Children.Count > 0)
+                {
+                    var isOpen = _openGroups.Contains(item.Label);
+
+                    <div class="has-submenu @(isOpen ? "open" : null)">
+                        <button class="nav-link-admin" type="button"
+                                @onclick="() => ToggleGroup(item.Label)"
+                                aria-expanded="@isOpen">
+                            <span class="material-symbols-outlined" aria-hidden="true">@item.Icon</span>
+                            <span class="nav-link-admin__label">@item.Label</span>
+                            @* Rolled up so a collapsed group still shows its children's count. No
+                               current submenu child carries a badge key, so the ambiguous-tooltip
+                               case (null) never actually renders — kept generic on purpose. *@
+                            @RenderBadge(item.Children.Sum(child => BadgeCount(child.BadgeKey)), null)
+                            <span class="material-symbols-outlined nav-link-admin__chevron"
+                                  aria-hidden="true">expand_more</span>
+                        </button>
+                        <ul class="submenu">
+                            @foreach (var child in item.Children)
+                            {
+                                <li>
+                                    <NavLink class="nav-link-admin" href="@child.Href"
+                                             ActiveClass="active" Match="NavLinkMatch.All">
+                                        <span class="nav-link-admin__label">@child.Label</span>
+                                        @RenderBadge(BadgeCount(child.BadgeKey), child.BadgeKey)
+                                    </NavLink>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+                else
+                {
+                    <NavLink class="nav-link-admin" href="@item.Href"
+                             ActiveClass="active" Match="NavLinkMatch.All">
+                        <span class="material-symbols-outlined" aria-hidden="true">@item.Icon</span>
+                        <span class="nav-link-admin__label">@item.Label</span>
+                        @RenderBadge(BadgeCount(item.BadgeKey), item.BadgeKey)
+                    </NavLink>
+                }
+            }
+        }
+    </nav>
+</aside>
+
+@code {
+    private RenderFragment? RenderBadge(int count, string? badgeKey) => count <= 0
+        ? null
+        : @<span class="nav-link-admin__badge" title="@BadgeTooltip(badgeKey, count)">
+              @(count > 99 ? "99+" : count.ToString())
+          </span>;
+
+    private static string BadgeTooltip(string? badgeKey, int count) => badgeKey switch
+    {
+        BadgeKeys.NewOrders => $"{count} new order{(count == 1 ? "" : "s")}",
+        BadgeKeys.PendingReviews => $"{count} pending review{(count == 1 ? "" : "s")}",
+        _ => count.ToString()
+    };
+
+    // Which submenus are expanded. Seeded from the URL and re-seeded on navigation, but the
+    // user's own toggles are kept in between. Plain component state, so it cannot drift the
+    // way a document-level class toggle would.
+    private readonly HashSet<string> _openGroups = new(StringComparer.Ordinal);
+
+    private static class BadgeKeys
+    {
+        public const string NewOrders = "new-orders";
+        public const string PendingReviews = "pending-reviews";
+    }
+
+    private sealed record NavChild(string Label, string Href, string? BadgeKey = null);
+
+    private sealed record NavItem(
+        string Label,
+        string Icon,
+        string Href = "",
+        List<NavChild>? ChildrenRaw = null,
+        string? BadgeKey = null)
+    {
+        public List<NavChild> Children => ChildrenRaw ?? [];
+    }
+
+    private sealed record NavGroup(string? Section, List<NavItem> Items);
+
+    private static readonly List<NavGroup> NavGroups =
+    [
+        new(null,
+        [
+            new("Dashboard", "dashboard", "/admin")
+        ]),
+        new("Sales",
+        [
+            new("Orders", "receipt_long", "/admin/orders", BadgeKey: BadgeKeys.NewOrders),
+            new("Reviews", "rate_review", "/admin/reviews", BadgeKey: BadgeKeys.PendingReviews)
+        ]),
+        new("Catalog",
+        [
+            new("Products", "inventory_2", ChildrenRaw:
+            [
+                new("All Products", "/admin/products"),
+                new("Categories", "/admin/product-categories")
+            ])
+        ]),
+        new("Content",
+        [
+            new("Knowledge", "article", ChildrenRaw:
+            [
+                new("Articles", "/admin/articles"),
+                new("Categories", "/admin/article-categories")
+            ]),
+            new("Activities", "photo_library", "/admin/activities")
+        ]),
+        new("System",
+        [
+            new("Accounts & Roles", "manage_accounts", ChildrenRaw:
+            [
+                new("Accounts", "/admin/accounts"),
+                new("Roles", "/admin/roles")
+            ])
+        ])
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        OpenGroupsForCurrentUrl();
+        Navigation.LocationChanged += HandleLocationChanged;
+
+        OrderCountState.OnChange += HandleCountChanged;
+        ReviewCountState.OnChange += HandleCountChanged;
+
+        await Task.WhenAll(OrderCountState.RefreshAsync(), ReviewCountState.RefreshAsync());
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= HandleLocationChanged;
+        OrderCountState.OnChange -= HandleCountChanged;
+        ReviewCountState.OnChange -= HandleCountChanged;
+    }
+
+    // Raised from the state's own LocationChanged handler, so hop back onto the renderer.
+    private void HandleCountChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private int BadgeCount(string? badgeKey) => badgeKey switch
+    {
+        BadgeKeys.NewOrders => OrderCountState.Count,
+        BadgeKeys.PendingReviews => ReviewCountState.Count,
+        _ => 0
+    };
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        OpenGroupsForCurrentUrl();
+        StateHasChanged();
+    }
+
+    private void OpenGroupsForCurrentUrl()
+    {
+        var path = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0];
+
+        foreach (var item in NavGroups.SelectMany(g => g.Items).Where(i => i.Children.Count > 0))
+        {
+            if (item.Children.Any(c => path.Equals(c.Href.TrimStart('/'), StringComparison.OrdinalIgnoreCase)))
+                _openGroups.Add(item.Label);
+        }
+    }
+
+    private void ToggleGroup(string label)
+    {
+        if (!_openGroups.Remove(label))
+            _openGroups.Add(label);
+    }
+}

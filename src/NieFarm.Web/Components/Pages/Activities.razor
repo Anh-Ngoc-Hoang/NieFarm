@@ -1,0 +1,119 @@
+@page "/hoat-dong"
+@using NieFarm.Application.Features.Activities.Dtos
+@using NieFarm.Application.Features.Activities.Queries
+@using NieFarm.Domain.Enums
+@inject ISender Sender
+
+<PageTitle>Nhật ký hoạt động - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="description"
+          content="Khoảnh khắc từ nông trại Nie Farm: mùa thu hoạch, kiểm định chất lượng, hội thảo canh tác bền vững và nâng cấp cơ sở chế biến." />
+</HeadContent>
+
+<section class="max-w-container-max mx-auto px-gutter pt-12 mb-16 text-center">
+    <h1 class="text-headline-lg-mobile md:text-headline-lg text-deep-red mb-6">Nhật Ký Hoạt Động</h1>
+    <p class="text-body-lg text-on-surface-variant max-w-3xl mx-auto">
+        Khám phá những khoảnh khắc chân thực nhất từ nông trại Nie Farm, nơi sự tâm huyết và kỹ thuật canh
+        tác hiện đại hòa quyện để tạo nên những hạt cà phê chất lượng cao.
+    </p>
+</section>
+
+<section class="max-w-container-max mx-auto px-gutter pb-section-padding-y">
+    @if (_activities.Count == 0)
+    {
+        <p class="text-center text-body-lg text-on-surface-variant py-12">
+            Chưa có hoạt động nào được đăng tải.
+        </p>
+    }
+    else
+    {
+        <div class="masonry-grid">
+            @foreach (var activity in _activities)
+            {
+                var current = activity;
+
+                <div class="masonry-item">
+                    <button type="button" @onclick="() => Open(current)"
+                            class="interactive-card bg-white rounded-lg overflow-hidden cursor-pointer w-full text-left">
+                        <img class="w-full @HeightClass(current.CardSize) object-cover"
+                             src="@current.ImageUrl" alt="@current.ImageAlt" />
+                        <div class="p-6">
+                            <h2 class="text-headline-sm text-deep-red mb-2">@current.Title</h2>
+                            <p class="text-body-sm text-on-surface-variant flex items-center">
+                                <span class="material-symbols-outlined text-sm mr-1 text-forest-green"
+                                      aria-hidden="true">calendar_month</span>
+                                @FormatPeriod(current.EventDate)
+                            </p>
+                        </div>
+                    </button>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@* Detail modal *@
+<div class="modal-overlay fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 @(_selected is null ? null : "active")"
+     role="dialog" aria-modal="true" aria-labelledby="activity-modal-title"
+     aria-hidden="@(_selected is null)" @onclick="Close">
+
+    @if (_selected is not null)
+    {
+        <div class="modal-content bg-white w-full max-w-4xl max-h-[85vh] overflow-y-auto rounded-xl shadow-2xl relative border border-amber-gold"
+             @onclick:stopPropagation="true">
+
+            <button type="button" @onclick="Close" aria-label="Đóng"
+                    class="absolute top-4 right-4 p-2 text-on-surface-variant hover:text-deep-red transition-colors bg-white/80 backdrop-blur rounded-full z-10">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+
+            <img class="w-full h-64 sm:h-96 object-cover" src="@_selected.ImageUrl" alt="@_selected.ImageAlt" />
+
+            <div class="p-8 md:p-12">
+                <p class="flex items-center text-forest-green text-body-sm mb-3">
+                    <span class="material-symbols-outlined text-base mr-2" aria-hidden="true">calendar_month</span>
+                    @FormatFullDate(_selected.EventDate)
+                </p>
+
+                <h2 id="activity-modal-title" class="text-headline-md text-deep-red mb-6">@_selected.ModalTitle</h2>
+
+                <div class="text-body-lg text-on-surface-variant border-b border-amber-gold pb-6 mb-6 rich-text-content">
+                    @((MarkupString)_selected.Body)
+                </div>
+
+                <div class="flex flex-wrap gap-4 justify-between items-center">
+                    <span class="text-label-bold font-semibold text-amber-gold">Nie Farm Việt Nam</span>
+                    <button type="button" @onclick="Close"
+                            class="btn-secondary-brand inline-flex items-center justify-center px-6 py-2 rounded font-label-bold text-label-bold">
+                        Đóng
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ActivityDto> _activities = [];
+    private ActivityDto? _selected;
+
+    protected override async Task OnInitializedAsync() =>
+        _activities = await Sender.Send(new GetActivitiesQuery());
+
+    private void Open(ActivityDto activity) => _selected = activity;
+
+    private void Close() => _selected = null;
+
+    private static string HeightClass(ActivityCardSize size) => size switch
+    {
+        ActivityCardSize.Short => "h-64",
+        ActivityCardSize.Medium => "h-72",
+        ActivityCardSize.Tall => "h-80",
+        ActivityCardSize.ExtraTall => "h-96",
+        _ => "h-72"
+    };
+
+    private static string FormatPeriod(DateOnly date) => $"Tháng {date.Month}, {date.Year}";
+
+    private static string FormatFullDate(DateOnly date) => date.ToString("dd 'Tháng' M, yyyy");
+}

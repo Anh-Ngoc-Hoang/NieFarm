@@ -1,0 +1,91 @@
+@page "/dang-nhap"
+@layout AuthLayout
+
+<PageTitle>Đăng nhập - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<div class="min-h-screen w-full flex flex-col lg:flex-row">
+
+    <FarmStoryPanel />
+
+    @* Right panel: the login form. *@
+    <main class="flex-1 flex flex-col justify-center items-center px-gutter py-16">
+
+        <a class="lg:hidden mb-8 font-headline-sm text-headline-sm font-bold text-deep-red" href="/">Nie Farm Việt Nam</a>
+
+        <div class="w-full max-w-[360px]">
+            <h2 class="text-headline-md text-on-surface mb-2">Đăng nhập</h2>
+            <p class="text-body-lg text-secondary mb-8">
+                Đăng nhập để xem lịch sử đơn hàng của bạn.
+            </p>
+
+            @if (Error is not null)
+            {
+                <div class="mb-6 flex items-start gap-3 rounded-lg border border-alert-rust/40 bg-alert-rust/5 p-3 text-body-sm text-alert-rust"
+                     role="alert">
+                    <span class="material-symbols-outlined text-[20px] leading-none">warning</span>
+                    <span>@ErrorMessage</span>
+                </div>
+            }
+
+            @*
+                A plain HTML form, posted to the Razor Page that owns SignInManager. A Blazor
+                EditForm cannot set the auth cookie, because the circuit has no HTTP response.
+            *@
+            <form action="/pages/tai-khoan/dang-nhap" method="post" class="space-y-6">
+                <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+
+                <div class="flex flex-col">
+                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="Email">Email</label>
+                    <input id="Email" name="Email" type="email" required autofocus autocomplete="username"
+                           value="@Email" placeholder="ban@vidu.vn"
+                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                </div>
+
+                <div class="flex flex-col">
+                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="Password">Mật khẩu</label>
+                    <input id="Password" name="Password" type="password" required autocomplete="current-password"
+                           placeholder="••••••••"
+                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                </div>
+
+                <label class="flex items-center gap-2 text-body-sm text-secondary">
+                    <input type="checkbox" name="RememberMe" value="true" />
+                    Ghi nhớ đăng nhập
+                </label>
+
+                <button type="submit"
+                        class="btn-brand w-full py-4 rounded-lg font-label-bold text-label-bold flex items-center justify-center gap-2">
+                    Đăng nhập
+                    <span class="material-symbols-outlined text-[18px] leading-none">arrow_forward</span>
+                </button>
+            </form>
+
+            <p class="text-body-sm text-secondary text-center mt-6">
+                Chưa có tài khoản?
+                <a class="text-amber-gold font-semibold underline" href="/dang-ky">Đăng ký ngay</a>
+            </p>
+
+            <div class="mt-6 text-center">
+                <a class="inline-flex items-center gap-1 text-body-sm text-secondary hover:text-on-surface" href="/">
+                    <span class="material-symbols-outlined text-[16px] leading-none">arrow_back</span>
+                    Quay lại trang chủ
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+    [SupplyParameterFromQuery] public string? Email { get; set; }
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string ErrorMessage => Error switch
+    {
+        "locked" => "Tài khoản tạm thời bị khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.",
+        _ => "Email hoặc mật khẩu không đúng. Vui lòng thử lại."
+    };
+}

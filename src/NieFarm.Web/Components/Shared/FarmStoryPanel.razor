@@ -1,0 +1,52 @@
+@*
+    The "farm to cup" brand panel shared by the auth screens (login, register): a
+    loosely scattered photo collage on a soft, light background, each photo
+    straightening and lifting on hover. Hidden below lg so mobile is a plain
+    single-column form.
+*@
+
+<aside class="hidden lg:flex lg:w-[56%] xl:w-[60%] shrink-0 flex-col justify-between bg-[#FBF1EE] border-r border-soft-border p-10 xl:p-12 relative overflow-hidden">
+    <a class="relative z-10 font-headline-sm text-headline-sm font-bold text-deep-red" href="/">Nie Farm Việt Nam</a>
+
+    <div class="relative z-10 my-auto py-6 w-full">
+        <div class="max-w-md">
+            <span class="inline-flex items-center px-3 py-1 rounded-full bg-deep-red/10 border border-deep-red/20 text-deep-red text-body-sm font-semibold uppercase tracking-wider mb-4">
+                Hành trình hạt cà phê
+            </span>
+            <h1 class="text-headline-md text-deep-red leading-tight mb-3">Từ Nông Trại Đến Ly Cà Phê</h1>
+            <p class="text-body-sm text-on-surface-variant mb-8">
+                Mỗi hạt cà phê là một hành trình được chăm chút tỉ mỉ từ vùng đất đỏ bazan Tây Nguyên trù phú.
+            </p>
+        </div>
+
+        @* A loosely scattered photo collage (matches the Stitch auth-screen design): card 3
+           tucks back toward the left instead of continuing the diagonal, card 4 anchors to
+           the right edge, and each card straightens/lifts on hover. *@
+        <div class="relative h-[440px] xl:h-[520px] w-full">
+            <div class="absolute top-0 left-0 w-[42%] -rotate-3 z-10 transition-all duration-300 hover:rotate-0 hover:scale-105 hover:z-30">
+                <PolaroidPhoto ImageUrl="/images/process-2.jpg"
+                               ImageAlt="Đôi tay đeo găng chọn hái những quả cà phê chín đỏ trên cây trong vườn hữu cơ"
+                               Caption="1. Thu Hoạch" />
+            </div>
+            <div class="absolute top-[-20%] left-[50%] w-[44%] rotate-2 z-[15] transition-all duration-300 hover:rotate-0 hover:scale-105 hover:z-30">
+                <PolaroidPhoto ImageUrl="/images/process-3.jpg"
+                               ImageAlt="Hạt cà phê được rửa trong bồn thép không gỉ hiện đại với dòng nước sạch"
+                               Caption="2. Sơ Chế" />
+            </div>
+            <div class="absolute top-[50%] left-[18%] w-[42%] -rotate-2 z-[12] transition-all duration-300 hover:rotate-0 hover:scale-105 hover:z-30">
+                <PolaroidPhoto ImageUrl="/images/process-4.jpg"
+                               ImageAlt="Những giàn phơi cà phê thóc vàng óng bên trong nhà màng sáng sủa"
+                               Caption="3. Phơi Giàn" />
+            </div>
+            <div class="absolute top-[40%] left-[57%] w-[46%] rotate-3 z-20 transition-all duration-300 hover:rotate-0 hover:scale-105 hover:z-30">
+                <PolaroidPhoto ImageUrl="/images/process-5.jpg"
+                               ImageAlt="Máy rang cà phê công nghiệp hiện đại đang vận hành cùng màn hình theo dõi đường cong nhiệt"
+                               Caption="4. Rang Xay" />
+            </div>
+        </div>
+    </div>
+
+    <div class="relative z-10 pt-4 border-t border-soft-border text-body-sm text-secondary">
+        © @DateTime.Now.Year Nie Farm Việt Nam
+    </div>
+</aside>

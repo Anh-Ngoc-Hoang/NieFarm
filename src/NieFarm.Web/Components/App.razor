@@ -1,0 +1,53 @@
+@inject IHttpContextAccessor HttpContextAccessor
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+
+    @* Inter carries the full weight range so Vietnamese diacritics render correctly. *@
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@@400;500;600;700&display=swap" />
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@@100..700,0..1&display=swap" />
+
+    @* Tailwind must load before the token config assigns tailwind.config. *@
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <script src="@Assets["js/tailwind.config.js"]"></script>
+
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["NieFarm.Web.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" CartAnonymousId="@_cartAnonymousId" />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    @* Interop shim only — it pulls Quill itself from the CDN the first time an admin
+       opens a rich-text field, so public pages never pay for the editor. *@
+    <script src="@Assets["js/quill-editor.js"]"></script>
+</body>
+
+</html>
+
+@code {
+    // App.razor is statically rendered per request, so it can read the anonymous cart id
+    // stashed by CartCookieMiddleware in HttpContext.Items — a live Blazor circuit has no
+    // HttpContext, and the prerender DI scope is not the circuit's scope. Passed as a
+    // root-component parameter (serialized into the component marker, Data-Protection-
+    // protected) because a <CascadingValue> here would not cross the InteractiveServer
+    // render-mode boundary.
+    private string? _cartAnonymousId;
+
+    protected override void OnInitialized() =>
+        _cartAnonymousId = HttpContextAccessor.HttpContext?
+            .Items[NieFarm.Web.Services.Cart.CartCookie.HttpContextItemKey] as string;
+}

@@ -1,0 +1,640 @@
+@page "/thanh-toan"
+@layout CheckoutLayout
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using NieFarm.Application.Features.Addresses.Dtos
+@using NieFarm.Application.Features.Addresses.Queries
+@using NieFarm.Application.Features.Carts.Commands
+@using NieFarm.Application.Features.Carts.Dtos
+@using NieFarm.Application.Features.Carts.Queries
+@using NieFarm.Application.Features.Orders.Commands
+@using NieFarm.Domain.Entities
+@using NieFarm.Domain.Enums
+@using NieFarm.Web.Services.Cart
+@inject ISender Sender
+@inject NavigationManager Navigation
+@inject CartState CartState
+@implements IDisposable
+
+<PageTitle>Thanh toán - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<div class="w-full max-w-container-max mx-auto px-gutter py-12">
+
+    <div class="mb-10 text-center">
+        <h1 class="text-headline-md text-on-surface mb-2">Thanh Toán</h1>
+        <p class="text-body-lg text-secondary">Hoàn tất đơn hàng của bạn</p>
+    </div>
+
+    @* Stepper *@
+    <ol class="w-full max-w-3xl mx-auto mb-16 flex items-start justify-between relative list-none">
+        @for (var i = 0; i < Steps.Length; i++)
+        {
+            var step = Steps[i];
+            var state = i < CurrentStep ? "step-completed" : i == CurrentStep ? "step-active" : "step-inactive";
+
+            <li class="flex flex-col items-center relative z-10 w-32">
+                <span class="w-10 h-10 rounded-full flex items-center justify-center border-2 @state text-label-bold font-semibold mb-2"
+                      aria-hidden="true">
+                    @if (i < CurrentStep)
+                    {
+                        <span class="material-symbols-outlined text-[20px]">check</span>
+                    }
+                    else
+                    {
+                        @(i + 1)
+                    }
+                </span>
+                <span class="text-label-bold font-semibold text-center @(i <= CurrentStep ? "text-on-surface" : "text-secondary")"
+                      aria-current="@(i == CurrentStep ? "step" : null)">
+                    @step
+                </span>
+            </li>
+
+            @if (i < Steps.Length - 1)
+            {
+                <li class="flex-grow h-0.5 mx-2 mt-5 @(i < CurrentStep ? "step-line-active" : "step-line-inactive")"
+                    aria-hidden="true"></li>
+            }
+        }
+    </ol>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        @* Left: cart, address, payment *@
+        <div class="lg:col-span-8 space-y-8">
+
+            <section class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-headline-sm text-on-surface flex items-center gap-2">
+                        <span class="material-symbols-outlined text-amber-gold" aria-hidden="true">shopping_cart</span>
+                        Sản phẩm trong giỏ
+                    </h2>
+                    <a class="text-label-bold font-semibold text-amber-gold hover:underline" href="/cua-hang">Tiếp tục mua sắm</a>
+                </div>
+
+                @if (_lastRemoved is not null)
+                {
+                    <div class="mb-4 flex items-center justify-between gap-4 rounded-lg border border-amber-gold/30 bg-cream-ivory p-3 text-body-sm text-on-surface">
+                        <span>Đã xóa @_lastRemoved.Value.Name.</span>
+                        <button type="button" class="text-amber-gold font-semibold underline" @onclick="UndoRemoveAsync">
+                            Hoàn tác
+                        </button>
+                    </div>
+                }
+
+                @if (_cartUnavailable)
+                {
+                    <div class="text-body-sm text-alert-rust bg-alert-rust/5 border border-alert-rust/20 rounded-lg p-4" role="alert">
+                        Trình duyệt đang chặn cookie nên giỏ hàng không thể được lưu. Vui lòng bật cookie hoặc
+                        <a class="underline font-semibold" href="/dang-nhap?returnUrl=%2Fthanh-toan">đăng nhập</a>
+                        để tiếp tục.
+                    </div>
+                }
+                else if (_cart is null)
+                {
+                    <div class="space-y-4">
+                        @for (var i = 0; i < 2; i++)
+                        {
+                            <div class="h-24 bg-cream-ivory rounded-lg animate-pulse"></div>
+                        }
+                    </div>
+                }
+                else if (_cart.IsEmpty)
+                {
+                    <div class="text-center py-12">
+                        <span class="material-symbols-outlined text-amber-gold text-[48px]" aria-hidden="true">shopping_cart</span>
+                        <p class="text-body-lg text-secondary mt-4 mb-6">Giỏ hàng của bạn đang trống.</p>
+                        <a class="btn-brand inline-flex px-8 py-3 rounded-lg font-label-bold text-label-bold" href="/cua-hang">
+                            Tiếp tục mua sắm
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    <ul class="space-y-4">
+                        @foreach (var line in _cart.Lines)
+                        {
+                            <li class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-soft-border pb-4 last:border-0 last:pb-0 @(line.IsAvailable ? null : "opacity-60")">
+                                <div class="flex items-center gap-4">
+                                    <img class="w-20 h-20 object-cover rounded-lg border border-soft-border"
+                                         src="@line.ImageUrl" alt="@line.ImageAlt" />
+                                    <div>
+                                        <h3 class="text-label-bold font-semibold text-on-surface">
+                                            <a class="hover:text-forest-green transition-colors duration-250" href="@($"/san-pham/{line.Slug}")">@line.Name</a>
+                                        </h3>
+                                        @if (!string.IsNullOrWhiteSpace(line.Variant))
+                                        {
+                                            <p class="text-body-sm text-secondary mt-1">@line.Variant</p>
+                                        }
+                                        @if (!line.IsAvailable)
+                                        {
+                                            <span class="inline-block mt-1 text-xs font-semibold text-alert-rust bg-alert-rust/10 px-2 py-1 rounded-full">Tạm hết hàng</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-3 sm:gap-4">
+                                    <div class="flex items-center border border-amber-gold/30 rounded-lg w-max overflow-hidden bg-white">
+                                        <button type="button"
+                                                class="p-3 w-11 h-11 flex items-center justify-center text-forest-green hover:bg-surface-container-low transition-colors duration-250 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                disabled="@(_updating || line.Quantity <= 1)"
+                                                @onclick="() => DecrementAsync(line)" aria-label="Giảm số lượng @line.Name">
+                                            <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+                                        </button>
+                                        <input type="number" min="1" max="99" value="@line.Quantity" disabled="@_updating"
+                                               @onchange="e => OnQuantityInputAsync(line, e)"
+                                               class="w-14 text-center border-none focus:ring-0 font-medium bg-transparent text-on-surface p-2" />
+                                        <button type="button"
+                                                class="p-3 w-11 h-11 flex items-center justify-center text-forest-green hover:bg-surface-container-low transition-colors duration-250 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                disabled="@_updating"
+                                                @onclick="() => IncrementAsync(line)" aria-label="Tăng số lượng @line.Name">
+                                            <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                                        </button>
+                                    </div>
+
+                                    <div class="text-right min-w-[6rem]">
+                                        <p class="text-label-bold font-semibold text-on-surface">@SiteContent.Vnd(line.LineTotal)</p>
+                                        <p class="text-body-sm text-secondary">@SiteContent.Vnd(line.UnitPrice)/sp</p>
+                                    </div>
+
+                                    <button type="button"
+                                            class="p-3 w-11 h-11 flex items-center justify-center text-secondary hover:text-alert-rust transition-colors duration-250 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            disabled="@_updating"
+                                            @onclick="() => RemoveAsync(line)" aria-label="Xóa @line.Name khỏi giỏ hàng">
+                                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                    </button>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <AuthorizeView>
+                <NotAuthorized>
+                    <div class="bg-white border border-amber-gold/40 rounded-xl p-4 text-body-sm text-secondary flex flex-wrap gap-2 items-center">
+                        <span class="material-symbols-outlined text-amber-gold text-[20px]" aria-hidden="true">info</span>
+                        Đã có tài khoản?
+                        <a class="text-amber-gold font-semibold underline" href="/dang-nhap?returnUrl=%2Fthanh-toan">Đăng nhập</a>
+                        để lưu đơn hàng vào tài khoản của bạn. Bạn vẫn có thể đặt hàng mà không cần tài khoản.
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+
+            <section class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm">
+                <h2 class="text-headline-sm text-on-surface flex items-center gap-2 mb-6">
+                    <span class="material-symbols-outlined text-amber-gold" aria-hidden="true">location_on</span>
+                    Địa chỉ nhận hàng
+                </h2>
+
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="flex flex-col">
+                            <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="full-name">
+                                Họ và tên *
+                            </label>
+                            <input id="full-name" type="text" placeholder="Nhập họ và tên" @bind="_fullName"
+                                   class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                        </div>
+                        <div class="flex flex-col">
+                            <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="phone">
+                                Số điện thoại *
+                            </label>
+                            <input id="phone" type="tel" placeholder="Nhập số điện thoại" @bind="_phone"
+                                   class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col">
+                        <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="email">Email</label>
+                        <input id="email" type="email" placeholder="Nhập email (để nhận hóa đơn)" @bind="_email"
+                               class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                    </div>
+
+                    @if (_addressLookupFailed)
+                    {
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="flex flex-col">
+                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="province">
+                                    Tỉnh / Thành phố *
+                                </label>
+                                <input id="province" type="text" placeholder="Nhập tỉnh/thành phố"
+                                       @bind="_provinceName"
+                                       class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="ward">
+                                    Phường / Xã *
+                                </label>
+                                <input id="ward" type="text" placeholder="Nhập phường/xã"
+                                       @bind="_wardName"
+                                       class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                            </div>
+                        </div>
+                        <p class="text-body-sm text-secondary">Không tải được danh sách tỉnh/phường. Vui lòng nhập thủ công.</p>
+                    }
+                    else
+                    {
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="flex flex-col">
+                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="province">
+                                    Tỉnh / Thành phố *
+                                </label>
+                                <select id="province" @bind="_provinceCode" @bind:after="OnProvinceChangedAsync"
+                                        disabled="@_provincesLoading"
+                                        class="input-flat w-full p-3 text-body-sm bg-white text-on-surface disabled:bg-cream-ivory disabled:cursor-not-allowed">
+                                    <option value="">@(_provincesLoading ? "Đang tải..." : "Chọn Tỉnh/Thành")</option>
+                                    @foreach (var p in _provinces)
+                                    {
+                                        <option value="@p.Code">@p.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="ward">
+                                    Phường / Xã *
+                                </label>
+                                <select id="ward" @bind="_wardCode"
+                                        disabled="@(string.IsNullOrEmpty(_provinceCode) || _wardsLoading)"
+                                        class="input-flat w-full p-3 text-body-sm bg-white text-on-surface disabled:bg-cream-ivory disabled:cursor-not-allowed">
+                                    <option value="">@WardPlaceholder</option>
+                                    @foreach (var w in _wards)
+                                    {
+                                        <option value="@w.Code">@w.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="flex flex-col">
+                        <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="street">
+                            Địa chỉ cụ thể *
+                        </label>
+                        <input id="street" type="text" placeholder="Số nhà, tên đường..." @bind="_street"
+                               class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                    </div>
+
+                    <div class="flex flex-col">
+                        <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="note">
+                            Ghi chú đơn hàng
+                        </label>
+                        <textarea id="note" placeholder="Ghi chú thêm về đơn hàng..." @bind="_note"
+                                  class="input-flat w-full p-3 text-body-sm bg-white text-on-surface h-24 resize-none"></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm">
+                <h2 class="text-headline-sm text-on-surface flex items-center gap-2 mb-6">
+                    <span class="material-symbols-outlined text-amber-gold" aria-hidden="true">payments</span>
+                    Phương thức thanh toán
+                </h2>
+
+                <div class="space-y-4">
+                    @foreach (var method in PaymentMethods)
+                    {
+                        var current = method;
+
+                        <label class="flex items-center gap-4 p-4 border rounded-lg cursor-pointer transition-colors @(_payment == current.Id ? "border-amber-gold bg-cream-ivory" : "border-soft-border hover:bg-cream-ivory")">
+                            <input type="radio" name="payment_method" class="radio-custom w-5 h-5 text-amber-gold"
+                                   checked="@(_payment == current.Id)" @onchange="() => _payment = current.Id" />
+                            <span class="flex-grow">
+                                <span class="block text-label-bold font-semibold text-on-surface">@current.Title</span>
+                                <span class="block text-body-sm text-secondary mt-1">@current.Description</span>
+                            </span>
+                            <span class="material-symbols-outlined text-secondary" aria-hidden="true">@current.Icon</span>
+                        </label>
+                    }
+                </div>
+            </section>
+        </div>
+
+        @* Right: summary *@
+        <div class="lg:col-span-4">
+            <div class="bg-white border border-soft-border rounded-xl p-card-padding sticky top-28 shadow-sm">
+                <h2 class="text-headline-sm text-on-surface mb-6 border-b border-soft-border pb-4">Tóm tắt đơn hàng</h2>
+
+                <dl class="space-y-4 mb-6" aria-live="polite">
+                    <div class="flex justify-between items-center">
+                        <dt class="text-body-sm text-secondary">Tạm tính (@(_cart?.ItemCount ?? 0) sản phẩm)</dt>
+                        <dd class="text-label-bold font-semibold text-on-surface">@SiteContent.Vnd(_cart?.Subtotal ?? 0m)</dd>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <dt class="text-body-sm text-secondary">Phí vận chuyển</dt>
+                        <dd class="text-label-bold font-semibold text-on-surface">
+                            @SiteContent.Vnd(_cart?.ShippingFee ?? 0m)
+                        </dd>
+                    </div>
+                </dl>
+
+                <div class="flex gap-2 mb-6 border-t border-b border-soft-border py-4">
+                    <label class="sr-only" for="promo">Mã giảm giá</label>
+                    <input id="promo" type="text" placeholder="Mã giảm giá"
+                           class="input-flat flex-grow p-2 text-body-sm bg-white" />
+                    <button type="button" class="btn-secondary-brand px-4 rounded-lg font-label-bold text-label-bold">
+                        Áp dụng
+                    </button>
+                </div>
+
+                <div class="flex justify-between items-center mb-8">
+                    <span class="text-label-bold font-semibold text-on-surface text-lg">Tổng cộng</span>
+                    <span class="text-headline-sm font-bold text-amber-gold">@SiteContent.Vnd(_cart?.Total ?? 0m)</span>
+                </div>
+
+                @if (_cart is not null && _cart.IsEmpty && !_cartUnavailable)
+                {
+                    <p class="text-body-sm text-alert-rust text-center mb-4">
+                        Giỏ hàng trống — hãy thêm sản phẩm trước khi đặt hàng.
+                    </p>
+                }
+
+                @if (_cart is { HasUnavailableLines: true })
+                {
+                    <p class="text-body-sm text-alert-rust text-center mb-4">
+                        Vui lòng xóa sản phẩm đã hết hàng trước khi đặt hàng.
+                    </p>
+                }
+
+                @if (_errors.Count > 0)
+                {
+                    <ul class="mb-4 rounded-lg border border-alert-rust/40 bg-alert-rust/5 p-3 text-body-sm text-alert-rust space-y-1"
+                        role="alert">
+                        @foreach (var error in _errors)
+                        {
+                            <li>@error</li>
+                        }
+                    </ul>
+                }
+
+                <button type="button"
+                        disabled="@(_submitting || _updating || _cartUnavailable || _cart is null || _cart.IsEmpty || _cart.HasUnavailableLines)"
+                        @onclick="PlaceOrderAsync"
+                        class="btn-brand w-full py-4 rounded-lg font-label-bold text-label-bold flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                    @(_submitting ? "Đang xử lý..." : "Xác nhận đặt hàng")
+                    @if (!_submitting)
+                    {
+                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">arrow_forward</span>
+                    }
+                </button>
+
+                <p class="text-body-sm text-secondary text-center mt-4 text-xs">
+                    Bằng cách đặt hàng, bạn đồng ý với
+                    <a class="text-amber-gold underline" href="/dieu-khoan-su-dung">Điều khoản sử dụng</a>
+                    của chúng tôi.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly string[] Steps = ["Giỏ hàng", "Địa chỉ", "Xác nhận"];
+
+    // The design shows the address step selected.
+    private const int CurrentStep = 1;
+
+    private sealed record PaymentOption(PaymentMethod Id, string Title, string Description, string Icon);
+
+    private static readonly PaymentOption[] PaymentMethods =
+    [
+        new(PaymentMethod.CashOnDelivery, "Thanh toán khi nhận hàng (COD)", "Nhận hàng và thanh toán trực tiếp.", "local_shipping"),
+        new(PaymentMethod.BankTransfer,   "Chuyển khoản ngân hàng", "Chuyển khoản qua mã QR an toàn và nhanh chóng.", "account_balance")
+    ];
+
+    private PaymentMethod _payment = PaymentMethod.CashOnDelivery;
+
+    // Real totals are computed server-side (CartAssembler, re-derived from the Products table)
+    // — see .claude/rules/security.md.
+    [CascadingParameter(Name = "CartAnonymousId")] public string? CartAnonymousId { get; set; }
+    private CartDto? _cart;
+    private bool _updating;
+    private bool _cartUnavailable;   // no user and no cookie — cookies blocked
+    private (int ProductId, string VariantKey, string Name, int Quantity)? _lastRemoved;
+
+    private IReadOnlyList<ProvinceDto> _provinces = [];
+    private IReadOnlyList<WardDto> _wards = [];
+    private string? _provinceCode;
+    private string? _wardCode;
+    private string? _provinceName;   // manual-entry fallback only
+    private string? _wardName;       // manual-entry fallback only
+    private bool _provincesLoading;
+    private bool _wardsLoading;
+    private bool _addressLookupFailed;
+    private readonly CancellationTokenSource _cts = new();
+
+    private string _fullName = string.Empty;
+    private string _phone = string.Empty;
+    private string? _email;
+    private string _street = string.Empty;
+    private string? _note;
+    private bool _submitting;
+    private List<string> _errors = [];
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string WardPlaceholder =>
+        _wardsLoading ? "Đang tải..." : string.IsNullOrEmpty(_provinceCode) ? "Chọn Tỉnh/Thành trước" : "Chọn Phường/Xã";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Prerender pass: skip the outbound calls so the first paint is never blocked by a
+        // third party, and so the requests are not made twice (prerender + circuit). The
+        // guest-cart merge and demo seed inside CartState are writes and must not run during
+        // prerender — this is why the cart load also lives inside this guard.
+        if (!RendererInfo.IsInteractive)
+            return;
+
+        ClaimsPrincipal? user = null;
+        string? userId = null;
+        if (AuthState is not null)
+        {
+            user = (await AuthState).User;
+            if (user.Identity?.IsAuthenticated == true)
+                userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        }
+
+        if (string.IsNullOrWhiteSpace(userId) && string.IsNullOrWhiteSpace(CartAnonymousId))
+        {
+            // Cookies blocked — the page surfaces this, not the handlers.
+            _cartUnavailable = true;
+        }
+        else
+        {
+            try
+            {
+                await CartState.EnsureInitializedAsync(userId, CartAnonymousId);
+                _cart = await Sender.Send(new GetCartQuery(CartAnonymousId), _cts.Token);
+            }
+            catch (OperationCanceledException) { /* circuit tore down */ }
+        }
+
+        _provincesLoading = true;
+        try
+        {
+            var result = await Sender.Send(new GetProvincesQuery(), _cts.Token);
+            if (result.IsSuccess) _provinces = result.Value;
+            else _addressLookupFailed = true;
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        finally { _provincesLoading = false; }
+
+        if (user is not null && user.Identity?.IsAuthenticated == true)
+        {
+            _fullName = string.IsNullOrWhiteSpace(_fullName)
+                ? user.FindFirst("FullName")?.Value ?? string.Empty : _fullName;
+            _email = string.IsNullOrWhiteSpace(_email)
+                ? user.FindFirst(ClaimTypes.Email)?.Value ?? user.Identity.Name ?? string.Empty : _email;
+        }
+    }
+
+    private Task IncrementAsync(CartLineDto line) => SetQuantityAsync(line.ProductId, line.VariantKey, line.Quantity + 1);
+
+    private Task DecrementAsync(CartLineDto line) => SetQuantityAsync(line.ProductId, line.VariantKey, line.Quantity - 1);
+
+    private Task OnQuantityInputAsync(CartLineDto line, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var parsed))
+            return SetQuantityAsync(line.ProductId, line.VariantKey, Math.Clamp(parsed, 1, Cart.MaxQuantityPerItem));
+
+        // Unparseable input: leave the previous value, send nothing, just repaint the input
+        // back to its bound value.
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task SetQuantityAsync(int productId, string variantKey, int quantity)
+    {
+        // Every mutation is a write on the shared scoped AppDbContext — parallel sends would
+        // throw "A second operation was started on this context instance…" (data-access.md).
+        if (_updating) return;
+        _updating = true;
+
+        try
+        {
+            var clamped = Math.Clamp(quantity, 1, Cart.MaxQuantityPerItem);
+            var result = await Sender.Send(new SetCartLineQuantityCommand(productId, variantKey, clamped, CartAnonymousId), _cts.Token);
+
+            if (result.IsSuccess)
+            {
+                _cart = result.Value;
+                CartState.Set(_cart.ItemCount);
+                _errors = [];
+                _lastRemoved = null;
+            }
+            else
+            {
+                _errors = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .DefaultIfEmpty("Không thể cập nhật giỏ hàng. Vui lòng thử lại.")
+                    .ToList();
+            }
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        finally { _updating = false; }
+    }
+
+    private async Task RemoveAsync(CartLineDto line)
+    {
+        if (_updating) return;
+        _updating = true;
+
+        try
+        {
+            var result = await Sender.Send(new RemoveCartLineCommand(line.ProductId, line.VariantKey, CartAnonymousId), _cts.Token);
+
+            if (result.IsSuccess)
+            {
+                _cart = result.Value;
+                CartState.Set(_cart.ItemCount);
+                _errors = [];
+                _lastRemoved = (line.ProductId, line.VariantKey, line.Name, line.Quantity);
+            }
+            else
+            {
+                _errors = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .DefaultIfEmpty("Không thể xóa sản phẩm khỏi giỏ hàng. Vui lòng thử lại.")
+                    .ToList();
+            }
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        finally { _updating = false; }
+    }
+
+    private async Task UndoRemoveAsync()
+    {
+        if (_lastRemoved is not { } removed) return;
+        _lastRemoved = null;
+        await SetQuantityAsync(removed.ProductId, removed.VariantKey, removed.Quantity);
+    }
+
+    private async Task PlaceOrderAsync()
+    {
+        if (_submitting) return;          // guards against a double-click creating two orders
+        _submitting = true;
+        _errors = [];
+
+        try
+        {
+            // Resolve the display names for the selected codes; fall back to the manual-entry
+            // text inputs shown when the address lookup is unavailable.
+            var province = _addressLookupFailed
+                ? _provinceName
+                : _provinces.FirstOrDefault(p => p.Code.ToString() == _provinceCode)?.Name;
+            var ward = _addressLookupFailed
+                ? _wardName
+                : _wards.FirstOrDefault(w => w.Code.ToString() == _wardCode)?.Name;
+
+            var result = await Sender.Send(new CreateOrderCommand(
+                _fullName, _phone, _email, _street,
+                ward ?? string.Empty, province ?? string.Empty,
+                _note, _payment, CartAnonymousId), _cts.Token);
+
+            if (result.IsSuccess)
+            {
+                CartState.Set(0);
+                Navigation.NavigateTo($"/dat-hang-thanh-cong/{result.Value.Code}");
+                return;                   // leave _submitting true; we are navigating away
+            }
+
+            _errors = result.ValidationErrors.Select(v => v.ErrorMessage)
+                .Concat(result.Errors)
+                .DefaultIfEmpty("Không thể đặt hàng. Vui lòng thử lại.")
+                .ToList();
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        finally
+        {
+            if (_errors.Count > 0) _submitting = false;
+        }
+    }
+
+    private async Task OnProvinceChangedAsync()
+    {
+        _wardCode = null;
+        _wards = [];
+
+        if (!int.TryParse(_provinceCode, out var code) || code <= 0)
+            return;
+
+        _wardsLoading = true;
+        StateHasChanged();               // paint the "Đang tải..." state before awaiting
+        try
+        {
+            var result = await Sender.Send(new GetWardsQuery(code), _cts.Token);
+            _wards = result.IsSuccess ? result.Value : [];
+        }
+        catch (OperationCanceledException) { }
+        finally { _wardsLoading = false; }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

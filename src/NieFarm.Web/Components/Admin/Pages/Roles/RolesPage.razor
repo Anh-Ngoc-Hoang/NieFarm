@@ -1,0 +1,56 @@
+@page "/admin/roles"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Roles.Dtos
+@using NieFarm.Application.Features.Admin.Roles.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Roles" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Roles</h1>
+        <p>Roles are fixed in code and seeded on start-up; assign them from the Accounts page.</p>
+    </div>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Role</th>
+                <th style="width:140px;">Accounts</th>
+                <th>Grants</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var role in _roles)
+            {
+                <tr>
+                    <td class="cell-primary">@role.Name</td>
+                    <td>@role.UserCount</td>
+                    <td class="cell-muted">@Describe(role.Name)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_roles.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No roles found.</div>
+    }
+</div>
+
+@code {
+    private List<RoleDto> _roles = [];
+
+    protected override async Task OnInitializedAsync() =>
+        _roles = await Sender.Send(new GetRolesQuery());
+
+    private static string Describe(string role) => role switch
+    {
+        "SuperAdmin" => "Full access, including account management.",
+        "Admin" => "Full access to the catalog, content and orders.",
+        _ => "No admin access."
+    };
+}

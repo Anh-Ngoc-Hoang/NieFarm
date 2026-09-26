@@ -1,0 +1,111 @@
+@page "/dang-ky"
+@layout AuthLayout
+
+<PageTitle>Đăng ký - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<div class="min-h-screen w-full flex flex-col lg:flex-row">
+
+    <FarmStoryPanel />
+
+    @* Right panel: the registration form. *@
+    <main class="flex-1 flex flex-col justify-center items-center px-gutter py-16">
+
+        <a class="lg:hidden mb-8 font-headline-sm text-headline-sm font-bold text-deep-red" href="/">Nie Farm Việt Nam</a>
+
+        <div class="w-full max-w-[360px]">
+            <h2 class="text-headline-md text-on-surface mb-2">Đăng ký tài khoản</h2>
+            <p class="text-body-lg text-secondary mb-8">
+                Tạo tài khoản để lưu và theo dõi đơn hàng của bạn.
+            </p>
+
+            @if (Error is not null)
+            {
+                <div class="mb-6 flex items-start gap-3 rounded-lg border border-alert-rust/40 bg-alert-rust/5 p-3 text-body-sm text-alert-rust"
+                     role="alert">
+                    <span class="material-symbols-outlined text-[20px] leading-none">warning</span>
+                    <span>@Error</span>
+                </div>
+            }
+
+            @*
+                A plain HTML form, posted to the Razor Page that owns SignInManager. A Blazor
+                EditForm cannot set the auth cookie, because the circuit has no HTTP response.
+            *@
+            <form action="/pages/tai-khoan/dang-ky" method="post" class="space-y-6">
+                <div class="flex flex-col">
+                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="FullName">
+                        Họ và tên
+                    </label>
+                    <input id="FullName" name="FullName" type="text" required autofocus
+                           value="@FullName" placeholder="Nhập họ và tên"
+                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                </div>
+
+                <div class="flex flex-col">
+                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="Email">Email</label>
+                    <input id="Email" name="Email" type="email" required autocomplete="username"
+                           value="@Email" placeholder="ban@vidu.vn"
+                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                </div>
+
+                <div class="flex flex-col">
+                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="PhoneNumber">
+                        Số điện thoại (không bắt buộc)
+                    </label>
+                    <input id="PhoneNumber" name="PhoneNumber" type="tel"
+                           value="@Phone" placeholder="Nhập số điện thoại"
+                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                </div>
+
+                <div class="flex flex-col">
+                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="Password">
+                        Mật khẩu
+                    </label>
+                    <input id="Password" name="Password" type="password" required autocomplete="new-password"
+                           placeholder="••••••••"
+                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                    <p class="text-body-sm text-secondary mt-1">
+                        Ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số.
+                    </p>
+                </div>
+
+                <div class="flex flex-col">
+                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="ConfirmPassword">
+                        Xác nhận mật khẩu
+                    </label>
+                    <input id="ConfirmPassword" name="ConfirmPassword" type="password" required autocomplete="new-password"
+                           placeholder="••••••••"
+                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                </div>
+
+                <button type="submit"
+                        class="btn-brand w-full py-4 rounded-lg font-label-bold text-label-bold flex items-center justify-center gap-2">
+                    Đăng ký
+                    <span class="material-symbols-outlined text-[18px] leading-none">arrow_forward</span>
+                </button>
+            </form>
+
+            <p class="text-body-sm text-secondary text-center mt-6">
+                Đã có tài khoản?
+                <a class="text-amber-gold font-semibold underline" href="/dang-nhap">Đăng nhập</a>
+            </p>
+
+            <div class="mt-6 text-center">
+                <a class="inline-flex items-center gap-1 text-body-sm text-secondary hover:text-on-surface" href="/">
+                    <span class="material-symbols-outlined text-[16px] leading-none">arrow_back</span>
+                    Quay lại trang chủ
+                </a>
+            </div>
+        </div>
+    </main>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Error { get; set; }
+    [SupplyParameterFromQuery] public string? Email { get; set; }
+    [SupplyParameterFromQuery] public string? FullName { get; set; }
+    [SupplyParameterFromQuery] public string? Phone { get; set; }
+}

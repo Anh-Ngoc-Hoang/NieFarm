@@ -1,0 +1,439 @@
+/* ---------------------------------------------------------------------------
+   NieFarm public site — design system
+   Ported from the Stitch project "NieFarm" (id 3649571720089026821).
+   Tailwind utilities come from the CDN build configured in js/tailwind.config.js;
+   this file holds the component classes the screens rely on.
+
+   Brand palette
+     deep-red      #6B1313   header, footer, headings, price
+     amber-gold    #D4A359   accents, borders, active nav underline
+     forest-green  #2C4A34   primary action colour
+     cream-ivory   #F9F6F0   page canvas
+     cream-shade   #EFECE5   alternating panels
+     soft-border   #E5E7EB   structural dividers, input outlines
+--------------------------------------------------------------------------- */
+
+:root {
+    --deep-red: #6B1313;
+    --amber-gold: #D4A359;
+    --forest-green: #2C4A34;
+    --forest-green-dark: #1e3324;
+    --cream-ivory: #F9F6F0;
+    --cream-shade: #EFECE5;
+    --soft-border: #E5E7EB;
+    --card-border: #e5e2dc;
+    --elevation-hover: 0 4px 12px rgba(46, 46, 46, 0.06);
+}
+
+html {
+    scroll-behavior: smooth;
+    /* Sticky 80px header — keep anchor targets clear of it. */
+    scroll-padding-top: 6rem;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background-color: var(--cream-ivory);
+    color: #1a1c1c;
+}
+
+h1:focus,
+h1:focus-visible {
+    outline: none;
+}
+
+/* Material Symbols ------------------------------------------------------- */
+
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.icon-fill {
+    font-variation-settings: 'FILL' 1;
+}
+
+/* Buttons ---------------------------------------------------------------- */
+
+.btn-brand {
+    background-color: var(--forest-green);
+    color: #ffffff;
+    transition: all 250ms ease;
+}
+
+.btn-brand:hover {
+    background-color: var(--forest-green-dark);
+    transform: scale(1.02);
+    box-shadow: var(--elevation-hover);
+}
+
+.btn-secondary-brand {
+    background-color: transparent;
+    border: 1px solid var(--forest-green);
+    color: var(--forest-green);
+    transition: all 250ms ease;
+}
+
+.btn-secondary-brand:hover {
+    background-color: var(--forest-green);
+    color: #ffffff;
+    transform: scale(1.02);
+}
+
+/* Cards ------------------------------------------------------------------ */
+
+.flat-card {
+    border: 1px solid var(--amber-gold);
+    transition: all 250ms ease;
+}
+
+.flat-card:hover,
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--elevation-hover);
+}
+
+.hover-lift {
+    transition: transform 250ms ease, box-shadow 250ms ease;
+}
+
+.card-hover {
+    transition: transform 250ms ease, box-shadow 250ms ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--elevation-hover);
+}
+
+.interactive-card {
+    border: 1px solid var(--soft-border);
+    transition: all 250ms ease;
+}
+
+.interactive-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--elevation-hover);
+    border-color: transparent;
+}
+
+.glass-panel {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--amber-gold);
+}
+
+.grayscale-hover {
+    filter: grayscale(100%);
+    transition: filter 300ms ease, transform 300ms ease;
+}
+
+.grayscale-hover:hover {
+    filter: grayscale(0%);
+    transform: scale(1.05);
+}
+
+/* Form controls ---------------------------------------------------------- */
+
+.input-flat {
+    border: 1px solid var(--soft-border);
+    border-radius: 8px;
+    transition: all 250ms ease;
+}
+
+.input-flat:focus,
+.input-focus-glow:focus {
+    border-color: var(--amber-gold);
+    box-shadow: 0 0 0 4px rgba(212, 163, 89, 0.15);
+    outline: none;
+}
+
+.radio-custom:checked {
+    background-color: var(--amber-gold);
+    border-color: var(--amber-gold);
+}
+
+.radio-custom:focus {
+    --tw-ring-color: rgba(212, 163, 89, 0.5);
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid var(--alert-rust, #B45309);
+}
+
+.validation-message {
+    color: #B45309;
+}
+
+/* Checkout stepper ------------------------------------------------------- */
+
+.step-active {
+    border-color: var(--amber-gold);
+    background-color: var(--amber-gold);
+    color: #ffffff;
+}
+
+.step-completed {
+    border-color: var(--amber-gold);
+    background-color: #ffffff;
+    color: var(--amber-gold);
+}
+
+.step-inactive {
+    border-color: var(--soft-border);
+    background-color: #ffffff;
+    color: #5E5E5E;
+}
+
+.step-line-active {
+    background-color: var(--amber-gold);
+}
+
+.step-line-inactive {
+    background-color: var(--soft-border);
+}
+
+/* Process timeline ------------------------------------------------------- */
+
+.timeline-line::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 2px;
+    background-color: var(--amber-gold);
+    transform: translateX(-50%);
+    z-index: 0;
+}
+
+@media (max-width: 767px) {
+    .timeline-line::before {
+        left: 2rem;
+    }
+}
+
+/* Activities gallery ----------------------------------------------------- */
+
+.masonry-grid {
+    column-count: 1;
+    column-gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+    .masonry-grid {
+        column-count: 2;
+    }
+}
+
+@media (min-width: 1024px) {
+    .masonry-grid {
+        column-count: 3;
+    }
+}
+
+.masonry-item {
+    break-inside: avoid;
+    margin-bottom: 1.5rem;
+}
+
+/* Spacing for Quill-authored HTML (RichTextEditor output) rendered via MarkupString. */
+.rich-text-content p,
+.rich-text-content ul,
+.rich-text-content ol {
+    margin-bottom: 1rem;
+}
+
+.rich-text-content p:last-child,
+.rich-text-content ul:last-child,
+.rich-text-content ol:last-child {
+    margin-bottom: 0;
+}
+
+.rich-text-content ul,
+.rich-text-content ol {
+    padding-left: 1.5rem;
+}
+
+.rich-text-content ul {
+    list-style: disc;
+}
+
+.rich-text-content ol {
+    list-style: decimal;
+}
+
+.rich-text-content strong {
+    font-weight: 600;
+}
+
+.modal-overlay {
+    background-color: rgba(46, 46, 46, 0.5);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 300ms ease;
+    pointer-events: none;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-content {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+    transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-overlay.active .modal-content {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+/* Order lookup results --------------------------------------------------- */
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(1rem);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.5s ease forwards;
+}
+
+/* Blazor error UI -------------------------------------------------------- */
+
+.blazor-error-boundary {
+    background: #b32121;
+    padding: 1rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "Đã xảy ra lỗi.";
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .btn-brand,
+    .btn-secondary-brand,
+    .flat-card,
+    .hover-lift,
+    .card-hover,
+    .interactive-card,
+    .grayscale-hover,
+    .modal-content,
+    .fade-in-up {
+        transition: none;
+        animation: none;
+    }
+
+    .btn-brand:hover,
+    .btn-secondary-brand:hover,
+    .flat-card:hover,
+    .hover-lift:hover,
+    .card-hover:hover,
+    .interactive-card:hover,
+    .grayscale-hover:hover {
+        transform: none;
+    }
+}
+
+/* Article body ----------------------------------------------------------- */
+
+.article-content h2 {
+    font-size: 32px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--deep-red);
+    margin-top: 48px;
+    margin-bottom: 24px;
+}
+
+.article-content h3 {
+    font-size: 24px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: #1a1c1c;
+    margin-top: 32px;
+    margin-bottom: 16px;
+}
+
+.article-content p {
+    font-size: 18px;
+    line-height: 1.7;
+    color: #554337;
+    margin-bottom: 24px;
+}
+
+.article-content ul {
+    list-style-type: disc;
+    margin-left: 24px;
+    margin-bottom: 24px;
+}
+
+.article-content li {
+    font-size: 18px;
+    line-height: 1.7;
+    color: #554337;
+    margin-bottom: 8px;
+}
+
+.article-content strong {
+    color: #1a1c1c;
+    font-weight: 600;
+}
+
+.premium-divider {
+    border-top: 1px solid var(--amber-gold);
+    opacity: 0.3;
+}
+
+.ghost-button {
+    border: 1px solid var(--deep-red);
+    color: var(--deep-red);
+    transition: all 250ms ease;
+}
+
+.ghost-button:hover {
+    background-color: var(--deep-red);
+    color: #ffffff;
+}
+
+/* Dotted texture behind the article CTA banner. */
+.dotted-overlay {
+    background-image: radial-gradient(circle, #ffffff 2px, transparent 2px);
+    background-size: 20px 20px;
+}

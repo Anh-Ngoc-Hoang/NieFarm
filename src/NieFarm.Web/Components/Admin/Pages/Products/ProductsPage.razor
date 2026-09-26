@@ -1,0 +1,212 @@
+@page "/admin/products"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.ProductCategories.Dtos
+@using NieFarm.Application.Features.Admin.ProductCategories.Queries
+@using NieFarm.Application.Features.Admin.Products.Commands
+@using NieFarm.Application.Features.Admin.Products.Dtos
+@using NieFarm.Application.Features.Admin.Products.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Products" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Products</h1>
+        <p>Manage the catalog shown in the shop.</p>
+    </div>
+    <button class="btn-admin" type="button" disabled="@(_categories.Count == 0)"
+            @onclick="() => _formModal.OpenForCreate()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Product
+    </button>
+</div>
+
+@if (_categories.Count == 0)
+{
+    <div class="admin-card">
+        <div class="admin-card__body cell-muted">
+            No categories yet. Create a <a href="/admin/product-categories">product category</a> first.
+        </div>
+    </div>
+}
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by product name…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+    <select class="form-control-admin" style="max-width:240px;"
+            @bind="_categoryFilter" @bind:after="ApplyFilters">
+        <option value="">All categories</option>
+        @foreach (var category in _categories)
+        {
+            <option value="@category.Slug">@category.Name</option>
+        }
+    </select>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:64px;">Image</th>
+                <th>Product</th>
+                <th>Category</th>
+                <th style="width:150px;">Price</th>
+                <th style="width:120px;">Visible</th>
+                <th style="width:120px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in _filtered)
+            {
+                <tr>
+                    <td>
+                        <div class="table-thumb">
+                            @if (!string.IsNullOrWhiteSpace(product.ImageUrl))
+                            {
+                                <img src="@product.ImageUrl" alt="@product.Name" />
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined cell-muted" aria-hidden="true">coffee</span>
+                            }
+                        </div>
+                    </td>
+                    <td class="cell-primary">
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <span>@product.Name</span>
+                            @if (!string.IsNullOrWhiteSpace(product.Badge))
+                            {
+                                <AdminBadge Text="@product.Badge" Variant="muted" />
+                            }
+                            @if (product.IsFeatured)
+                            {
+                                <AdminBadge Text="Featured" Variant="success" />
+                            }
+                            @if (product.VariantCount > 0)
+                            {
+                                <AdminBadge Text="@($"{product.VariantCount} variants")" Variant="muted" />
+                            }
+                        </div>
+                        <div class="cell-muted" style="font-size:12px;">/@product.Slug</div>
+                    </td>
+                    <td><AdminBadge Text="@product.CategoryName" Variant="muted" /></td>
+                    <td class="cell-primary">@PriceCell(product)</td>
+                    <td>
+                        @if (product.IsVisible)
+                        {
+                            <AdminBadge Text="Visible" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Hidden" Variant="muted" />
+                        }
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => _formModal.OpenForEditAsync(product.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(product)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No products found.</div>
+    }
+</div>
+
+@if (_deleteError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-top:16px;">@_deleteError</div>
+}
+
+<ProductFormModal @ref="_formModal" Categories="_categories" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete product?"
+              Message="@($"Delete \"{_deleteTarget?.Name}\"? This cannot be undone.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<ProductAdminListDto> _all = [];
+    private List<ProductAdminListDto> _filtered = [];
+    private List<ProductCategoryDto> _categories = [];
+
+    private string _search = string.Empty;
+    private string _categoryFilter = string.Empty;
+    private string? _deleteError;
+
+    private ProductFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private ProductAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    /// <summary>
+    /// What the product actually sells for: the span across its variants, or its own price
+    /// when it has none.
+    /// </summary>
+    private static string PriceCell(ProductAdminListDto product)
+    {
+        if (product.MinPrice is not { } min || product.MaxPrice is not { } max)
+            return Money.Vnd(product.Price);
+
+        return min == max ? Money.Vnd(min) : $"{Money.Vnd(min)} – {Money.Vnd(max)}";
+    }
+
+    private async Task ReloadAsync()
+    {
+        // Both are read queries, so each resolves its own DbContext and they can overlap —
+        // see .claude/rules/data-access.md.
+        var categoriesTask = Sender.Send(new GetProductCategoriesQuery());
+        var productsTask = Sender.Send(new GetProductsAdminQuery());
+        await Task.WhenAll(categoriesTask, productsTask);
+
+        _categories = categoriesTask.Result;
+        _all = productsTask.Result;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(p =>
+            (string.IsNullOrWhiteSpace(_search)
+             || p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(_categoryFilter) || p.CategorySlug == _categoryFilter))
+            .ToList();
+
+    private void AskDelete(ProductAdminListDto product)
+    {
+        _deleteError = null;
+        _deleteTarget = product;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteProductCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _deleteError = result.Errors.FirstOrDefault() ?? "Could not delete the product.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

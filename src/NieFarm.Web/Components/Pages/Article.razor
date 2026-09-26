@@ -1,0 +1,90 @@
+@page "/kien-thuc"
+
+<PageTitle>Kiến thức cà phê - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="description"
+          content="Câu chuyện từ nông trại, kiến thức pha chế chuyên sâu và xu hướng thưởng thức cà phê mới nhất từ Nie Farm Việt Nam." />
+</HeadContent>
+
+@* Hero + search *@
+<section class="py-section-padding-y px-gutter max-w-container-max mx-auto text-center">
+    <h1 class="text-headline-lg-mobile md:text-headline-lg mb-6 text-deep-red">Khám Phá Thế Giới Cà Phê</h1>
+    <p class="text-body-lg text-deep-red/80 max-w-2xl mx-auto mb-10">
+        Những câu chuyện từ nông trại, kiến thức pha chế chuyên sâu và xu hướng thưởng thức mới nhất dành
+        cho những tâm hồn yêu cà phê.
+    </p>
+
+    <div class="flex flex-col md:flex-row gap-4 justify-center items-stretch max-w-3xl mx-auto">
+        <div class="relative w-full md:w-2/3">
+            <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-forest-green"
+                  aria-hidden="true">search</span>
+            <label class="sr-only" for="article-search">Tìm kiếm bài viết</label>
+            <input id="article-search" type="search" placeholder="Tìm kiếm bài viết..."
+                   @bind="_query" @bind:event="oninput"
+                   class="w-full pl-12 pr-4 py-3 rounded-lg border border-amber-gold bg-white focus:outline-none focus:border-forest-green focus:ring-1 focus:ring-forest-green transition-all" />
+        </div>
+        <label class="sr-only" for="article-category">Danh mục</label>
+        <select id="article-category" @bind="_category"
+                class="w-full md:w-1/3 px-4 py-3 rounded-lg border border-amber-gold bg-white focus:outline-none focus:border-forest-green focus:ring-1 focus:ring-forest-green transition-all text-deep-red">
+            <option value="">Tất cả danh mục</option>
+            @foreach (var category in SiteContent.ArticleCategories)
+            {
+                <option value="@category">@category</option>
+            }
+        </select>
+    </div>
+</section>
+
+@* Article grid *@
+<section class="pb-section-padding-y px-gutter max-w-container-max mx-auto">
+    @if (FilteredArticles.Any())
+    {
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            @foreach (var article in FilteredArticles)
+            {
+                <article class="bg-white rounded-xl border border-amber-gold overflow-hidden hover-lift flex flex-col h-full">
+                    <div class="h-48 w-full relative">
+                        <img class="w-full h-full object-cover" src="@article.ImageUrl" alt="@article.ImageAlt" />
+                        <span class="absolute top-4 left-4 bg-forest-green text-white px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider">
+                            @article.Category
+                        </span>
+                    </div>
+                    <div class="p-card-padding flex flex-col flex-grow">
+                        <p class="text-deep-red/80 text-body-sm mb-2 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm text-forest-green" aria-hidden="true">calendar_month</span>
+                            @article.PublishedOn.ToString("dd/MM/yyyy")
+                        </p>
+                        <h2 class="text-headline-sm mb-3 text-deep-red line-clamp-2">
+                            <a class="hover:text-amber-gold transition-colors" href="@article.Url">@article.Title</a>
+                        </h2>
+                        <p class="text-body-sm text-deep-red/80 mb-6 line-clamp-3">@article.Summary</p>
+                        <a class="mt-auto text-forest-green font-semibold text-label-bold flex items-center gap-1 hover:text-amber-gold transition-colors"
+                           href="@article.Url">
+                            Đọc tiếp
+                            <span class="material-symbols-outlined text-sm" aria-hidden="true">arrow_forward</span>
+                        </a>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="text-center text-body-lg text-on-surface-variant py-16">
+            Không tìm thấy bài viết phù hợp. Thử từ khóa khác hoặc chọn danh mục "Tất cả".
+        </p>
+    }
+</section>
+
+@code {
+    private string _query = string.Empty;
+    private string _category = string.Empty;
+
+    // Client-side filtering over fixture data; the real listing becomes a paged query.
+    private IEnumerable<SiteContent.Article> FilteredArticles =>
+        SiteContent.Articles.Where(a =>
+            (string.IsNullOrWhiteSpace(_category) || a.Category == _category)
+            && (string.IsNullOrWhiteSpace(_query)
+                || a.Title.Contains(_query, StringComparison.OrdinalIgnoreCase)
+                || a.Summary.Contains(_query, StringComparison.OrdinalIgnoreCase)));
+}

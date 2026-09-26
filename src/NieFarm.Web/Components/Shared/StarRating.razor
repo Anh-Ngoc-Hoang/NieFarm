@@ -1,0 +1,32 @@
+@*
+    Amber star row used on product cards, the product detail header and testimonials.
+    Renders filled / half / empty Material Symbols to match the Stitch screens.
+*@
+
+<div class="flex text-amber-gold @CssClass" role="img" aria-label="@AriaLabel">
+    @for (var i = 1; i <= 5; i++)
+    {
+        var filled = Value >= i;
+        var half = !filled && Value >= i - 0.5;
+
+        <span class="material-symbols-outlined @SizeClass @(filled || half ? "icon-fill" : null)"
+              aria-hidden="true">
+            @(half ? "star_half" : "star")
+        </span>
+    }
+</div>
+
+@code {
+    /// <summary>Rating out of five; halves render as <c>star_half</c>.</summary>
+    [Parameter]
+    public double Value { get; set; } = 5;
+
+    /// <summary>Tailwind text-size utility applied to each glyph.</summary>
+    [Parameter]
+    public string SizeClass { get; set; } = "text-sm";
+
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    private string AriaLabel => $"Đánh giá {Value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} trên 5 sao";
+}

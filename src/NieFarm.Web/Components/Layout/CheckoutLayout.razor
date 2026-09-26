@@ -1,0 +1,25 @@
+@inherits LayoutComponentBase
+
+@*
+    Transactional shell: the design drops the main navigation on checkout so
+    nothing competes with completing the order.
+*@
+
+<div class="min-h-screen flex flex-col bg-cream-ivory text-on-surface antialiased">
+    <CartInitializer />
+    <header class="bg-deep-red border-b border-amber-gold py-6 px-gutter flex justify-center sticky top-0 z-50">
+        <a class="font-headline-sm text-headline-sm font-bold text-white" href="/">Nie Farm Việt Nam</a>
+    </header>
+
+    <main class="flex-grow">
+        @Body
+    </main>
+
+    <SiteFooter />
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Đã xảy ra lỗi không mong muốn.
+    <a href="." class="reload">Tải lại</a>
+    <span class="dismiss">🗙</span>
+</div>

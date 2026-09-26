@@ -1,0 +1,17 @@
+<span class="badge-admin @VariantClass">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+
+    /// <summary>One of: default, success, warning, danger, muted.</summary>
+    [Parameter] public string Variant { get; set; } = "default";
+
+    private string VariantClass => Variant switch
+    {
+        "success" => "badge-admin--success",
+        "warning" => "badge-admin--warning",
+        "danger" => "badge-admin--danger",
+        "muted" => "badge-admin--muted",
+        _ => string.Empty
+    };
+}

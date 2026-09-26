@@ -1,0 +1,17 @@
+@*
+    A single framed photo with a caption underneath, used to build loosely-stacked
+    photo collages (e.g. the farm-to-cup story on the login screen).
+*@
+
+<div class="bg-white p-2 pb-2.5 rounded-lg shadow-lg border border-soft-border">
+    <div class="aspect-[4/3] rounded overflow-hidden">
+        <img class="w-full h-full object-cover" src="@ImageUrl" alt="@ImageAlt" />
+    </div>
+    <p class="text-center text-[11px] font-semibold text-deep-red mt-2">@Caption</p>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string ImageUrl { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ImageAlt { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Caption { get; set; } = string.Empty;
+}

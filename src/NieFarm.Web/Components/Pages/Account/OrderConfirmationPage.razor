@@ -1,0 +1,35 @@
+@page "/dat-hang-thanh-cong/{Code}"
+@using Microsoft.AspNetCore.Components.Authorization
+
+<PageTitle>Đặt hàng thành công - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<div class="w-full max-w-lg mx-auto px-gutter py-20 text-center">
+    <span class="material-symbols-outlined text-forest-green text-[64px]" aria-hidden="true">check_circle</span>
+
+    <h1 class="text-headline-md text-on-surface mt-6 mb-2">Đặt hàng thành công!</h1>
+    <p class="text-body-lg text-secondary mb-8">
+        Cảm ơn bạn đã đặt hàng tại Nie Farm. Mã đơn hàng của bạn là:
+    </p>
+
+    <p class="text-headline-md font-bold text-deep-red mb-10">@Code</p>
+
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/tra-cuu-don-hang" class="btn-secondary-brand px-8 py-3 rounded-lg font-label-bold text-label-bold">
+            Tra cứu đơn hàng
+        </a>
+        <AuthorizeView>
+            <Authorized>
+                <a href="/tai-khoan/don-hang" class="btn-brand px-8 py-3 rounded-lg font-label-bold text-label-bold">
+                    Xem đơn hàng của tôi
+                </a>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Code { get; set; } = string.Empty;
+}

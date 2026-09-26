@@ -1,0 +1,187 @@
+@page "/admin/articles"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.ArticleCategories.Dtos
+@using NieFarm.Application.Features.Admin.ArticleCategories.Queries
+@using NieFarm.Application.Features.Admin.Articles.Commands
+@using NieFarm.Application.Features.Admin.Articles.Dtos
+@using NieFarm.Application.Features.Admin.Articles.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Articles" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Articles</h1>
+        <p>Posts shown in the knowledge section.</p>
+    </div>
+    <button class="btn-admin" type="button" disabled="@(_categories.Count == 0)"
+            @onclick="() => _formModal.OpenForCreate()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Article
+    </button>
+</div>
+
+@if (_categories.Count == 0)
+{
+    <div class="admin-card">
+        <div class="admin-card__body cell-muted">
+            No categories yet. Create an <a href="/admin/article-categories">article category</a> first.
+        </div>
+    </div>
+}
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by title…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+    <select class="form-control-admin" style="max-width:240px;"
+            @bind="_categoryFilter" @bind:after="ApplyFilters">
+        <option value="">All categories</option>
+        @foreach (var category in _categories)
+        {
+            <option value="@category.Slug">@category.Name</option>
+        }
+    </select>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:64px;">Image</th>
+                <th>Title</th>
+                <th>Category</th>
+                <th style="width:150px;">Author</th>
+                <th style="width:130px;">Published</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:120px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var article in _filtered)
+            {
+                <tr>
+                    <td>
+                        <div class="table-thumb">
+                            @if (!string.IsNullOrWhiteSpace(article.ImageUrl))
+                            {
+                                <img src="@article.ImageUrl" alt="@article.Title" />
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined cell-muted" aria-hidden="true">article</span>
+                            }
+                        </div>
+                    </td>
+                    <td class="cell-primary">
+                        @article.Title
+                        <div class="cell-muted" style="font-size:12px;">/bai-viet/@article.Slug</div>
+                    </td>
+                    <td><AdminBadge Text="@article.CategoryName" Variant="muted" /></td>
+                    <td class="cell-muted">@article.Author</td>
+                    <td class="cell-muted">@article.PublishedOn.ToString("dd/MM/yyyy")</td>
+                    <td>
+                        @if (article.IsPublished)
+                        {
+                            <AdminBadge Text="Published" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Draft" Variant="warning" />
+                        }
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => _formModal.OpenForEditAsync(article.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(article)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No articles found.</div>
+    }
+</div>
+
+@if (_deleteError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-top:16px;">@_deleteError</div>
+}
+
+<ArticleFormModal @ref="_formModal" Categories="_categories" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete article?"
+              Message="@($"Delete \"{_deleteTarget?.Title}\"? This cannot be undone.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<ArticleAdminListDto> _all = [];
+    private List<ArticleAdminListDto> _filtered = [];
+    private List<ArticleCategoryDto> _categories = [];
+
+    private string _search = string.Empty;
+    private string _categoryFilter = string.Empty;
+    private string? _deleteError;
+
+    private ArticleFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private ArticleAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        // Read queries only, so each resolves its own DbContext and they can overlap.
+        var categoriesTask = Sender.Send(new GetArticleCategoriesQuery());
+        var articlesTask = Sender.Send(new GetArticlesAdminQuery());
+        await Task.WhenAll(categoriesTask, articlesTask);
+
+        _categories = categoriesTask.Result;
+        _all = articlesTask.Result;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(a =>
+            (string.IsNullOrWhiteSpace(_search)
+             || a.Title.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(_categoryFilter) || a.CategorySlug == _categoryFilter))
+            .ToList();
+
+    private void AskDelete(ArticleAdminListDto article)
+    {
+        _deleteError = null;
+        _deleteTarget = article;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteArticleCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _deleteError = result.Errors.FirstOrDefault() ?? "Could not delete the article.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

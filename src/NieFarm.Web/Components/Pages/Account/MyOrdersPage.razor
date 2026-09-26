@@ -1,0 +1,90 @@
+@page "/tai-khoan/don-hang"
+@attribute [Authorize]
+@using NieFarm.Application.Features.Orders.Dtos
+@using NieFarm.Application.Features.Orders.Queries
+@using NieFarm.Domain.Enums
+@inject ISender Sender
+
+<PageTitle>Đơn hàng của tôi - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<div class="w-full max-w-container-max mx-auto px-gutter py-12">
+    <div class="mb-10">
+        <h1 class="text-headline-md text-on-surface mb-2">Đơn hàng của tôi</h1>
+        <p class="text-body-lg text-secondary">Theo dõi tình trạng và lịch sử các đơn hàng đã đặt.</p>
+    </div>
+
+    @if (_orders is null)
+    {
+        <div class="space-y-4">
+            @for (var i = 0; i < 3; i++)
+            {
+                <div class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm animate-pulse h-24"></div>
+            }
+        </div>
+    }
+    else if (_orders.Count == 0)
+    {
+        <div class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm text-center py-16">
+            <span class="material-symbols-outlined text-amber-gold text-[48px]" aria-hidden="true">shopping_bag</span>
+            <p class="text-body-lg text-secondary mt-4 mb-6">Bạn chưa có đơn hàng nào.</p>
+            <a class="btn-brand inline-flex px-8 py-3 rounded-lg font-label-bold text-label-bold" href="/cua-hang">
+                Mua sắm ngay
+            </a>
+        </div>
+    }
+    else
+    {
+        <ul class="space-y-4">
+            @foreach (var order in _orders)
+            {
+                <li>
+                    <a href="/tai-khoan/don-hang/@order.Id"
+                       class="block bg-white border border-soft-border rounded-xl p-card-padding shadow-sm hover:border-amber-gold transition-colors">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                                <p class="text-label-bold font-semibold text-on-surface">
+                                    Mã đơn: <span class="text-deep-red">@order.Code</span>
+                                </p>
+                                <p class="text-body-sm text-secondary mt-1">
+                                    Ngày đặt: @order.PlacedAt.ToString("dd/MM/yyyy") · @order.ItemCount sản phẩm
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <span class="@StatusPillClass(order.Status) px-4 py-2 rounded-full text-label-bold font-semibold border">
+                                    @OrderStatusText.Vi(order.Status)
+                                </span>
+                                <span class="text-headline-sm font-bold text-amber-gold whitespace-nowrap">
+                                    @SiteContent.Vnd(order.Total)
+                                </span>
+                                <span class="material-symbols-outlined text-secondary hidden md:inline" aria-hidden="true">
+                                    chevron_right
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private List<MyOrderListDto>? _orders;
+
+    // Prerendering the list is fine here — see docs/plans/customer-accounts-order-history.md §9.
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Sender.Send(new GetMyOrdersQuery());
+        _orders = result.IsSuccess ? result.Value : [];
+    }
+
+    private static string StatusPillClass(OrderStatus status) => status switch
+    {
+        OrderStatus.Cancelled => "bg-alert-rust/10 text-alert-rust border-alert-rust/20",
+        OrderStatus.Completed => "bg-forest-green/10 text-forest-green border-forest-green/20",
+        _ => "bg-amber-gold/10 text-amber-gold border-amber-gold/20"
+    };
+}

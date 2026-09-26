@@ -1,0 +1,154 @@
+@page "/admin/activities"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Activities.Commands
+@using NieFarm.Application.Features.Admin.Activities.Dtos
+@using NieFarm.Application.Features.Admin.Activities.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Activities" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Activities</h1>
+        <p>Diary entries shown on the public activities page.</p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="() => _formModal.OpenForCreate()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Activity
+    </button>
+</div>
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by title…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:64px;">Image</th>
+                <th>Title</th>
+                <th style="width:130px;">Date</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:120px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var activity in _filtered)
+            {
+                <tr>
+                    <td>
+                        <div class="table-thumb">
+                            @if (!string.IsNullOrWhiteSpace(activity.ImageUrl))
+                            {
+                                <img src="@activity.ImageUrl" alt="@activity.Title" />
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined cell-muted" aria-hidden="true">photo_library</span>
+                            }
+                        </div>
+                    </td>
+                    <td class="cell-primary">
+                        @activity.Title
+                        <div class="cell-muted" style="font-size:12px;">@activity.Slug</div>
+                    </td>
+                    <td class="cell-muted">@activity.EventDate.ToString("dd/MM/yyyy")</td>
+                    <td>
+                        @if (activity.IsPublished)
+                        {
+                            <AdminBadge Text="Published" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Draft" Variant="warning" />
+                        }
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => _formModal.OpenForEditAsync(activity.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(activity)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No activities found.</div>
+    }
+</div>
+
+@if (_deleteError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-top:16px;">@_deleteError</div>
+}
+
+<ActivityFormModal @ref="_formModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete activity?"
+              Message="@($"Delete \"{_deleteTarget?.Title}\"? This cannot be undone.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<ActivityAdminListDto> _all = [];
+    private List<ActivityAdminListDto> _filtered = [];
+
+    private string _search = string.Empty;
+    private string? _deleteError;
+
+    private ActivityFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private ActivityAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _all = await Sender.Send(new GetActivitiesAdminQuery());
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(a =>
+            string.IsNullOrWhiteSpace(_search)
+            || a.Title.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private void AskDelete(ActivityAdminListDto activity)
+    {
+        _deleteError = null;
+        _deleteTarget = activity;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteActivityCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _deleteError = result.Errors.FirstOrDefault() ?? "Could not delete the activity.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}
