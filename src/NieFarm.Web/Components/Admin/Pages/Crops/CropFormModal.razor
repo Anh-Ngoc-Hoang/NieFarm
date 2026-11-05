@@ -1,0 +1,352 @@
+@using NieFarm.Application.Features.Admin.Crops.Commands
+@using NieFarm.Application.Features.Admin.Crops.Dtos
+@using NieFarm.Application.Features.Admin.Crops.Queries
+@using NieFarm.Application.Features.Admin.Products.Dtos
+@using NieFarm.Application.Features.Admin.Products.Queries
+@using NieFarm.Domain.Entities
+@inject ISender Sender
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="crop-form-title">
+        <div class="admin-modal__dialog admin-modal__dialog--wide">
+            <div class="admin-modal__head">
+                <h2 id="crop-form-title">@(_model.Id is null ? "Add Crop" : "Edit Crop")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="CancelAsync">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                <div class="form-grid form-grid--2">
+                    <div>
+                        <label class="form-label-admin" for="crop-year">Year *</label>
+                        <input id="crop-year" class="form-control-admin" type="number"
+                               min="@Crop.MinYear" max="@Crop.MaxYear" @bind="_model.Year" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="crop-season">Season window *</label>
+                        <input id="crop-season" class="form-control-admin" @bind="_model.SeasonLabel"
+                               placeholder="Tháng 11 – Tháng 1" />
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin" for="crop-headline">Headline *</label>
+                    <input id="crop-headline" class="form-control-admin" @bind="_model.Headline" />
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin" for="crop-story">Story *</label>
+                    <textarea id="crop-story" class="form-control-admin" rows="6"
+                              maxlength="@Crop.StoryMaxLength" @bind="_model.Story"></textarea>
+                    <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                        Plain text. Separate paragraphs with a blank line.
+                    </div>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        <label class="form-label-admin" for="crop-region">Region</label>
+                        <input id="crop-region" class="form-control-admin" @bind="_model.Region" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="crop-altitude">Altitude</label>
+                        <input id="crop-altitude" class="form-control-admin" @bind="_model.Altitude"
+                               placeholder="1.450m" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="crop-varieties">Varieties</label>
+                        <input id="crop-varieties" class="form-control-admin" @bind="_model.Varieties" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="crop-process">Process</label>
+                        <input id="crop-process" class="form-control-admin" @bind="_model.Process" />
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin" for="crop-notes">Tasting notes</label>
+                    <input id="crop-notes" class="form-control-admin" @bind="_model.TastingNotes"
+                           placeholder="Mật ong, Sô-cô-la đen" />
+                    <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                        Comma-separated, e.g. Mật ong, Sô-cô-la đen
+                    </div>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        @* Unmounted with the modal so each open gets a fresh InputFile. *@
+                        <SingleImageField @ref="_imageField"
+                                          Label="Image"
+                                          Subfolder="@CropImageLimits.Subfolder"
+                                          MaxBytes="CropImageLimits.MaxImageBytes"
+                                          Value="@_model.ImageUrl"
+                                          ValueChanged="url => _model.ImageUrl = url"
+                                          PersistedValue="@_persistedImageUrl"
+                                          Disabled="_saving"
+                                          UploadingChanged="value => _uploading = value" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="crop-alt">Image alt text *</label>
+                        <input id="crop-alt" class="form-control-admin" @bind="_model.ImageAlt" />
+                    </div>
+                </div>
+
+                <div style="margin-top:28px;">
+                    <label class="form-label-admin">Shop the crop</label>
+                    <div class="cell-muted" style="font-size:12px;margin-bottom:8px;">
+                        Up to @Crop.MaxProducts catalog products shown alongside this crop on the home page.
+                    </div>
+
+                    @foreach (var productId in _selectedProductIds)
+                    {
+                        var product = _productsById.GetValueOrDefault(productId);
+                        var index = _selectedProductIds.IndexOf(productId);
+
+                        <div class="repeat-row" @key="productId">
+                            <div class="table-thumb" style="flex:none;">
+                                @if (product is not null && !string.IsNullOrWhiteSpace(product.ImageUrl))
+                                {
+                                    <img src="@product.ImageUrl" alt="" />
+                                }
+                                else
+                                {
+                                    <span class="material-symbols-outlined cell-muted" aria-hidden="true">inventory_2</span>
+                                }
+                            </div>
+                            <span style="flex:1 1 auto;">
+                                @(product?.Name ?? "(unknown product)")
+                                @if (product is { IsVisible: false })
+                                {
+                                    <AdminBadge Text="Hidden" Variant="muted" />
+                                }
+                            </span>
+                            <button class="btn-icon" type="button" title="Move up" disabled="@(index == 0)"
+                                    @onclick="() => MoveProduct(index, -1)">
+                                <span class="material-symbols-outlined" aria-hidden="true">arrow_upward</span>
+                            </button>
+                            <button class="btn-icon" type="button" title="Move down"
+                                    disabled="@(index == _selectedProductIds.Count - 1)"
+                                    @onclick="() => MoveProduct(index, 1)">
+                                <span class="material-symbols-outlined" aria-hidden="true">arrow_downward</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Remove"
+                                    @onclick="() => _selectedProductIds.Remove(productId)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    }
+
+                    <div class="repeat-row" style="margin-top:8px;">
+                        <select class="form-control-admin" @bind="_pickerProductId" disabled="@(AvailableProducts.Count == 0)">
+                            @if (AvailableProducts.Count == 0)
+                            {
+                                <option value="0">No more products available</option>
+                            }
+                            else
+                            {
+                                @foreach (var product in AvailableProducts)
+                                {
+                                    <option value="@product.Id">@product.Name@(product.IsVisible ? "" : " (hidden)")</option>
+                                }
+                            }
+                        </select>
+                        <button class="btn-admin-outline btn-admin--sm" type="button"
+                                disabled="@(_selectedProductIds.Count >= Crop.MaxProducts || AvailableProducts.Count == 0)"
+                                @onclick="AddProduct">
+                            <span class="material-symbols-outlined" aria-hidden="true">add</span> Add
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="CancelAsync" disabled="@_saving">
+                    Cancel
+                </button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync"
+                        disabled="@(_saving || _uploading)">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public int Year { get; set; } = DateTime.Today.Year + 1;
+        public string SeasonLabel { get; set; } = string.Empty;
+        public string Headline { get; set; } = string.Empty;
+        public string Story { get; set; } = string.Empty;
+        public string Region { get; set; } = string.Empty;
+        public string Altitude { get; set; } = string.Empty;
+        public string Varieties { get; set; } = string.Empty;
+        public string Process { get; set; } = string.Empty;
+        public string TastingNotes { get; set; } = string.Empty;
+        public string ImageUrl { get; set; } = string.Empty;
+        public string ImageAlt { get; set; } = string.Empty;
+    }
+
+    private FormModel _model = new();
+    private SingleImageField? _imageField;
+    private string _persistedImageUrl = string.Empty;
+    private List<string> _errors = [];
+
+    private bool _visible;
+    private bool _saving;
+    private bool _uploading;
+
+    // Loaded once (component-lifetime cache, not re-fetched per open) — no new query is needed
+    // beyond the existing GetProductsAdminQuery used by /admin/products itself.
+    private List<ProductAdminListDto> _allProducts = [];
+    private Dictionary<int, ProductAdminListDto> _productsById = [];
+    private readonly List<int> _selectedProductIds = [];
+    private int _pickerProductId;
+
+    private List<ProductAdminListDto> AvailableProducts =>
+        _allProducts.Where(p => !_selectedProductIds.Contains(p.Id)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allProducts = await Sender.Send(new GetProductsAdminQuery());
+        _productsById = _allProducts.ToDictionary(p => p.Id);
+    }
+
+    public void OpenForCreate()
+    {
+        _model = new FormModel();
+        _persistedImageUrl = string.Empty;
+        _selectedProductIds.Clear();
+        _errors = [];
+        _visible = true;
+        SyncPicker();
+        StateHasChanged();
+    }
+
+    public async Task OpenForEditAsync(int id)
+    {
+        var crop = await Sender.Send(new GetCropForEditQuery(id));
+        if (crop is null)
+            return;
+
+        _model = new FormModel
+        {
+            Id = crop.Id,
+            Year = crop.Year,
+            SeasonLabel = crop.SeasonLabel,
+            Headline = crop.Headline,
+            Story = crop.Story,
+            Region = crop.Region,
+            Altitude = crop.Altitude,
+            Varieties = crop.Varieties,
+            Process = crop.Process,
+            TastingNotes = crop.TastingNotes,
+            ImageUrl = crop.ImageUrl,
+            ImageAlt = crop.ImageAlt
+        };
+
+        _persistedImageUrl = crop.ImageUrl;
+        _selectedProductIds.Clear();
+        _selectedProductIds.AddRange(crop.ProductIds);
+        _errors = [];
+        _visible = true;
+        SyncPicker();
+        StateHasChanged();
+    }
+
+    private void SyncPicker()
+    {
+        var available = AvailableProducts;
+        _pickerProductId = available.Count > 0 ? available[0].Id : 0;
+    }
+
+    private void AddProduct()
+    {
+        if (_pickerProductId <= 0 || _selectedProductIds.Count >= Crop.MaxProducts)
+            return;
+
+        if (!_selectedProductIds.Contains(_pickerProductId))
+            _selectedProductIds.Add(_pickerProductId);
+
+        SyncPicker();
+    }
+
+    private void MoveProduct(int index, int offset)
+    {
+        var newIndex = index + offset;
+        if (newIndex < 0 || newIndex >= _selectedProductIds.Count)
+            return;
+
+        (_selectedProductIds[index], _selectedProductIds[newIndex]) =
+            (_selectedProductIds[newIndex], _selectedProductIds[index]);
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var result = await Sender.Send(new SaveCropCommand(
+                _model.Id,
+                _model.Year,
+                _model.SeasonLabel ?? string.Empty,
+                _model.Headline ?? string.Empty,
+                _model.Story ?? string.Empty,
+                _model.Region,
+                _model.Altitude,
+                _model.Varieties,
+                _model.Process,
+                _model.TastingNotes,
+                _model.ImageUrl ?? string.Empty,
+                _model.ImageAlt ?? string.Empty,
+                _selectedProductIds.ToList()));
+
+            if (!result.IsSuccess)
+            {
+                _errors = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .DefaultIfEmpty("Could not save the crop.")
+                    .ToList();
+                return;
+            }
+
+            // The upload is now a stored value, so the field must not treat it as an orphan.
+            _persistedImageUrl = _model.ImageUrl ?? string.Empty;
+
+            _visible = false;
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        // Removes an upload that was never persisted, before the field unmounts.
+        if (_imageField is not null)
+            await _imageField.DiscardAsync();
+
+        _visible = false;
+    }
+}

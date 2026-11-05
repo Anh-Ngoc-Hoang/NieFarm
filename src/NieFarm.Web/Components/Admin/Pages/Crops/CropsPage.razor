@@ -1,0 +1,217 @@
+@page "/admin/crops"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Crops.Commands
+@using NieFarm.Application.Features.Admin.Crops.Dtos
+@using NieFarm.Application.Features.Admin.Crops.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="New Crops" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>New Crops</h1>
+        <p>Harvest stories. The current crop is featured on the home page.</p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="() => _formModal.OpenForCreate()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Crop
+    </button>
+</div>
+
+@if (_all.Count > 0 && !_all.Any(c => c.IsCurrent))
+{
+    <div class="form-alert form-alert--error" style="margin-bottom:16px;">
+        No crop is current — the New Crop section is hidden on the home page.
+    </div>
+}
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:64px;">Image</th>
+                <th style="width:100px;">Year</th>
+                <th>Headline</th>
+                <th style="width:100px;">Products</th>
+                <th style="width:200px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var crop in _all)
+            {
+                <tr>
+                    <td>
+                        <div class="table-thumb">
+                            @if (!string.IsNullOrWhiteSpace(crop.ImageUrl))
+                            {
+                                <img src="@crop.ImageUrl" alt="@crop.Headline" />
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined cell-muted" aria-hidden="true">agriculture</span>
+                            }
+                        </div>
+                    </td>
+                    <td class="cell-primary">
+                        @crop.Year
+                        @if (crop.IsCurrent)
+                        {
+                            <div style="margin-top:4px;"><AdminBadge Text="Current" Variant="success" /></div>
+                        }
+                    </td>
+                    <td>
+                        @crop.Headline
+                        <div class="cell-muted" style="font-size:12px;">@crop.SeasonLabel</div>
+                    </td>
+                    <td class="cell-muted">@crop.ProductCount</td>
+                    <td>
+                        <div class="row-actions">
+                            @if (!crop.IsCurrent)
+                            {
+                                <button class="btn-icon" type="button" title="Set as current"
+                                        @onclick="() => AskSetCurrent(crop)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">star</span>
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn-icon" type="button" title="Unset current"
+                                        @onclick="() => AskUnsetCurrent(crop)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">star_outline</span>
+                                </button>
+                            }
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => _formModal.OpenForEditAsync(crop.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(crop)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_all.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No crops found.</div>
+    }
+</div>
+
+@if (_actionError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-top:16px;">@_actionError</div>
+}
+
+<CropFormModal @ref="_formModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_setCurrentModal"
+              Title="Show on home page?"
+              Message="@($"Show New Crop {_actionTarget?.Year} on the home page? The current crop will be replaced.")"
+              ConfirmLabel="Set as current"
+              OnConfirm="ConfirmSetCurrentAsync" />
+
+<ConfirmModal @ref="_unsetCurrentModal"
+              Title="Hide from home page?"
+              Message="Hide the New Crop section from the home page?"
+              ConfirmLabel="Unset current"
+              OnConfirm="ConfirmUnsetCurrentAsync" />
+
+<ConfirmModal @ref="_deleteModal"
+              Title="Delete crop?"
+              Message="@DeleteMessage"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<CropAdminListDto> _all = [];
+
+    private string? _actionError;
+    private CropFormModal _formModal = default!;
+    private ConfirmModal _setCurrentModal = default!;
+    private ConfirmModal _unsetCurrentModal = default!;
+    private ConfirmModal _deleteModal = default!;
+    private CropAdminListDto? _actionTarget;
+
+    private string DeleteMessage => _actionTarget is null
+        ? string.Empty
+        : _actionTarget.IsCurrent
+            ? $"Delete \"{_actionTarget.Headline}\" ({_actionTarget.Year})? This is the current crop; " +
+              "the New Crop section will be hidden. This cannot be undone."
+            : $"Delete \"{_actionTarget.Headline}\" ({_actionTarget.Year})? This cannot be undone.";
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync() => _all = await Sender.Send(new GetCropsAdminQuery());
+
+    private void AskSetCurrent(CropAdminListDto crop)
+    {
+        _actionError = null;
+        _actionTarget = crop;
+        _setCurrentModal.Show();
+    }
+
+    private void AskUnsetCurrent(CropAdminListDto crop)
+    {
+        _actionError = null;
+        _actionTarget = crop;
+        _unsetCurrentModal.Show();
+    }
+
+    private void AskDelete(CropAdminListDto crop)
+    {
+        _actionError = null;
+        _actionTarget = crop;
+        _deleteModal.Show();
+    }
+
+    private async Task ConfirmSetCurrentAsync()
+    {
+        if (_actionTarget is null)
+            return;
+
+        var result = await Sender.Send(new SetCurrentCropCommand(_actionTarget.Id));
+        _actionTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = result.Errors.FirstOrDefault() ?? "Could not set the current crop.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ConfirmUnsetCurrentAsync()
+    {
+        var result = await Sender.Send(new SetCurrentCropCommand(null));
+        _actionTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = result.Errors.FirstOrDefault() ?? "Could not hide the New Crop section.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_actionTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteCropCommand(_actionTarget.Id));
+        _actionTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = result.Errors.FirstOrDefault() ?? "Could not delete the crop.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

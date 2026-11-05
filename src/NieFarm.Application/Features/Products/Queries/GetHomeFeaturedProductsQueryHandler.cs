@@ -1,0 +1,31 @@
+using Ardalis.Specification;
+using MediatR;
+using NieFarm.Application.Features.Products.Dtos;
+using NieFarm.Application.Features.Products.Specifications;
+using NieFarm.Domain.Entities;
+
+namespace NieFarm.Application.Features.Products.Queries;
+
+public class GetHomeFeaturedProductsQueryHandler(IReadRepositoryBase<Product> repository)
+    : IRequestHandler<GetHomeFeaturedProductsQuery, IReadOnlyList<ProductCardDto>>
+{
+    public async Task<IReadOnlyList<ProductCardDto>> Handle(
+        GetHomeFeaturedProductsQuery request, CancellationToken cancellationToken)
+    {
+        var take = Math.Clamp(request.Take, 1, 8);
+
+        var products = await repository.ListAsync(new HomeFeaturedProductsSpec(take), cancellationToken);
+
+        return products
+            .Select(p => new ProductCardDto(
+                p.Slug,
+                p.Name,
+                p.Category?.Name ?? string.Empty,
+                p.Price,
+                p.ImageUrl,
+                p.ImageAlt,
+                string.IsNullOrWhiteSpace(p.Badge) ? null : p.Badge,
+                p.Summary))
+            .ToList();
+    }
+}
