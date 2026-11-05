@@ -1,0 +1,12 @@
+{
+  "name": "niefarm-map",
+  "private": true,
+  "type": "module",
+  "description": "One-off generator for the home page's Vietnam coffee-regions map (src/NieFarm.Web/Content/VietnamMapGeometry.g.cs). Build-time only; never shipped.",
+  "scripts": {
+    "build": "node build-map.mjs"
+  },
+  "devDependencies": {
+    "mapshaper": "0.6.121"
+  }
+}

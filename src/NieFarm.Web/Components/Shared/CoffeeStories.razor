@@ -1,0 +1,145 @@
+@*
+    The home page's "Vietnam Coffee Stories" body (docs/plans/home-vietnam-coffee-stories.md D12):
+    the region map, three segment buttons that do the same job without the map (the southern
+    Central strip is a narrow tap target on phones), a polite live region, and the selected
+    region's story. Blazor state only — no nf-motion.js, the same precedent as
+    TestimonialCarousel.razor. Prerender already shows South; clicks become live once the
+    circuit connects.
+
+    Only the active panel is rendered, keyed by the selection so the "hstories-in" keyframe fade
+    replays on every switch. Stacking all three (as the carousel does) would leave a large gap
+    under the shorter panels, since South lists seven areas and North two.
+
+    Markup order is also the phone stacking order: map, tabs, panel. Nothing in here carries
+    data-reveal or .draw — the static wrapper in Home.razor does.
+*@
+@using NieFarm.Application.Features.CoffeeRegions.Dtos
+@using NieFarm.Domain.Enums
+
+<div class="hstories__grid">
+    <div class="hstories__map">
+        <VietnamCoffeeMap Selected="_selected" Available="_available" OnSelect="Select" PanelId="@PanelId" />
+        <p class="hstories__caption">Bản đồ vùng trồng cà phê Việt Nam</p>
+    </div>
+
+    <div class="chips hstories__tabs" role="group" aria-label="Chọn miền">
+        @foreach (var key in CoffeeRegionUi.All.Where(_available.Contains))
+        {
+            <button type="button" class="chip"
+                    aria-pressed="@(key == _selected ? "true" : "false")"
+                    aria-controls="@PanelId"
+                    @onclick="() => Select(key)">@CoffeeRegionUi.Label(key)</button>
+        }
+    </div>
+
+    <p class="sr-only" aria-live="polite">Đang xem: @CoffeeRegionUi.Label(_selected)</p>
+
+    @if (Current is { } region)
+    {
+        <div id="@PanelId" class="hstories__panel" @key="_selected">
+            <p class="eyebrow">@CoffeeRegionUi.Label(region.Key)</p>
+            <h3 class="hstories__heading">@region.Title</h3>
+
+            @if (!string.IsNullOrWhiteSpace(region.Tagline))
+            {
+                <p class="hstories__tagline accent">@region.Tagline</p>
+            }
+
+            @if (region.ImageUrl is not null)
+            {
+                <figure class="hstories__photo">
+                    <img src="@region.ImageUrl" width="1200" height="896" loading="lazy" alt="@region.ImageAlt" />
+                </figure>
+            }
+
+            @if (region.DescriptionParagraphs.Count > 0)
+            {
+                <div class="hstories__desc">
+                    @foreach (var paragraph in region.DescriptionParagraphs)
+                    {
+                        <p>@paragraph</p>
+                    }
+                </div>
+            }
+
+            @{ var facts = Facts(region); }
+            @if (facts.Count > 0)
+            {
+                <dl class="hstories__facts">
+                    @foreach (var fact in facts)
+                    {
+                        <div>
+                            <dt>@fact.Label</dt>
+                            <dd>@fact.Value</dd>
+                        </div>
+                    }
+                </dl>
+            }
+
+            @if (region.Areas.Count > 0)
+            {
+                <div class="hstories__areas-block">
+                    <p class="eyebrow eyebrow--plain" id="@($"{PanelId}-areas")">Vùng trồng tiêu biểu</p>
+                    <ol class="hstories__areas" aria-labelledby="@($"{PanelId}-areas")">
+                        @for (var i = 0; i < region.Areas.Count; i++)
+                        {
+                            var area = region.Areas[i];
+                            <li>
+                                <span class="hstories__num" aria-hidden="true">@((i + 1).ToString("00"))</span>
+                                <span class="hstories__area">
+                                    <b>@area.Name</b>
+                                    @if (!string.IsNullOrWhiteSpace(area.Note))
+                                    {
+                                        <span>@area.Note</span>
+                                    }
+                                </span>
+                            </li>
+                        }
+                    </ol>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const string PanelId = "hstories-panel";
+
+    [Parameter, EditorRequired] public IReadOnlyList<CoffeeRegionDto> Regions { get; set; } = default!;
+
+    private CoffeeRegionKey _selected = CoffeeRegionUi.DefaultKey;
+    private HashSet<CoffeeRegionKey> _available = [];
+
+    private CoffeeRegionDto? Current => Regions.FirstOrDefault(r => r.Key == _selected);
+
+    protected override void OnParametersSet()
+    {
+        _available = Regions.Select(r => r.Key).ToHashSet();
+
+        // South by default; if its row is missing, the first region that exists. Re-clamped on
+        // every parameter change so a selection can never point at a region with no data.
+        if (!_available.Contains(_selected) && Regions.Count > 0)
+        {
+            _selected = _available.Contains(CoffeeRegionUi.DefaultKey)
+                ? CoffeeRegionUi.DefaultKey
+                : CoffeeRegionUi.All.First(_available.Contains);
+        }
+    }
+
+    private void Select(CoffeeRegionKey key)
+    {
+        if (_available.Contains(key))
+            _selected = key;
+    }
+
+    private static IReadOnlyList<(string Label, string Value)> Facts(CoffeeRegionDto region) =>
+    [
+        .. new[]
+        {
+            ("Độ cao", region.Altitude),
+            ("Giống chủ đạo", region.Varieties),
+            ("Khí hậu", region.Climate),
+            ("Hương vị", region.FlavorProfile)
+        }.Where(f => !string.IsNullOrWhiteSpace(f.Item2))
+    ];
+}
