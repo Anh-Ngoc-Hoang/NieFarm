@@ -1,0 +1,185 @@
+@using NieFarm.Application.Features.Admin.Partners.Commands
+@using NieFarm.Application.Features.Admin.Partners.Dtos
+@using NieFarm.Application.Features.Admin.Partners.Queries
+@using NieFarm.Domain.Entities
+@inject ISender Sender
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="partner-form-title">
+        <div class="admin-modal__dialog admin-modal__dialog--wide">
+            <div class="admin-modal__head">
+                <h2 id="partner-form-title">@(_model.Id is null ? "Add Partner" : "Edit Partner")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="CancelAsync">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                <div class="form-grid form-grid--2">
+                    <div>
+                        <label class="form-label-admin" for="pt-name">Name *</label>
+                        <input id="pt-name" class="form-control-admin"
+                               maxlength="@Partner.NameMaxLength" @bind="_model.Name" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="pt-website">Website</label>
+                        <input id="pt-website" class="form-control-admin" type="url" placeholder="https://"
+                               maxlength="@Partner.WebsiteUrlMaxLength" @bind="_model.WebsiteUrl" />
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            Optional. Full address including https://. Opens in a new tab.
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;">
+                    @* Unmounted with the modal so each open gets a fresh InputFile. *@
+                    <SingleImageField @ref="_imageField"
+                                      Label="Logo (optional)"
+                                      Subfolder="@PartnerImageLimits.Subfolder"
+                                      MaxBytes="PartnerImageLimits.MaxImageBytes"
+                                      AllowedContentTypes="PartnerImageLimits.AllowedContentTypes"
+                                      ContainPreview="true"
+                                      HelpText="PNG or WebP with a transparent background works best (JPG also accepted); shown about 44px tall; max 5 MB. Without a logo the partner name is shown as a text wordmark."
+                                      Value="@_model.LogoUrl"
+                                      ValueChanged="url => _model.LogoUrl = url"
+                                      PersistedValue="@_persistedLogoUrl"
+                                      Disabled="_saving"
+                                      UploadingChanged="value => _uploading = value" />
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        <label class="form-label-admin" for="pt-order">Sort order *</label>
+                        <input id="pt-order" class="form-control-admin" type="number" min="0" @bind="_model.SortOrder" />
+                    </div>
+                    <div style="display:flex;align-items:flex-end;">
+                        <label class="form-check-admin">
+                            <input type="checkbox" @bind="_model.IsVisible" /> Visible
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="CancelAsync" disabled="@_saving">
+                    Cancel
+                </button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync"
+                        disabled="@(_saving || _uploading)">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string WebsiteUrl { get; set; } = string.Empty;
+        public string LogoUrl { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
+        public bool IsVisible { get; set; } = true;
+    }
+
+    private FormModel _model = new();
+    private SingleImageField? _imageField;
+    private string _persistedLogoUrl = string.Empty;
+    private List<string> _errors = [];
+
+    private bool _visible;
+    private bool _saving;
+    private bool _uploading;
+
+    public void OpenForCreate()
+    {
+        _model = new FormModel();
+        _persistedLogoUrl = string.Empty;
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public async Task OpenForEditAsync(int id)
+    {
+        var partner = await Sender.Send(new GetPartnerForEditQuery(id));
+        if (partner is null)
+            return;
+
+        _model = new FormModel
+        {
+            Id = partner.Id,
+            Name = partner.Name,
+            WebsiteUrl = partner.WebsiteUrl,
+            LogoUrl = partner.LogoUrl,
+            SortOrder = partner.SortOrder,
+            IsVisible = partner.IsVisible
+        };
+
+        _persistedLogoUrl = partner.LogoUrl;
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var result = await Sender.Send(new SavePartnerCommand(
+                _model.Id,
+                _model.Name ?? string.Empty,
+                _model.LogoUrl,
+                _model.WebsiteUrl,
+                _model.SortOrder,
+                _model.IsVisible));
+
+            if (!result.IsSuccess)
+            {
+                _errors = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .DefaultIfEmpty("Could not save the partner.")
+                    .ToList();
+                return;
+            }
+
+            // The upload is now a stored value, so the field must not treat it as an orphan.
+            _persistedLogoUrl = _model.LogoUrl ?? string.Empty;
+
+            _visible = false;
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        // Removes an upload that was never persisted, before the field unmounts.
+        if (_imageField is not null)
+            await _imageField.DiscardAsync();
+
+        _visible = false;
+    }
+}

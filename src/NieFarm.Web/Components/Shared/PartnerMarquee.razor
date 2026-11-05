@@ -1,0 +1,93 @@
+@*
+    Home page strategic-partner strip (docs/plans/home-partners-marquee.md). Presentation only —
+    the eyebrow and the data-reveal wrapper stay in Home.razor.
+
+    - D7: the band scrolls only from MarqueeMinCount (3) visible partners. With 1-2 it is a static,
+      centred, wrapping row with one copy and no pause button — repeating one or two logos 4-8 times
+      to fill a loop reads as filler.
+    - D8: the loop is Copies identical lists, each translating by exactly its own width
+      (@keyframes hpartner-scroll in nf-pages.css), so the seam is invisible. Copy 0 is the real
+      one; copies 1+ are aria-hidden and their links tabindex="-1". Copies = 1 + ceil(8 / count)
+      guarantees (Copies - 1) x listWidth covers the widest viewport. MinSlotsPerLoop is COUPLED
+      to nf-pages.css's ".hpartner__item { min-inline-size: 9rem }" and "--hpartner-gap: 3.5rem"
+      (about 200px per slot x 8 >= the 1184px maximum viewport) — change one, revisit the other.
+    - D11: pause on hover (hover-capable devices), on :focus-within, and via the explicit toggle
+      below (WCAG 2.2.2, same reasoning as TestimonialCarousel.razor). State is rendered as
+      data-paused on the viewport and aria-pressed on the button — never a Razor class expression.
+      The toggle is inert until the circuit connects; hover/focus still pause before then.
+    - D12: keyboard focus on a partner link unrolls the band into the static layout via
+      ".hpartner__viewport:has(a:focus-visible)", so a focused link can never be clipped.
+    - D13: under prefers-reduced-motion the CSS gives the lists an explicit "animation: none"
+      (nf.css only shortens durations, which would make an infinite loop spin ~1000x/s), wraps
+      them, and hides the copies and the toggle.
+
+    Never put data-reveal or .draw on anything in here: the viewport carries Razor-driven
+    attributes and the reveal wrapper in Home.razor already covers the whole band.
+*@
+@using NieFarm.Application.Features.Partners.Dtos
+
+<div class="hpartner__strip">
+    <div class="hpartner__viewport" data-motion="@(IsMarquee ? "marquee" : "static")"
+         data-paused="@(_paused ? "true" : null)" style="--count:@Items.Count">
+        @for (var copy = 0; copy < Copies; copy++)
+        {
+            var hidden = copy > 0;
+            <ul class="hpartner__list" role="list" aria-hidden="@(hidden ? "true" : null)" @key="copy">
+                @foreach (var partner in Items)
+                {
+                    <li class="hpartner__item" @key="partner.Id">
+                        @if (partner.WebsiteUrl is not null)
+                        {
+                            <a class="hpartner__link" href="@partner.WebsiteUrl" target="_blank"
+                               rel="noopener noreferrer" tabindex="@(hidden ? "-1" : null)">
+                                @_mark(partner)<span class="sr-only"> (mở trong thẻ mới)</span>
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="hpartner__link">@_mark(partner)</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+    @if (IsMarquee)
+    {
+        <button class="hpartner__toggle" type="button" aria-label="Tạm dừng dải đối tác"
+                aria-pressed="@(_paused ? "true" : "false")" @onclick="() => _paused = !_paused">
+            <NfIcon Name="@(_paused ? "play" : "pause")" Size="16" />
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>Fewer visible partners than this render as a static row (D7).</summary>
+    private const int MarqueeMinCount = 3;
+
+    /// <summary>
+    /// Slots one loop must span to cover the widest viewport (D8). Coupled to nf-pages.css's
+    /// ".hpartner__item" min-inline-size (9rem) and "--hpartner-gap" (3.5rem).
+    /// </summary>
+    private const int MinSlotsPerLoop = 8;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<PartnerDto> Items { get; set; } = [];
+
+    private bool _paused;
+
+    private bool IsMarquee => Items.Count >= MarqueeMinCount;
+
+    private int Copies => IsMarquee ? 1 + (int)Math.Ceiling(MinSlotsPerLoop / (double)Items.Count) : 1;
+
+    /// <summary>The logo when there is one (alt = Name), otherwise the name as a text wordmark (D15).</summary>
+    private readonly RenderFragment<PartnerDto> _mark = p =>
+        @<text>@if (p.LogoUrl is not null)
+        {
+            <img class="hpartner__logo" src="@p.LogoUrl" alt="@p.Name" decoding="async" />
+        }
+        else
+        {
+            <span class="hpartner__mark">@p.Name</span>
+        }</text>;
+}

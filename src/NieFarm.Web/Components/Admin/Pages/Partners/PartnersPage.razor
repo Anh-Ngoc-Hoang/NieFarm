@@ -1,0 +1,174 @@
+@page "/admin/partners"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Partners.Commands
+@using NieFarm.Application.Features.Admin.Partners.Dtos
+@using NieFarm.Application.Features.Admin.Partners.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Partners" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Partners</h1>
+        <p>
+            Partner logos shown in the scrolling band at the bottom of the home page. With fewer than
+            three visible partners the band is a static row. To hide the band, untick Visible — deleting
+            every partner restores the default one on restart.
+        </p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="() => _formModal.OpenForCreate()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Partner
+    </button>
+</div>
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by name or website…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:64px;">Logo</th>
+                <th>Name</th>
+                <th>Website</th>
+                <th style="width:80px;">Order</th>
+                <th style="width:100px;">Status</th>
+                <th style="width:120px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var partner in _filtered)
+            {
+                <tr>
+                    <td>
+                        <div class="table-thumb table-thumb--contain">
+                            @if (!string.IsNullOrWhiteSpace(partner.LogoUrl))
+                            {
+                                <img src="@partner.LogoUrl" alt="" />
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined cell-muted" aria-hidden="true">handshake</span>
+                            }
+                        </div>
+                    </td>
+                    <td class="cell-primary" style="cursor:pointer;" @onclick="() => _formModal.OpenForEditAsync(partner.Id)">
+                        @partner.Name
+                    </td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(partner.WebsiteUrl))
+                        {
+                            <a href="@partner.WebsiteUrl" target="_blank" rel="noopener noreferrer">
+                                @Truncate(partner.WebsiteUrl, 40)
+                            </a>
+                        }
+                        else
+                        {
+                            <span class="cell-muted">—</span>
+                        }
+                    </td>
+                    <td class="cell-muted">@partner.SortOrder</td>
+                    <td>
+                        @if (partner.IsVisible)
+                        {
+                            <AdminBadge Text="Visible" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Hidden" Variant="muted" />
+                        }
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => _formModal.OpenForEditAsync(partner.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(partner)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No partners found.</div>
+    }
+</div>
+
+@if (_deleteError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-top:16px;">@_deleteError</div>
+}
+
+<PartnerFormModal @ref="_formModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete partner?"
+              Message="@($"Delete the partner \"{_deleteTarget?.Name}\"? This cannot be undone.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<PartnerAdminListDto> _all = [];
+    private List<PartnerAdminListDto> _filtered = [];
+
+    private string _search = string.Empty;
+    private string? _deleteError;
+
+    private PartnerFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private PartnerAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _all = await Sender.Send(new GetPartnersAdminQuery());
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(p =>
+            string.IsNullOrWhiteSpace(_search)
+            || p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || p.WebsiteUrl.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : string.Concat(text.AsSpan(0, maxLength), "…");
+
+    private void AskDelete(PartnerAdminListDto partner)
+    {
+        _deleteError = null;
+        _deleteTarget = partner;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeletePartnerCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _deleteError = result.Errors.FirstOrDefault() ?? "Could not delete the partner.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}
