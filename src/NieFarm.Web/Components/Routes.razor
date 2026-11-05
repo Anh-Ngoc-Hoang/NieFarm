@@ -13,9 +13,13 @@
                     }
                     else
                     {
-                        <section class="max-w-3xl mx-auto px-gutter py-section-padding-y text-center">
-                            <h1 class="text-headline-md text-deep-red mb-4">Không có quyền truy cập</h1>
-                            <p class="text-body-lg text-on-surface-variant">
+                        @* Not wrapped by any layout (AuthorizeRouteView's NotAuthorized fragment
+                           renders raw), so ".nf" must be applied here explicitly — unlike
+                           NotFound.razor/Error.razor, which do reach PublicLayout's ambient ".nf"
+                           (docs/plans/public-site-redesign-nf2.md §7, step 5.2). *@
+                        <section class="nf shell" style="max-width:42rem;padding-block:clamp(6rem,14vh,9rem);text-align:center">
+                            <h1 style="margin-bottom:1.25rem">Không có quyền truy cập</h1>
+                            <p class="lede" style="margin-inline:auto">
                                 Tài khoản của bạn không có quyền xem trang này.
                             </p>
                         </section>

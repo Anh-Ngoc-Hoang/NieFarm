@@ -1,0 +1,1496 @@
+/* =====================================================================
+   NieFarm 2.0 — page-specific blocks.
+
+   Each page-migration commit appends one clearly delimited section here
+   (the process-tour rail, the shop filter bar, the product-detail page,
+   the checkout stepper, …) alongside the single ".razor" file it restyles
+   — see docs/plans/public-site-redesign-nf2.md §3.1 and §7. Linked from
+   Components/App.razor immediately after nf.css.
+   ===================================================================== */
+
+/* ==========================================================================
+   /quy-trinh — the "from seed to cup" journey tour (Phase 2, step 2.5).
+   Ported from docs/design-preview/nf2.css (.jhero/.journey/.rail/.stages/
+   .stage/.cupout) verbatim, plus their min-width:860px/1080px breakpoint
+   tier. Page owns no other markup-level class beyond these.
+   ========================================================================== */
+.jhero {
+    position: relative;
+    padding-block: clamp(8rem, 16vh, 11rem) clamp(3rem, 8vw, 6rem);
+    overflow: hidden;
+}
+.jhero__grid { display: grid; gap: clamp(2.5rem, 5vw, 4rem); align-items: center; }
+.jhero__title { font-size: var(--fs-display); }
+.jhero__title .accent { color: var(--red); display: block; }
+/* --fs-display is sized for two short lines ("Từ hạt giống / đến ly cà phê");
+   a longer headline at that size breaks into four and swamps the hero. */
+.jhero__title--long { font-size: clamp(2.3rem, 5vw, 4.4rem); }
+.jhero__meta { display: flex; flex-wrap: wrap; gap: 2.5rem; margin-top: 2.75rem; }
+.jhero__stat .n { font-size: 1.85rem; font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+.jhero__stat .l { font-size: var(--fs-xs); color: var(--ink-55); margin-top: .35rem; }
+
+/* Animated branch->cup line art */
+.jhero__art { position: relative; aspect-ratio: 1 / 1; color: var(--ink); }
+.jhero__art svg { width: 100%; height: 100%; }
+.jhero__art .ico { stroke-width: 1.1; }
+
+/* Home hero: the photo alone fills the right column. Each hero carries one
+   visual — a photo here, the self-drawing seed-to-cup line art on /quy-trinh —
+   never both stacked on top of each other. */
+.hhero__photo {
+    margin: 0;
+    aspect-ratio: 5 / 4;
+    border-radius: var(--r-lg);
+    --r-mask: var(--r-lg);
+    overflow: hidden;
+    background: var(--tint);
+    box-shadow: 0 30px 70px -40px rgba(20, 17, 15, .6);
+}
+.hhero__photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scale(1.08);
+    transition: transform 1.6s var(--ease);
+}
+.hhero__photo.is-in img { transform: scale(1); }
+
+.scrollcue {
+    display: inline-flex;
+    align-items: center;
+    gap: .75rem;
+    margin-top: 3.5rem;
+    font-size: var(--fs-xs);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-38);
+}
+.scrollcue i {
+    width: 1px;
+    height: 44px;
+    background: linear-gradient(var(--ink-38), transparent);
+    position: relative;
+    overflow: hidden;
+}
+.scrollcue i::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 1px; height: 14px;
+    background: var(--red);
+    animation: cue 2.2s var(--ease-soft) infinite;
+}
+@keyframes cue { 0% { transform: translateY(-14px); } 70%, 100% { transform: translateY(44px); } }
+
+/* --- The tour ------------------------------------------------------------ */
+.journey { position: relative; padding-block: clamp(3rem, 6vw, 5rem) clamp(4rem, 9vw, 8rem); }
+.journey__layout { display: grid; grid-template-columns: 1fr; gap: 0; }
+
+/* Sticky rail: stage list + route line + filling cup */
+.rail { display: none; }
+.rail__inner { position: sticky; top: 120px; padding-right: 2rem; }
+.rail__route { position: absolute; left: 6px; top: 6px; bottom: 74px; width: 2px; }
+.rail__route svg { width: 2px; height: 100%; overflow: visible; }
+.rail__route .track { stroke: var(--line); stroke-width: 2; }
+.rail__route .fill { stroke: var(--red); stroke-width: 2; stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--p, 0)); }
+.rail__list { list-style: none; margin: 0; padding: 0; position: relative; }
+.rail__list li { position: relative; padding: 0 0 1.55rem 2.25rem; }
+.rail__list li::before {
+    content: "";
+    position: absolute;
+    left: 1px; top: .55rem;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1.5px var(--line);
+    transition: box-shadow .45s var(--ease), transform .45s var(--ease);
+}
+.rail__list li.is-active::before { box-shadow: inset 0 0 0 4px var(--red); transform: scale(1.25); }
+.rail__list li.is-done::before { box-shadow: inset 0 0 0 6px var(--red); }
+.rail__list a {
+    font-size: var(--fs-xs);
+    color: var(--ink-38);
+    letter-spacing: -.005em;
+    transition: color .4s var(--ease), transform .4s var(--ease);
+    display: inline-block;
+}
+.rail__list li.is-active a { color: var(--ink); font-weight: 600; transform: translateX(3px); }
+.rail__list li.is-done a { color: var(--ink-55); }
+
+.rail__cup { margin-top: 1.5rem; width: 58px; color: var(--ink); }
+.rail__cup .liquid { fill: var(--red); transform-box: fill-box; transform-origin: bottom; transform: scaleY(var(--p, 0)); transition: transform .3s linear; }
+.rail__pct { font-size: var(--fs-xs); color: var(--ink-38); margin-top: .4rem; font-variant-numeric: tabular-nums; }
+
+/* Stage blocks */
+.stages { display: grid; gap: clamp(5rem, 11vw, 9rem); }
+.stage { display: grid; gap: clamp(1.75rem, 4vw, 3.5rem); align-items: center; scroll-margin-top: 120px; }
+.stage__num {
+    display: flex;
+    align-items: baseline;
+    gap: .9rem;
+    font-size: var(--fs-eyebrow);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--ink-38);
+    margin-bottom: 1.1rem;
+}
+.stage__num b {
+    font-family: var(--font-accent);
+    font-style: italic;
+    font-size: 2.6rem;
+    font-weight: 500;
+    letter-spacing: -.02em;
+    color: var(--red);
+    line-height: 1;
+}
+.stage__title { margin-bottom: 1rem; }
+.stage__body { color: var(--ink-70); max-width: 46ch; }
+.stage__facts { list-style: none; margin: 1.75rem 0 0; padding: 0; display: grid; gap: .55rem; }
+.stage__facts li {
+    display: flex;
+    gap: .7rem;
+    align-items: flex-start;
+    font-size: var(--fs-sm);
+    color: var(--ink-70);
+}
+.stage__facts svg,
+.stage__facts .ico { width: 17px; height: 17px; flex: none; margin-top: .35rem; color: var(--green); }
+
+.stage__media { position: relative; }
+.stage__photo {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--tint);
+}
+.stage__photo img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scale(1.12);
+    transition: transform 1.6s var(--ease);
+}
+.is-in .stage__photo img { transform: scale(1); }
+.stage__glyph {
+    position: absolute;
+    left: -18px;
+    bottom: -18px;
+    width: clamp(78px, 9vw, 104px);
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: var(--r-pill);
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--ink);
+}
+.stage:nth-child(even) .stage__glyph { left: auto; right: -18px; }
+
+/* Closing "cup" panel */
+.cupout {
+    position: relative;
+    border-radius: var(--r-lg);
+    background: var(--ink);
+    color: #fff;
+    overflow: hidden;
+    padding: clamp(2.5rem, 6vw, 5rem);
+    text-align: center;
+}
+.cupout .eyebrow { color: rgba(255, 255, 255, .55); }
+.cupout h2 { margin-bottom: 1.1rem; }
+.cupout p { color: rgba(255, 255, 255, .7); margin-inline: auto; }
+.cupout__glow {
+    position: absolute;
+    width: 620px; height: 620px;
+    left: 50%; top: 100%;
+    translate: -50% -50%;
+    background: radial-gradient(circle, rgba(212, 163, 89, .30), transparent 62%);
+    pointer-events: none;
+}
+
+@media (min-width: 860px) {
+    .jhero__grid { grid-template-columns: 1.05fr .95fr; }
+    .stage { grid-template-columns: 1fr 1.05fr; }
+    .stage:nth-child(even) .stage__text { order: 2; }
+    .stage:nth-child(even) .stage__media { order: 1; }
+}
+
+@media (min-width: 1080px) {
+    .journey__layout { grid-template-columns: 220px 1fr; gap: 3rem; }
+    .rail { display: block; position: relative; }
+}
+
+/* ==========================================================================
+   /cua-hang — Shop (Phase 2, step 2.6). Ported from docs/design-preview/
+   nf2.css's Shop section. Shared pieces the grid/filter row are built from
+   (.chip/.chips, .pcard) live in nf.css instead (plan §3.1) — this section
+   only carries what is Shop-specific: the hero band, the sticky filter bar
+   and the results grid container.
+   ========================================================================== */
+.shophead { padding-block: clamp(7.5rem, 14vh, 10rem) clamp(1.5rem, 3vw, 2.5rem); }
+.shophead__row { display: grid; gap: 1.75rem; align-items: end; }
+.shophead h1 { font-size: clamp(2.6rem, 6vw, 4.6rem); }
+
+.filterbar {
+    position: sticky;
+    top: var(--hdr-h);
+    z-index: 40;
+    background: rgba(251, 250, 247, .88);
+    backdrop-filter: blur(12px);
+    border-block: 1px solid var(--line);
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+}
+.filterbar__in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-block: .85rem;
+}
+.sortwrap { display: flex; align-items: center; gap: .5rem; flex: none; font-size: var(--fs-xs); color: var(--ink-55); }
+.sortwrap select {
+    font: inherit;
+    font-weight: 600;
+    color: var(--ink);
+    border: 0;
+    background: transparent;
+    padding: .35rem 1.4rem .35rem .35rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2314110F' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right .25rem center;
+    cursor: pointer;
+}
+
+/* Results grid — shared by the Shop page, the PDP "related products" band, the home page's
+   featured-products band and (Phase 3, step 3.2) the /kien-thuc article grid. */
+.grid-products {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(1.25rem, 2.5vw, 2.5rem) clamp(1rem, 2vw, 1.75rem);
+}
+
+/* ==========================================================================
+   /san-pham/{slug} — Product detail (Phase 2, step 2.7). Ported from
+   docs/design-preview/nf2.css's Product-detail section. Shared pieces
+   (.gallery, .opt, .qty, .acc) live in nf.css instead (plan §3.1) — this
+   section carries the PDP-only wrappers around them, plus the new
+   Reviews section the prototype doesn't have (D2 in the plan — the review
+   form's validation/edit-mode/focus call is why it is a full-width section
+   below the accordion rather than a fourth accordion item).
+   ========================================================================== */
+.pdp { padding-block: clamp(6.5rem, 12vh, 8.5rem) 0; }
+.crumbs { display: flex; gap: .55rem; font-size: var(--fs-xs); color: var(--ink-38); margin-bottom: clamp(1.5rem, 3vw, 2.5rem); }
+.crumbs a:hover { color: var(--ink); }
+
+.pdp__grid { display: grid; gap: clamp(2rem, 4vw, 4rem); align-items: start; }
+.pdp__rating { display: flex; align-items: center; gap: .6rem; margin-top: .9rem; font-size: var(--fs-sm); color: var(--ink-55); }
+
+.pdp__price { display: flex; align-items: baseline; gap: .8rem; margin: 1.25rem 0 1.5rem; }
+.pdp__price b { font-size: 1.85rem; font-weight: 700; letter-spacing: -.035em; }
+.pdp__price s { color: var(--ink-38); }
+
+.pdp__features { display: grid; gap: .6rem; margin-top: 2rem; }
+.pdp__features li { display: flex; align-items: center; gap: .6rem; font-size: var(--fs-sm); color: var(--ink-70); list-style: none; }
+.pdp__features .ico { width: 17px; height: 17px; color: var(--green); flex: none; }
+
+.optgroup { margin-top: 1.75rem; }
+.optgroup__label { display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .04em; margin-bottom: .7rem; }
+.optgroup__label span:last-child { color: var(--ink-55); font-weight: 400; }
+.opts { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+.buyrow { display: flex; gap: .75rem; margin-top: 2rem; }
+
+.assure { display: grid; gap: .9rem; margin-top: 2.25rem; padding-top: 1.75rem; border-top: 1px solid var(--line); }
+.assure li { display: flex; gap: .8rem; align-items: center; font-size: var(--fs-sm); color: var(--ink-70); list-style: none; }
+.assure svg, .assure .ico { width: 19px; height: 19px; flex: none; color: var(--green); }
+.assure ul { margin: 0; padding: 0; display: grid; gap: .9rem; }
+
+/* Inline validation / feedback banners — the cart error/success messages
+   above the buy row, and the review form's own error/success banners. */
+.alert { border-radius: var(--r-sm); padding: 1rem; font-size: var(--fs-sm); }
+.alert p { margin-bottom: .3rem; }
+.alert p:last-child { margin-bottom: 0; }
+.alert--error { background: rgba(107, 19, 19, .08); color: var(--red); }
+.alert--ok { background: rgba(44, 74, 52, .08); color: var(--green); }
+
+.linkbtn { font-size: var(--fs-xs); font-weight: 600; color: var(--green); transition: color .3s var(--ease); }
+.linkbtn:hover { color: var(--red); }
+
+/* --- Reviews (new section; no prototype source, see block comment above) --- */
+.reviews { margin-top: clamp(4rem, 8vw, 6rem); max-width: 760px; }
+.reviews__summary { display: flex; align-items: center; gap: 1.25rem; margin: 1.5rem 0 2rem; }
+.reviews__summary b { font-size: 2rem; font-weight: 700; color: var(--gold); font-variant-numeric: tabular-nums; }
+.reviews__summary p { font-size: var(--fs-sm); color: var(--ink-55); margin-top: .3rem; }
+
+.reviews__form { border-radius: var(--r-lg); background: var(--tint-warm); padding: clamp(1.5rem, 4vw, 2.25rem); margin-bottom: clamp(2rem, 4vw, 3rem); }
+.reviews__form h3 { font-size: var(--fs-h3); margin-bottom: 1.25rem; }
+.reviews__form-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; }
+.reviews__count { text-align: right; font-size: var(--fs-xs); color: var(--ink-38); margin-top: .4rem; }
+
+.reviews__list { display: grid; gap: 1.75rem; }
+.review { border-bottom: 1px solid var(--line); padding-bottom: 1.75rem; }
+.review__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .6rem; }
+.review__author { font-weight: 600; }
+.review__date { font-size: var(--fs-xs); color: var(--ink-38); }
+.review__rating { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+.review__body { color: var(--ink-70); font-size: var(--fs-sm); }
+.review__hint { font-size: var(--fs-xs); color: var(--ink-38); margin-bottom: .4rem; }
+
+.badge-pending {
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .6rem;
+    border-radius: var(--r-pill);
+    background: rgba(212, 163, 89, .18);
+    color: var(--gold);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+}
+
+@media (min-width: 640px) {
+    .grid-products { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 860px) {
+    .shophead__row { grid-template-columns: 1fr auto; }
+    .grid-products { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pdp__grid { grid-template-columns: 1.1fr .9fr; }
+}
+
+/* ==========================================================================
+   /kien-thuc — Article card (Phase 3, step 3.2). ".pcard"-derived: same
+   media/body/hover-zoom shape, but 16:9 media (article photos, not square
+   product shots) and a category eyebrow + date meta row instead of a price
+   row. Sits in the shared ".grid-products" grid (see the comment above it).
+   ========================================================================== */
+.acard { display: flex; flex-direction: column; }
+.acard__media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--tint-warm);
+}
+.acard__media img { width: 100%; height: 100%; object-fit: cover; transition: transform .9s var(--ease); }
+.acard:hover .acard__media img { transform: scale(1.05); }
+.acard__body { padding-top: 1.1rem; display: flex; flex-direction: column; gap: .55rem; }
+/* ".acard__body" is a column flex container, so its default "align-items:stretch" gives
+   ".linkline" a definite computed width (the card's full width) instead of its natural
+   shrink-to-fit one. The arrow icon's ".ico{width:100%}" (nf.css) then resolves that 100%
+   against the now-definite (and much wider than 15px) container instead of falling back to
+   its own intrinsic size, ballooning it to nearly the width of the card. "align-self" pins
+   it back to its content width without touching the title/summary/meta rows, which do want
+   to stretch full width (found migrating this page, Phase 3 step 3.2). */
+.acard__body .linkline { align-self: flex-start; white-space: nowrap; }
+.acard__meta { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; font-size: var(--fs-xs); color: var(--ink-38); }
+.acard__cat { color: var(--red); font-weight: 600; letter-spacing: .1em; text-transform: uppercase; }
+.acard__title { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.35; }
+.acard__title a:hover { color: var(--red); }
+.acard__summary {
+    font-size: var(--fs-sm);
+    color: var(--ink-70);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   /bai-viet/{slug} — Article detail (Phase 3, step 3.3). ".article-content"
+   itself lives in nf.css, ported by name. This is just the page's wrapper
+   grid, comment list and sidebar — new because no prototype page covers this
+   route (plan §7 Phase 3 intro).
+   ========================================================================== */
+.apage { padding-block: clamp(6.5rem, 12vh, 8.5rem) clamp(4rem, 8vw, 6rem); }
+.apage__grid { display: grid; gap: clamp(2.5rem, 5vw, 4rem); align-items: start; }
+.apage__meta { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.25rem; font-size: var(--fs-xs); color: var(--ink-38); margin-bottom: 1.5rem; }
+.apage__hero { aspect-ratio: 16 / 9; border-radius: var(--r-lg); overflow: hidden; background: var(--tint-warm); }
+.apage__hero img { width: 100%; height: 100%; object-fit: cover; }
+
+.apage__comments { display: grid; }
+.apage__comment { display: flex; gap: 1rem; padding-block: 1.5rem; border-top: 1px solid var(--line); }
+.apage__comment-avatar {
+    width: 2.75rem; height: 2.75rem;
+    border-radius: 50%;
+    background: var(--tint-warm);
+    color: var(--red);
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    flex: none;
+}
+
+.apage__sidebar { display: grid; gap: 1.75rem; align-self: start; }
+.apage__side-card h2 { font-size: var(--fs-h3); margin-bottom: 1.25rem; }
+.apage__side-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.25rem; }
+.apage__side-item { display: flex; gap: 1rem; align-items: flex-start; }
+.apage__side-thumb { width: 4.5rem; height: 4.5rem; border-radius: var(--r-sm); overflow: hidden; flex: none; background: var(--tint-warm); }
+.apage__side-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s var(--ease); }
+.apage__side-item:hover .apage__side-thumb img { transform: scale(1.08); }
+
+@media (min-width: 1080px) {
+    .apage__grid { grid-template-columns: 1fr 340px; }
+    .apage__sidebar { position: sticky; top: calc(var(--hdr-h) + 2rem); }
+}
+
+/* ==========================================================================
+   /hoat-dong — Activities masonry + detail modal (Phase 3, step 3.4). Same
+   CSS column-count technique as app.css's .masonry-grid/.masonry-item, but
+   hairline card edges instead of borders/shadow — the masonry and the modal
+   are the page, only their visual language changes (plan §7, step 3.4).
+   ========================================================================== */
+.nf-masonry { column-count: 1; column-gap: var(--gutter); }
+.nf-masonry__item { break-inside: avoid; margin-bottom: var(--gutter); }
+.nf-masonry__card {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--line);
+    transition: box-shadow .35s var(--ease);
+}
+.nf-masonry__card:hover { box-shadow: inset 0 0 0 1px var(--ink-38); }
+.nf-masonry__media { display: block; overflow: hidden; background: var(--tint-warm); }
+.nf-masonry__img { display: block; width: 100%; object-fit: cover; transition: transform .9s var(--ease); }
+.nf-masonry__card:hover .nf-masonry__img { transform: scale(1.05); }
+.nf-masonry__img--sm { height: 16rem; }
+.nf-masonry__img--md { height: 18rem; }
+.nf-masonry__img--lg { height: 20rem; }
+.nf-masonry__img--xl { height: 24rem; }
+.nf-masonry__body { display: block; padding: 1.25rem 1.5rem 1.5rem; }
+.nf-masonry__title { display: block; font-size: 1.0625rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.35; margin-bottom: .5rem; }
+.nf-masonry__date { display: inline-flex; align-items: center; gap: .4rem; font-size: var(--fs-xs); color: var(--ink-55); }
+.nf-masonry__date .ico { color: var(--green); }
+
+@media (min-width: 640px) { .nf-masonry { column-count: 2; } }
+@media (min-width: 1024px) { .nf-masonry { column-count: 3; } }
+
+/* Detail modal — ".nf-modal" (overlay) / ".nf-modal__panel" (content), the direct successor to
+   app.css's ".modal-overlay" / ".modal-content". Keeps the same "active" class toggle and the
+   same backdrop-click-to-close markup contract (Activities.razor's @onclick / @onclick:stopPropagation,
+   role="dialog", aria-modal, aria-labelledby). */
+.nf-modal {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(20, 17, 15, .55);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .3s var(--ease);
+}
+.nf-modal.active { opacity: 1; pointer-events: auto; }
+.nf-modal__panel {
+    position: relative;
+    width: 100%;
+    max-width: 56rem;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--line), 0 30px 70px -30px rgba(20, 17, 15, .5);
+    transform: translateY(20px) scale(.97);
+    opacity: 0;
+    transition: transform .35s var(--ease), opacity .35s var(--ease);
+}
+.nf-modal.active .nf-modal__panel { transform: none; opacity: 1; }
+.nf-modal__close {
+    position: absolute;
+    top: 1rem; right: 1rem;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: rgba(251, 250, 247, .85);
+    backdrop-filter: blur(6px);
+    color: var(--ink);
+    transition: background .3s var(--ease);
+}
+.nf-modal__close:hover { background: var(--surface); }
+.nf-modal__media { width: 100%; height: 16rem; object-fit: cover; }
+.nf-modal__body { padding: clamp(1.75rem, 4vw, 3rem); }
+.nf-modal__date { display: flex; align-items: center; gap: .5rem; font-size: var(--fs-sm); color: var(--green); margin-bottom: .75rem; }
+.nf-modal__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding-top: 1.5rem; margin-top: 1.5rem; border-top: 1px solid var(--line); }
+
+@media (min-width: 640px) {
+    .nf-modal__media { height: 22rem; }
+}
+
+/* ==========================================================================
+   /thanh-toan — Checkout (Phase 4, step 4.1). No prototype source (none of the
+   design-preview HTML files cover this route) — designed fresh in the house
+   language, the same approach already used for /bai-viet/{slug} and /hoat-dong.
+   Reuses .qty/.opt/.alert/.linkline/.linkbtn/.btn/.nf-field from nf.css and this
+   file's Product-detail section rather than duplicating them; only what is
+   checkout-specific lives here. ".nf-steps" is the one class the plan calls out
+   by name, replacing the Tailwind stepper's step-active/step-completed/
+   step-inactive + step-line-active/step-line-inactive classes one-for-one — it
+   is the shopper's only "where am I" signal, so it is preserved, not simplified
+   away.
+   ========================================================================== */
+.checkout { padding-block: clamp(3rem, 6vw, 4.5rem) clamp(4rem, 8vw, 7rem); }
+
+.nf-steps {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    list-style: none;
+    margin: 0 auto clamp(3rem, 6vw, 4.5rem);
+    padding: 0;
+    max-width: 32rem;
+}
+/* Shrinkable to content, not a fixed 8rem: a fixed per-item width * 3 overflows a narrow
+   (< ~400px) viewport horizontally, dragging the whole page into a sideways scroll (ui.md's
+   mobile-first rule — found screenshotting this page at 390px, Phase 4 step 4.1). */
+.nf-steps__item { display: flex; flex-direction: column; align-items: center; gap: .55rem; flex: 0 1 auto; min-width: 0; }
+.nf-steps__dot {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    font-weight: 600;
+    font-size: var(--fs-sm);
+    box-shadow: inset 0 0 0 1.5px var(--line);
+    color: var(--ink-38);
+    transition: background .3s var(--ease), color .3s var(--ease), box-shadow .3s var(--ease);
+}
+.nf-steps__dot--now { background: var(--ink); color: #fff; box-shadow: none; }
+.nf-steps__dot--done { background: var(--green); color: #fff; box-shadow: none; }
+.nf-steps__dot--next { color: var(--ink-38); }
+.nf-steps__label { font-size: var(--fs-xs); font-weight: 500; color: var(--ink-38); text-align: center; }
+.nf-steps__label--active { color: var(--ink); font-weight: 600; }
+.nf-steps__bar { flex: 1 1 auto; height: 1px; margin: 1.25rem .5rem 0; }
+.nf-steps__bar--done { background: var(--green); }
+.nf-steps__bar--todo { background: var(--line); }
+
+.checkout__grid { display: grid; gap: clamp(2.5rem, 5vw, 3.5rem); align-items: start; }
+
+/* The three form "cards" (cart / address / payment), stripped of border+shadow per
+   the plan and turned into hairline-delimited bands stacked in one column instead. */
+.checkout__section { padding-block: clamp(1.75rem, 4vw, 2.5rem); border-bottom: 1px solid var(--line); }
+.checkout__section:first-child { padding-top: 0; }
+.checkout__section:last-child { border-bottom: 0; }
+.checkout__section h2 { display: flex; align-items: center; gap: .6rem; font-size: var(--fs-h3); margin-bottom: 1.5rem; }
+/* Explicit size: ".checkout__section h2" is a flex row with a definite (wide) width, and an
+   unsized ".ico" balloons to fill it — the same mechanism nf.css documents above ".linkline
+   svg" and ".btn .ico". */
+.checkout__section h2 .ico { width: 1.3rem; height: 1.3rem; flex: none; color: var(--gold); }
+
+/* The guest-checkout note's icon and the empty-cart illustration are both bare NfIcon
+   instances outside any grid/stretch container, so they need the same explicit-size fix. */
+.checkout__note { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.checkout__note .ico { width: 1.25rem; height: 1.25rem; flex: none; color: var(--ink-38); }
+.checkout__empty-icon { display: block; width: 2.5rem; height: 2.5rem; margin: 0 auto 1rem; color: var(--ink-38); }
+
+.checkout__cart-item { display: flex; flex-direction: column; gap: .85rem; padding-block: 1.1rem; border-bottom: 1px solid var(--line-soft); }
+.checkout__cart-item:first-child { padding-top: 0; }
+.checkout__cart-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.checkout__cart-item--unavailable { opacity: .55; }
+.checkout__cart-item-info { display: flex; align-items: center; gap: 1rem; }
+.checkout__cart-item-media { width: 4.5rem; height: 4.5rem; border-radius: var(--r-sm); overflow: hidden; background: var(--tint-warm); flex: none; }
+.checkout__cart-item-media img { width: 100%; height: 100%; object-fit: cover; }
+.checkout__cart-item-name { font-weight: 600; }
+.checkout__cart-item-name a:hover { color: var(--green); }
+.checkout__cart-item-actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.checkout__cart-item-price { text-align: right; min-width: 6rem; }
+.checkout__cart-item-price b { font-weight: 600; display: block; }
+.checkout__remove { color: var(--ink-55); }
+.checkout__remove:hover { color: var(--red); }
+
+/* Red counterpart to this file's Product-detail ".badge-pending" (gold) — the
+   "Tạm hết hàng" flag on an unavailable cart line. */
+.badge-error {
+    display: inline-flex;
+    align-items: center;
+    padding: .2rem .6rem;
+    border-radius: var(--r-pill);
+    background: rgba(107, 19, 19, .08);
+    color: var(--red);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+}
+
+.checkout__summary { border-radius: var(--r-lg); background: var(--tint-warm); padding: clamp(1.5rem, 4vw, 2.25rem); }
+.checkout__summary h2 { font-size: var(--fs-h3); margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
+.checkout__summary dl { display: grid; gap: .85rem; margin: 0 0 1.5rem; }
+.checkout__summary .row { display: flex; justify-content: space-between; align-items: center; }
+.checkout__summary .row dt { color: var(--ink-55); font-size: var(--fs-sm); }
+.checkout__summary .row dd { margin: 0; font-weight: 600; }
+.checkout__promo { display: flex; gap: .6rem; padding-block: 1.25rem; margin-bottom: 1.5rem; border-block: 1px solid var(--line); }
+.checkout__total { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
+.checkout__total span:first-child { font-weight: 600; }
+.checkout__total b { font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; color: var(--red); font-variant-numeric: tabular-nums; }
+
+@media (min-width: 640px) {
+    .checkout__cart-item { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+
+@media (min-width: 1080px) {
+    .checkout__grid { grid-template-columns: 1.6fr 1fr; }
+    .checkout__summary { position: sticky; top: calc(var(--hdr-h) + 2rem); }
+}
+
+/* ==========================================================================
+   Status pill — shared by /tra-cuu-don-hang (4.2) and the /tai-khoan order
+   pages (4.3). Bigger than this file's ".badge-pending"/".badge-error" (which
+   are inline tags on a review/cart line, not a page header), same colour
+   vocabulary. OrderLookup's fixture order is always "Đang giao hàng" and
+   always rendered "--ok", matching the original hardcoded forest-green pill
+   byte-for-byte; MyOrderDetailPage does the same (its original never varied
+   by status either). MyOrdersPage keeps its own StatusPillClass(OrderStatus)
+   switch, now returning one of these three modifiers instead of Tailwind
+   utility classes.
+   ========================================================================== */
+.badge-status {
+    display: inline-flex;
+    align-items: center;
+    padding: .5rem 1.1rem;
+    border-radius: var(--r-pill);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: .01em;
+    white-space: nowrap;
+}
+.badge-status--ok { background: rgba(44, 74, 52, .1); color: var(--green); }
+.badge-status--pending { background: rgba(212, 163, 89, .18); color: var(--gold); }
+.badge-status--cancelled { background: rgba(107, 19, 19, .08); color: var(--red); }
+
+/* ==========================================================================
+   /tra-cuu-don-hang — Order lookup (Phase 4, step 4.2). No prototype source;
+   designed fresh in the house language, replacing the old glass-panel/
+   hover-lift cards with hairline ".nf-track__panel" bands (same approach as
+   /thanh-toan and /bai-viet/{slug}). Reuses .nf-field/.btn/.eyebrow/.lede/
+   .muted from nf.css; ".nf-track__lines"/".nf-track__totals" are deliberately
+   the same shape as this file's ".checkout__cart-item"/".checkout__summary"
+   so MyOrderDetailPage (4.3) can reuse them directly instead of duplicating.
+   ========================================================================== */
+.nf-track { padding-block: clamp(6.5rem, 12vh, 8.5rem) clamp(4rem, 8vw, 6rem); }
+.nf-track__intro { max-width: 42rem; margin-inline: auto; text-align: center; }
+
+.nf-track__form { display: flex; flex-direction: column; gap: .85rem; max-width: 30rem; margin: 1.75rem auto 0; }
+.nf-track__field { position: relative; flex: 1 1 auto; }
+.nf-track__field-ico { position: absolute; left: 1rem; top: 50%; translate: 0 -50%; width: 1.15rem; height: 1.15rem; color: var(--ink-38); pointer-events: none; }
+.nf-track__field-input { padding-left: 2.75rem; }
+.nf-track__error { margin-top: 1rem; color: var(--red); font-size: var(--fs-sm); }
+
+.nf-track__result { display: grid; gap: clamp(1.5rem, 3vw, 2rem); margin-top: clamp(3rem, 6vw, 4.5rem); }
+.nf-track__panel { border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--line); padding: clamp(1.5rem, 4vw, 2.25rem); }
+
+.nf-track__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+.nf-track__head h1, .nf-track__head h2 { font-size: var(--fs-h3); }
+.nf-track__code { color: var(--red); }
+
+/* Panel section title with a leading icon — same explicit-size fix as
+   ".checkout__section h2 .ico" (a flex row with a definite width balloons an
+   unsized icon to fill it). */
+.nf-track__panel-title { display: flex; align-items: center; gap: .6rem; font-size: var(--fs-h3); margin: 0 0 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+.nf-track__panel-title .ico { width: 1.2rem; height: 1.2rem; color: var(--green); flex: none; }
+
+/* Tracking steps. The dot's vertical centre (padding-top + half the dot's own
+   height) must equal ::before/::after's "top" so the connecting line runs
+   exactly through every dot, reached or not. */
+.nf-track__steps { display: flex; justify-content: space-between; gap: .5rem; list-style: none; margin: 0; padding: 2rem 0 0; position: relative; }
+.nf-track__steps::before, .nf-track__steps::after { content: ""; position: absolute; top: 3.25rem; height: 1px; }
+.nf-track__steps::before { left: 0; right: 0; background: var(--line); }
+.nf-track__steps::after { left: 0; width: var(--track-progress, 0%); background: var(--red); transition: width 1s var(--ease); }
+.nf-track__step { position: relative; z-index: 1; flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: .6rem; text-align: center; }
+.nf-track__dot {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1.5px var(--line);
+    color: var(--ink-38);
+    transition: background .3s var(--ease), color .3s var(--ease), box-shadow .3s var(--ease);
+}
+.nf-track__dot .ico { width: 1.05rem; height: 1.05rem; }
+.nf-track__step--reached .nf-track__dot { background: var(--red); color: #fff; box-shadow: none; }
+.nf-track__label { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-38); }
+.nf-track__step--reached .nf-track__label { color: var(--ink); }
+.nf-track__time { font-size: var(--fs-xs); color: var(--ink-38); }
+
+.nf-track__cols { display: grid; gap: clamp(1.5rem, 3vw, 2rem); }
+
+/* "Back to list" link on MyOrderDetailPage (4.3) — a plain colour-transition
+   link, not ".linkline": that class's ":hover svg{transform:translateX(4px)}"
+   would fight the static "scaleX(-1)" flip this back-arrow needs (transform
+   isn't additive), so a dedicated small style avoids the conflict. */
+.nf-track__back { display: inline-flex; align-items: center; gap: .5rem; font-size: var(--fs-sm); color: var(--ink-55); margin-bottom: 2rem; transition: color .3s var(--ease); }
+.nf-track__back:hover { color: var(--ink); }
+.nf-track__back .ico { width: 1.1rem; height: 1.1rem; flex: none; transform: scaleX(-1); }
+
+/* Recipient / payment meta list — shared verbatim with MyOrderDetailPage (4.3). */
+.nf-track__meta { display: grid; gap: 1.1rem; margin: 0; }
+.nf-track__meta dt { font-size: var(--fs-xs); color: var(--ink-38); margin-bottom: .25rem; }
+.nf-track__meta dd { margin: 0; font-size: var(--fs-sm); line-height: 1.6; }
+
+/* Order lines — read-only counterpart to ".checkout__cart-item" (no qty stepper,
+   no remove button), shared verbatim with MyOrderDetailPage (4.3). */
+.nf-track__lines { list-style: none; margin: 0; padding: 0; }
+.nf-track__line { display: flex; gap: 1rem; padding-block: 1.1rem; border-bottom: 1px solid var(--line-soft); }
+.nf-track__line:first-child { padding-top: 0; }
+.nf-track__line:last-child { border-bottom: 0; padding-bottom: 0; }
+.nf-track__line-media { width: 4.5rem; height: 4.5rem; border-radius: var(--r-sm); overflow: hidden; background: var(--tint-warm); flex: none; }
+.nf-track__line-media img { width: 100%; height: 100%; object-fit: cover; }
+.nf-track__line-body { flex: 1 1 auto; }
+.nf-track__line-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; }
+.nf-track__line-name { font-weight: 600; }
+.nf-track__line-meta { font-size: var(--fs-xs); color: var(--ink-55); margin-top: .25rem; }
+.nf-track__line-price { font-weight: 600; white-space: nowrap; }
+.nf-track__line-qty { font-size: var(--fs-xs); color: var(--ink-55); margin-top: .5rem; }
+
+/* Totals — read-only counterpart to ".checkout__summary"'s dl, shared verbatim
+   with MyOrderDetailPage (4.3). */
+.nf-track__totals { display: grid; gap: .75rem; margin: 0; }
+.nf-track__totals .row { display: flex; justify-content: space-between; font-size: var(--fs-sm); color: var(--ink-55); }
+.nf-track__totals .row dd { margin: 0; font-weight: 600; color: var(--ink); }
+.nf-track__totals .total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 1rem; margin-top: .5rem; border-top: 1px solid var(--line); }
+.nf-track__totals .total dt { font-weight: 700; font-size: var(--fs-h3); color: var(--ink); }
+.nf-track__totals .total dd { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--red); font-variant-numeric: tabular-nums; }
+
+@media (min-width: 640px) {
+    .nf-track__form { flex-direction: row; }
+}
+
+@media (min-width: 960px) {
+    .nf-track__cols { grid-template-columns: 1fr 2fr; align-items: start; }
+}
+
+/* ==========================================================================
+   /tai-khoan/don-hang, /tai-khoan/don-hang/{id}, /dat-hang-thanh-cong/{Code}
+   — account order pages (Phase 4, step 4.3). MyOrderDetailPage reuses
+   ".nf-track__panel"/".nf-track__head"/".nf-track__meta"/".nf-track__lines"/
+   ".nf-track__totals" from the section above directly (it has no progress
+   steps to show, just a status pill) rather than duplicating them.
+   ========================================================================== */
+.acct { padding-block: clamp(6.5rem, 12vh, 8.5rem) clamp(4rem, 8vw, 6rem); }
+.acct__head { margin-bottom: clamp(2.5rem, 5vw, 3.5rem); }
+
+.acct__empty { text-align: center; padding-block: clamp(3.5rem, 7vw, 5rem); border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--line); }
+.acct__empty-icon { display: block; width: 2.75rem; height: 2.75rem; margin: 0 auto; color: var(--ink-38); }
+
+.acct__list { list-style: none; margin: 0; padding: 0; }
+.acct__row { display: block; padding-block: 1.5rem; border-bottom: 1px solid var(--line); transition: background .25s var(--ease); }
+.acct__list li:first-child .acct__row { padding-top: 0; }
+.acct__row:hover { background: var(--tint); }
+.acct__row-in { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; padding-inline: clamp(0rem, 1vw, 1.25rem); }
+.acct__row-code { font-weight: 600; }
+.acct__row-code b { color: var(--red); }
+.acct__row-meta { font-size: var(--fs-xs); color: var(--ink-55); margin-top: .3rem; }
+.acct__row-right { display: flex; align-items: center; gap: 1.25rem; }
+.acct__row-total { font-weight: 700; color: var(--gold); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.acct__row-arrow { display: none; color: var(--ink-38); flex: none; }
+
+/* Order-confirmation page (/dat-hang-thanh-cong/{Code}) */
+.acct-confirm { padding-block: clamp(7rem, 14vh, 9rem) clamp(5rem, 10vw, 7rem); text-align: center; }
+.acct-confirm__icon { display: inline-grid; place-items: center; width: 4.5rem; height: 4.5rem; border-radius: 50%; background: rgba(44, 74, 52, .1); color: var(--green); }
+.acct-confirm__icon .ico { width: 1.75rem; height: 1.75rem; }
+.acct-confirm__code { font-size: var(--fs-h1); font-weight: 700; color: var(--red); margin: .75rem 0 2rem; }
+
+@media (min-width: 768px) {
+    .acct__row-arrow { display: block; width: 1.1rem; height: 1.1rem; }
+}
+
+/* ==========================================================================
+   /dang-nhap, /dang-ky — Auth screens (Phase 5, step 5.1). No prototype
+   source; the split layout + polaroid collage concept is kept from the
+   original Tailwind build, restyled in the house language: polaroid drop
+   shadows become hairline insets (".polaroid", the direct successor to
+   Shared/PolaroidPhoto.razor's own "shadow-lg"), and the collage keeps at
+   most one soft photographic shadow — on the front-most card,
+   ".auth__collage-item--4" — rather than one per card (the ".jhero__photo"
+   precedent from /quy-trinh). The story panel is hidden below 1024px (was
+   Tailwind's "hidden lg:flex" on FarmStoryPanel — the same breakpoint,
+   expressed as a plain media query instead of a utility class).
+   ========================================================================== */
+.auth { min-height: 100vh; display: flex; flex-direction: column; }
+
+.auth__story {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+    padding: clamp(2rem, 4vw, 3rem);
+    background: var(--tint-warm);
+    border-bottom: 1px solid var(--line);
+}
+.auth__story-body { position: relative; z-index: 1; margin-block: auto; padding-block: 1.5rem; max-width: 30rem; }
+.auth__story-title { font-size: clamp(1.9rem, 3.4vw, 2.75rem); margin: .9rem 0; }
+.auth__story-lede { margin-bottom: 2.5rem; }
+.auth__story-foot { position: relative; z-index: 1; padding-top: 1.25rem; border-top: 1px solid var(--line); font-size: var(--fs-xs); color: var(--ink-55); }
+
+/* margin-top clears the room ".auth__collage-item--2"'s negative "top" offset
+   needs to poke above the container without covering ".auth__story-lede"
+   above it (found screenshotting this page, Phase 5 step 5.1). */
+.auth__collage { position: relative; width: 100%; height: clamp(320px, 40vw, 460px); margin-top: 4rem; }
+.auth__collage-item {
+    position: absolute;
+    transition: transform .3s var(--ease);
+}
+.auth__collage-item:hover { transform: rotate(0deg) scale(1.05); z-index: 30; }
+.auth__collage-item--1 { top: 0; left: 0; width: 42%; rotate: -3deg; z-index: 10; }
+.auth__collage-item--2 { top: -14%; left: 48%; width: 44%; rotate: 2deg; z-index: 15; }
+.auth__collage-item--3 { top: 46%; left: 16%; width: 42%; rotate: -2deg; z-index: 12; }
+.auth__collage-item--4 { top: 38%; left: 55%; width: 46%; rotate: 3deg; z-index: 20; }
+/* The one soft shadow the plan allows — applied to the collage item, not the
+   ".polaroid" component itself, so PolaroidPhoto stays shadow-free everywhere
+   else it might be reused. */
+.auth__collage-item--4 .polaroid { box-shadow: inset 0 0 0 1px var(--line), 0 30px 70px -40px rgba(20, 17, 15, .6); }
+
+.auth__main { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: clamp(3rem, 8vh, 5rem) var(--gutter); }
+.auth__mobile-word { display: inline-block; margin-bottom: 2rem; font-size: 1.1rem; }
+.auth__panel { width: 100%; max-width: 360px; }
+.auth__panel h2 { margin-bottom: .5rem; }
+.auth__panel > .lede { margin-bottom: 2rem; max-width: none; }
+.auth__form { display: grid; gap: 1.5rem; }
+.auth__remember { display: flex; align-items: center; gap: .6rem; font-size: var(--fs-sm); color: var(--ink-55); }
+.auth__remember input { width: 1.05rem; height: 1.05rem; accent-color: var(--ink); margin: 0; }
+.auth__switch { text-align: center; font-size: var(--fs-sm); color: var(--ink-55); margin-top: 1.5rem; }
+.auth__link { color: var(--gold); font-weight: 600; text-decoration: underline; text-underline-offset: .15em; transition: color .3s var(--ease); }
+.auth__link:hover { color: var(--red); }
+/* Same left-pointing-arrow trick as ".nf-track__back" (Order lookup, Phase 4):
+   a single flipped "arrow-right" glyph instead of a dedicated "arrow-left" one. */
+.auth__back { display: inline-flex; align-items: center; gap: .45rem; font-size: var(--fs-sm); color: var(--ink-55); margin-top: 1.5rem; transition: color .3s var(--ease); }
+.auth__back:hover { color: var(--ink); }
+.auth__back .ico { width: 1rem; height: 1rem; flex: none; transform: scaleX(-1); }
+
+/* .polaroid — Shared/PolaroidPhoto.razor. Reused as-is wherever the collage
+   is; not page-scoped, but small enough to live beside its one call site
+   rather than in nf.css. */
+.polaroid { background: var(--surface); padding: .5rem .5rem .65rem; border-radius: var(--r-sm); box-shadow: inset 0 0 0 1px var(--line); }
+.polaroid__frame { aspect-ratio: 4 / 3; border-radius: var(--r-xs); overflow: hidden; background: var(--tint-warm); }
+.polaroid__frame img { width: 100%; height: 100%; object-fit: cover; }
+.polaroid__caption { text-align: center; font-size: var(--fs-eyebrow); font-weight: 600; color: var(--red); margin-top: .5rem; }
+
+@media (min-width: 1024px) {
+    .auth { flex-direction: row; }
+    .auth__story { display: flex; width: 56%; flex: none; }
+    .auth__mobile-word { display: none; }
+}
+@media (min-width: 1280px) {
+    .auth__story { width: 60%; }
+    /* Wide panels: text and collage side by side. Stacked under a 30rem cap,
+       the collage left the right half of a 1100px+ panel empty. */
+    .auth__story-body {
+        max-width: none;
+        display: grid;
+        grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+        gap: clamp(2rem, 3vw, 4rem);
+        align-items: center;
+    }
+    .auth__story-lede { margin-bottom: 0; }
+    /* Height follows width (the cards' tops are % of the height and their own
+       heights follow their widths), so the scatter keeps its spacing at any
+       size; the width cap stops it overlapping on very wide screens. */
+    .auth__story-body .auth__collage { height: auto; aspect-ratio: 1 / 1; max-width: 760px; justify-self: center; margin-block: 4rem 2rem; }
+    /* Bigger cards than the stacked layout: the column is wide enough here,
+       and at 42-46% the photos read as thumbnails on 2K screens. */
+    .auth__story-body .auth__collage-item--1 { width: 50%; left: 0; }
+    .auth__story-body .auth__collage-item--2 { width: 50%; left: 48%; }
+    .auth__story-body .auth__collage-item--3 { width: 50%; left: 8%; top: 51%; }
+    .auth__story-body .auth__collage-item--4 { width: 54%; left: 46%; top: 42%; }
+}
+
+/* ==========================================================================
+   /Error — the framework's own unhandled-exception page (Phase 5, step 5.2).
+   Small and mechanical; RequestId/dev-mode logic is untouched. Explicit size
+   on ".err-icon .ico" for the same reason documented throughout this file and
+   nf.css: a bare NfIcon with no definite-size flex/grid ancestor inherits
+   ".ico{width:100%;height:100%}" and resolves it against the whole centred
+   ".shell", ballooning to page width.
+   ========================================================================== */
+.err-icon { margin: 0 auto; }
+
+/* ==========================================================================
+   / — Home (docs/plans/home-redesign-crop-testimonials.md, Phase 6). Full
+   rewrite from the old plain-grid layout onto the /quy-trinh "journey" idiom
+   — hairlines, self-drawing glyphs, no stretched SVGs. Every class below is
+   "h…"-prefixed and never reuses ".journey"/".stage"/".stages"/".rail*" —
+   nf-motion.js binds the /quy-trinh scroll-progress rail to those selectors
+   globally by document.querySelector, so reusing them here would silently
+   switch on that page's rail code for Home too. Mobile-first; breakpoints at
+   640/860/1080 only, matching the rest of this file's tier. Home.razor keeps
+   no inline style beyond "--d"/"--step" — every layout and spacing rule
+   lives here instead, including the header/text-column child spacing that
+   used to be a per-element inline "margin-top" in the old markup.
+   ========================================================================== */
+
+/* Shared layout helpers ---------------------------------------------------- */
+.hflush { padding-top: 0; }
+
+.hhero__ctas { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2.5rem; }
+
+/* The home hero swaps /quy-trinh's self-drawing line art for a portrait photo
+   (quy-trinh-hero.jpg, 896x1200) — ".hhero__photo" alone is the 5:4 landscape
+   ratio from Phase 3, so this modifier overrides just the ratio/height. */
+.hhero__photo--portrait { aspect-ratio: 4 / 5; max-height: min(80vh, 720px); }
+
+/* Section header block, shared by the journey teaser, featured products and
+   testimonials. The child-spacing that used to be a repeated inline
+   "style=margin-top:...rem" on every eyebrow/h2/lede now lives here once. */
+.hhead { margin-bottom: clamp(2.5rem, 5vw, 4rem); }
+.hhead > * + * { margin-top: 1rem; }
+.hhead--center { text-align: center; max-width: 640px; margin-inline: auto; }
+/* The Featured-products CTA band reuses bare ".hhead--center" (no ".hhead")
+   standing alone after the grid, so it needs its own top gap instead of
+   ".hhead"'s margin-bottom. */
+.hfeat__grid + .hhead--center { margin-top: clamp(2.5rem, 5vw, 4rem); }
+
+/* Vision & mission's text column carries no dedicated wrapper class (only
+   the figure and the grid do) — this scopes the same child-spacing idiom to
+   its one call site instead of a bare inline style per element. */
+.hmission__grid > div:last-child > * + * { margin-top: 1.25rem; }
+/* Home reuses ".jhero__grid" for its own hero; ".lede" resets to margin:0
+   like every other :where(.nf) element, so the gap under the headline needs
+   restating here exactly as /quy-trinh's own hero already does inline. */
+.jhero__grid .lede { margin-top: 1.75rem; }
+
+/* New Crop ------------------------------------------------------------------ */
+.hcrop__grid { display: grid; grid-template-columns: 1fr; gap: clamp(2.5rem, 5vw, 4rem); align-items: start; }
+
+.hcrop__media { position: relative; }
+
+.hcrop__photo { position: relative; margin: 0; aspect-ratio: 4 / 3; border-radius: var(--r-lg); overflow: hidden; background: var(--tint); }
+.hcrop__photo img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.12); transition: transform 1.6s var(--ease); }
+.is-in .hcrop__photo img { transform: scale(1); }
+
+.hcrop__season {
+    position: absolute;
+    left: 1rem; top: 1rem;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .45rem .85rem;
+    border-radius: var(--r-pill);
+    background: var(--paper);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+}
+.hcrop__season .ico { width: 14px; height: 14px; flex: none; }
+
+/* Anchored bottom-right, same values as /quy-trinh's ".stage__glyph" — Home
+   has only one crop section (no alternating even/odd stages to mirror). */
+.hcrop__glyph {
+    position: absolute;
+    right: -18px; bottom: -18px;
+    width: clamp(78px, 9vw, 104px);
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: var(--r-pill);
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--ink);
+}
+
+.hcrop__text > * + * { margin-top: 1.25rem; }
+
+.hcrop__title { font-size: clamp(2.4rem, 5vw, 4.25rem); }
+.hcrop__title .accent { color: var(--red); }
+
+.hcrop__headline { font-size: var(--fs-h3); color: var(--ink-70); font-weight: 500; }
+
+.hcrop__story { display: grid; gap: 1rem; color: var(--ink-70); max-width: 54ch; }
+.hcrop__story > * + * { margin-top: 0; }
+
+.hcrop__facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem 1.5rem; margin: 1.75rem 0 0; }
+.hcrop__facts > div { border-top: 1px solid var(--line); padding-top: .6rem; }
+.hcrop__facts dt { margin: 0; font-size: var(--fs-eyebrow); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-38); }
+.hcrop__facts dd { margin: .3rem 0 0; font-weight: 600; }
+
+.hcrop__notes { list-style: none; margin: .75rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+.hcrop__note { padding: .4rem .85rem; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px var(--line); font-size: var(--fs-xs); color: var(--ink-70); }
+
+.hcrop__shop { border-top: 1px solid var(--line); padding-top: 1.25rem; }
+.hcrop__shop-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: .75rem; }
+
+.hcrop__item { display: flex; align-items: center; gap: .85rem; }
+.hcrop__item:hover .hcrop__item-body > span:first-child { color: var(--red); }
+.hcrop__item:hover .ico { transform: translateX(4px); }
+.hcrop__item .ico { width: 16px; height: 16px; flex: none; transition: transform .35s var(--ease); }
+
+.hcrop__item-media { width: 72px; height: 72px; flex: none; border-radius: var(--r-sm); overflow: hidden; background: var(--tint-warm); }
+.hcrop__item-media img { width: 100%; height: 100%; object-fit: cover; }
+
+.hcrop__item-body { flex: 1 1 auto; display: grid; gap: .2rem; }
+.hcrop__item-body > span:first-child { font-weight: 600; transition: color .35s var(--ease); }
+.hcrop__item-body > span:last-child { font-size: var(--fs-sm); color: var(--ink-55); }
+
+/* Vision & mission ----------------------------------------------------------
+   Fixes the original full-width-photo bug: the old inline "display:grid" had
+   no column definition at all, so the figure and text column simply stacked
+   full-width at every breakpoint. */
+.hmission__grid { display: grid; grid-template-columns: 1fr; gap: clamp(2.5rem, 5vw, 4rem); align-items: center; }
+
+.hmission__photo { margin: 0; aspect-ratio: 4 / 3; border-radius: var(--r-lg); --r-mask: var(--r-lg); overflow: hidden; background: var(--tint-warm); }
+.hmission__photo img { width: 100%; height: 100%; object-fit: cover; }
+
+.hmission__points { list-style: none; margin: 1.75rem 0 0; padding: 0; display: grid; gap: .85rem; }
+.hmission__points li { display: flex; gap: .75rem; align-items: flex-start; }
+.hmission__points .ico { width: 18px; height: 18px; flex: none; margin-top: .15rem; color: var(--green); }
+
+/* Farm-to-cup teaser ---------------------------------------------------------
+   No photos — eight self-drawing NfIcon glyphs and a hairline route that
+   draws left-to-right, CSS-only (no stretched SVG line, so it avoids the
+   viewBox stroke-scaling trap NfIcon's own doc comment calls out). */
+.hjourney__steps {
+    position: relative;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    row-gap: clamp(2rem, 5vw, 3rem);
+    column-gap: 1rem;
+}
+.hjourney__steps::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    top: 32px;
+    height: 1px;
+    background: var(--line);
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform 1.6s var(--ease);
+    display: none;
+}
+.is-in.hjourney__steps::before { transform: scaleX(1); }
+
+.hjourney__step a { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .5rem; }
+
+.hjourney__glyph {
+    position: relative;
+    z-index: 1;
+    width: 64px; height: 64px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--ink);
+    transition: box-shadow .35s var(--ease), transform .35s var(--ease);
+}
+.hjourney__step a:hover .hjourney__glyph { box-shadow: inset 0 0 0 1.5px var(--red); transform: translateY(-3px); }
+.hjourney__glyph .ico { width: 36px; height: 36px; }
+
+.hjourney__step .draw path, .hjourney__step .draw circle, .hjourney__step .draw line,
+.hjourney__step .draw polyline, .hjourney__step .draw rect {
+    transition-delay: calc(var(--d, 0s) + var(--step, 0) * .09s);
+}
+
+.hjourney__num { font-family: var(--font-accent); font-style: italic; font-weight: 500; color: var(--red); }
+.hjourney__label { font-size: var(--fs-xs); color: var(--ink-55); }
+
+/* Featured products -----------------------------------------------------------
+   Flex-wrap, not the shared ".grid-products" CSS grid: with at most 4 cards
+   (GetHomeFeaturedProductsQuery caps Take), a catalog with fewer than 4
+   visible products must centre a partial last row instead of hanging it
+   left, which "justify-content:center" on a flex row gives for free. */
+.hfeat__grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: clamp(1.25rem, 2.5vw, 2.5rem) clamp(1rem, 2vw, 1.75rem);
+}
+.hfeat__grid > .pcard { flex: 0 1 calc((100% - clamp(1rem, 2vw, 1.75rem)) / 2); }
+
+/* Testimonials ---------------------------------------------------------------
+   All slides render at once, stacked in one grid cell — inactive slides are
+   opacity:0/visibility:hidden so the stage's height is always the tallest
+   quote and nothing jumps when the active slide changes. */
+.hquote__shell { max-width: 56rem; }
+
+.hquote__stage { display: grid; }
+.hquote__stage > * { grid-area: 1 / 1; }
+
+.hquote__slide {
+    margin: 0;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: opacity .6s var(--ease), transform .6s var(--ease), visibility 0s linear .6s;
+    text-align: center;
+}
+.hquote__slide.is-active { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; transition: opacity .6s var(--ease), transform .6s var(--ease); }
+
+.hquote__mark { display: block; font-family: var(--font-accent); font-size: 4rem; line-height: .6; color: var(--red); }
+
+.hquote__text { margin: 1.25rem 0 0; font-size: clamp(1.35rem, 2.6vw, 2rem); line-height: 1.45; color: var(--ink); }
+
+.hquote__who { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: .6rem; margin-top: 1.5rem; }
+.hquote__avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+
+.hquote__nav { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.hquote__count { font-family: var(--font-accent); font-style: italic; font-variant-numeric: tabular-nums; color: var(--ink-55); }
+
+.hquote__bar { flex: 1; display: flex; gap: 6px; max-width: 220px; }
+.hquote__seg { flex: 1; position: relative; height: 24px; padding: 0; }
+.hquote__seg::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 1px;
+    background: var(--line);
+    transform: scaleX(1);
+    transform-origin: left;
+    transition: background .3s var(--ease), transform .5s var(--ease);
+}
+.hquote__seg[data-state="done"]::after { background: var(--red); }
+.hquote__seg[data-state="now"]::after { background: var(--red); transform: scaleX(0); animation: hquote-seg-now .8s var(--ease) forwards; }
+@keyframes hquote-seg-now { to { transform: scaleX(1); } }
+
+.hquote__btn { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .3s var(--ease); }
+.hquote__btn:hover { box-shadow: inset 0 0 0 1.5px var(--red); }
+.hquote__btn .ico { width: 18px; height: 18px; }
+.hquote__btn--prev .ico { transform: scaleX(-1); }
+
+/* Strategic partners ---------------------------------------------------------
+   Admin-managed partner band (docs/plans/home-partners-marquee.md, D7-D14,
+   PartnerMarquee.razor). Each partner is its logo, or its name as a text
+   wordmark. From 3 visible partners the strip is an endless right-to-left
+   marquee: PartnerMarquee renders several identical lists and each one
+   translates by exactly its own width, so the seam never shows. With 1-2
+   partners, under reduced motion, and while a partner link has keyboard
+   focus, it is a static, centred, wrapping row instead.
+   COUPLING: ".hpartner__item" min-inline-size (9rem) plus "--hpartner-gap"
+   (3.5rem) is about 200px per slot, and PartnerMarquee.MinSlotsPerLoop (8)
+   relies on 8 slots covering the widest viewport (1184px). Change either
+   side and revisit the other, or a gap opens at the loop seam. */
+.hpartner__band {
+    position: relative;
+    padding-block: clamp(2rem, 4vw, 3rem);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    justify-items: center;
+}
+.hpartner__band::before, .hpartner__band::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: var(--line);
+    transform-origin: left;
+    transform: scaleX(0);
+    transition: transform 1.2s var(--ease);
+}
+.hpartner__band::before { top: 0; }
+.hpartner__band::after { bottom: 0; }
+.is-in.hpartner__band::before, .is-in.hpartner__band::after { transform: scaleX(1); }
+
+.hpartner__strip { display: flex; align-items: center; gap: 1rem; width: 100%; min-width: 0; }
+.hpartner__viewport {
+    --hpartner-gap: 3.5rem; /* coupled to PartnerMarquee.MinSlotsPerLoop */
+    --hpartner-fade: clamp(1.5rem, 8%, 4rem);
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    overflow: hidden;
+}
+.hpartner__list { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: var(--hpartner-gap); flex: none; }
+/* min-inline-size is coupled to PartnerMarquee.MinSlotsPerLoop. */
+.hpartner__item { flex: none; display: flex; justify-content: center; min-inline-size: 9rem; }
+.hpartner__link { position: relative; display: inline-flex; align-items: center; min-block-size: 44px; color: var(--ink-55); transition: color .3s var(--ease); }
+.hpartner__logo {
+    block-size: clamp(2rem, 3.5vw, 2.75rem);
+    inline-size: auto;
+    max-inline-size: 10rem;
+    object-fit: contain;
+    filter: grayscale(1);
+    opacity: .7;
+    transition: filter .3s var(--ease), opacity .3s var(--ease);
+}
+.hpartner__mark { font-size: clamp(1.15rem, 2.2vw, 1.5rem); font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+
+/* Marquee (D8-D10): edge fade, and a constant ~55px/s whatever the count,
+   because both the loop distance and --count grow together. */
+.hpartner__viewport[data-motion="marquee"] {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--hpartner-fade), #000 calc(100% - var(--hpartner-fade)), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 var(--hpartner-fade), #000 calc(100% - var(--hpartner-fade)), transparent);
+}
+.hpartner__viewport[data-motion="marquee"] .hpartner__list {
+    padding-inline-end: var(--hpartner-gap);
+    animation: hpartner-scroll calc(var(--count, 6) * 3.5s) linear infinite;
+}
+@keyframes hpartner-scroll { to { transform: translateX(-100%); } }
+.hpartner__viewport[data-paused] .hpartner__list,
+.hpartner__viewport:focus-within .hpartner__list { animation-play-state: paused; }
+
+/* Static row: 1-2 partners, and the keyboard unroll (D12) -- :focus-visible,
+   not :focus-within, so a mouse click never reflows the band. The reduced-
+   motion block at the end of this file repeats it for the marquee. */
+.hpartner__viewport[data-motion="static"],
+.hpartner__viewport:has(a:focus-visible) { justify-content: center; -webkit-mask-image: none; mask-image: none; }
+.hpartner__viewport[data-motion="static"] .hpartner__list,
+.hpartner__viewport:has(a:focus-visible) .hpartner__list {
+    animation: none;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1.25rem 3rem;
+    padding-inline-end: 0;
+}
+.hpartner__viewport[data-motion="static"] .hpartner__item,
+.hpartner__viewport:has(a:focus-visible) .hpartner__item { min-inline-size: 0; }
+.hpartner__viewport[data-motion="static"] .hpartner__mark,
+.hpartner__viewport:has(a:focus-visible) .hpartner__mark { white-space: normal; text-align: center; }
+.hpartner__viewport:has(a:focus-visible) .hpartner__list[aria-hidden="true"] { display: none; }
+
+a.hpartner__link:focus-visible { color: var(--ink); }
+a.hpartner__link:focus-visible .hpartner__logo { filter: none; opacity: 1; }
+
+.hpartner__toggle { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .3s var(--ease); }
+.hpartner__toggle .ico { width: 16px; height: 16px; }
+
+@media (hover: hover) {
+    .hpartner__viewport:hover .hpartner__list { animation-play-state: paused; }
+    a.hpartner__link:hover { color: var(--ink); }
+    a.hpartner__link:hover .hpartner__logo { filter: none; opacity: 1; }
+    .hpartner__toggle:hover { box-shadow: inset 0 0 0 1.5px var(--red); }
+}
+
+/* Vietnam Coffee Stories -- the three-region map and the selected region's
+   story (docs/plans/home-vietnam-coffee-stories.md, VietnamCoffeeMap.razor,
+   CoffeeStories.razor). Phone order is map, tabs, panel; from 860px the map
+   is a sticky left column. Selected state comes from aria-pressed, never a
+   Razor class. Region fills are written ".hmap__svg > .hmap__region" on
+   purpose: Chromium matches plain class selectors against the clones inside
+   the border/halo <use> shadow trees, and the child combinator cannot reach
+   them, so the clones keep fill:none. Every map line is 1 CSS px thanks to
+   vector-effect (an attribute on the region paths, since it does not
+   inherit into the clones). The only inline styles are the map's own
+   --x/--y label positions and --hmap-w/--hmap-h frame size. */
+.hstories__title { font-size: clamp(2.4rem, 5vw, 4.25rem); }
+.hstories__title .accent { color: var(--red); }
+
+.hstories__grid { display: grid; grid-template-columns: 1fr; }
+
+.hmap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: var(--hmap-w) / var(--hmap-h);
+    max-width: min(100%, 440px, calc(60svh * var(--hmap-w) / var(--hmap-h)));
+    margin-inline: auto;
+}
+.hmap__svg { display: block; width: 100%; height: 100%; }
+
+.hmap__svg > .hmap__region {
+    fill: var(--tint);
+    cursor: pointer;
+    transition: fill .35s var(--ease);
+}
+.hmap__svg > .hmap__region:focus { outline: none; }
+.hmap__svg > .hmap__region[aria-pressed="true"] { fill: color-mix(in srgb, var(--gold) 22%, var(--paper)); }
+.hmap__svg > .hmap__region[data-disabled] { cursor: default; fill: var(--line-soft); }
+
+.hmap__lines use,
+.hmap__halo,
+.hmap__trace path {
+    fill: none;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+.hmap__lines use { stroke: var(--line); stroke-width: 1px; transition: stroke .35s var(--ease); }
+.hmap__halo { stroke: var(--red); stroke-width: 1.5px; }
+
+/* Keyboard focus thickens the focused region's own border line. */
+.hmap__region--north:focus-visible ~ .hmap__lines .hmap__line--north,
+.hmap__region--central:focus-visible ~ .hmap__lines .hmap__line--central,
+.hmap__region--south:focus-visible ~ .hmap__lines .hmap__line--south {
+    stroke: var(--ink);
+    stroke-width: 2px;
+}
+
+@media (hover: hover) {
+    .hmap__svg > .hmap__region[aria-pressed="false"]:hover { fill: var(--tint-warm); }
+    .hmap__region--north[role="button"]:hover ~ .hmap__lines .hmap__line--north,
+    .hmap__region--central[role="button"]:hover ~ .hmap__lines .hmap__line--central,
+    .hmap__region--south[role="button"]:hover ~ .hmap__lines .hmap__line--south { stroke: var(--ink-38); }
+}
+
+/* One-time self-drawing outline (plan Step 13). Its own rules, never the
+   global ".draw": that would also stamp the interactive paths. The static
+   ".hstories__body" wrapper gains "is-in" from nf-motion.js; the trace draws,
+   then fades while the real border lines and halo fade in under it. */
+.hmap__trace path {
+    stroke: var(--ink-55);
+    stroke-width: 1px;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0;
+}
+.is-in .hmap__trace path { animation: hmap-trace 2.8s var(--ease-soft) .15s both; }
+@keyframes hmap-trace {
+    0% { stroke-dashoffset: 1; opacity: 1; }
+    72% { stroke-dashoffset: 0; opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 0; }
+}
+.hmap__lines, .hmap__halo { transition: opacity .9s var(--ease) 1.6s; }
+[data-reveal]:not(.is-in) .hmap__lines,
+[data-reveal]:not(.is-in) .hmap__halo { opacity: 0; }
+
+.hmap__isle { fill: var(--ink-55); }
+.hmap__isle-area {
+    fill: none;
+    stroke: var(--ink-38);
+    stroke-width: 1px;
+    stroke-dasharray: 3 4;
+    vector-effect: non-scaling-stroke;
+}
+.hmap__leader line { stroke: var(--ink-38); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+.hmap__leader circle { fill: var(--ink-55); }
+
+.hmap__label,
+.hmap__isle-label,
+.hmap__sea-label {
+    position: absolute;
+    left: calc(var(--x) * 1%);
+    top: calc(var(--y) * 1%);
+    transform: translate(-50%, -50%);
+    font-size: var(--fs-xs);
+    line-height: 1.25;
+    color: var(--ink-55);
+    white-space: nowrap;
+    pointer-events: none;
+}
+.hmap__label {
+    font-weight: 600;
+    color: var(--ink-70);
+    /* A paper halo keeps the label legible where it crosses a border line. */
+    text-shadow: 0 0 3px var(--paper), 0 0 2px var(--paper), 0 0 1px var(--paper);
+}
+/* "Miền Trung" and "Tây Nguyên – Nam Bộ" sit offshore at the end of a leader line, so
+   they hang off their point to the right instead of centring on it. */
+.hmap__label--offshore { transform: translate(0, -50%); }
+.hmap__isle-label { text-align: center; }
+.hmap__sea-label { font-family: var(--font-accent); font-style: italic; letter-spacing: .06em; color: var(--ink-38); }
+
+.hstories__caption { margin-top: .75rem; text-align: center; font-size: var(--fs-xs); font-style: italic; color: var(--ink-38); }
+
+/* Wrap rather than scroll: .chips scrolls sideways, and a centred scroller clips both ends
+   once "Tây Nguyên – Nam Bộ" makes the row wider than a 390 px phone. */
+.hstories__tabs { justify-content: center; flex-wrap: wrap; overflow: visible; margin-top: 1.5rem; }
+
+.hstories__panel { margin-top: 2.5rem; animation: hstories-in .6s var(--ease) both; }
+.hstories__panel > * + * { margin-top: 1.25rem; }
+@keyframes hstories-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+.hstories__heading { font-size: var(--fs-h2); line-height: 1.12; }
+.hstories__tagline { font-size: var(--fs-h3); color: var(--ink-70); }
+
+/* margin-top is left to ".hstories__panel > * + *"; a bare "margin: 0" here
+   would cancel it (same specificity, later rule), gluing the photo to the
+   tagline. A figure still needs its browser side/bottom margins cleared. */
+.hstories__photo { margin-inline: 0; margin-bottom: 0; aspect-ratio: 16 / 9; border-radius: var(--r-lg); overflow: hidden; background: var(--tint); }
+.hstories__photo img { width: 100%; height: 100%; object-fit: cover; }
+
+.hstories__desc { display: grid; gap: 1rem; color: var(--ink-70); max-width: 60ch; }
+
+.hstories__facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem 1.5rem; margin-inline: 0; margin-bottom: 0; }
+.hstories__facts > div { min-width: 0; border-top: 1px solid var(--line); padding-top: .6rem; }
+.hstories__facts dt { margin: 0; font-size: var(--fs-eyebrow); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-38); }
+.hstories__facts dd { margin: .3rem 0 0; font-weight: 600; overflow-wrap: anywhere; }
+
+.hstories__areas { list-style: none; margin: .75rem 0 0; padding: 0; border-top: 1px solid var(--line); }
+.hstories__areas li {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    gap: .75rem;
+    padding-block: .85rem;
+    border-bottom: 1px solid var(--line);
+    overflow-wrap: anywhere;
+}
+.hstories__num { font-family: var(--font-accent); font-style: italic; font-weight: 500; color: var(--red); line-height: 1.5; }
+.hstories__area { display: grid; gap: .15rem; }
+.hstories__area b { font-weight: 600; }
+.hstories__area span { font-size: var(--fs-sm); color: var(--ink-55); }
+
+@media (min-width: 640px) {
+    .hcrop__shop-list { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 860px) {
+    .hcrop__grid { grid-template-columns: 1.05fr .95fr; }
+    .hcrop__media { position: sticky; top: calc(var(--hdr-h) + 2rem); }
+
+    .hmission__grid { grid-template-columns: 1fr 1fr; }
+
+    /* "auto 1fr" rows: the map spans both, and the flexible second row absorbs
+       any extra height so the tabs never drift away from the panel. */
+    .hstories__grid {
+        grid-template-columns: .9fr 1.1fr;
+        grid-template-rows: auto 1fr;
+        grid-template-areas: "map tabs" "map panel";
+        column-gap: clamp(2.5rem, 5vw, 4rem);
+        align-items: start;
+    }
+    .hstories__map { grid-area: map; position: sticky; top: calc(var(--hdr-h) + 2rem); }
+    .hmap { max-width: none; }
+    .hstories__tabs { grid-area: tabs; justify-content: flex-start; margin-top: 0; }
+    .hstories__panel { grid-area: panel; margin-top: 2rem; }
+
+    .hjourney__steps { grid-template-columns: repeat(8, 1fr); }
+    .hjourney__steps::before { display: block; }
+
+    .hfeat__grid > .pcard { flex: 0 1 calc((100% - 3 * clamp(1rem, 2vw, 1.75rem)) / 4); }
+
+    /* minmax(0, ...) is mandatory: the max-content marquee lists would
+       otherwise blow the grid out to their full width. */
+    .hpartner__band {
+        grid-template-columns: auto minmax(0, 1fr);
+        justify-items: stretch;
+        align-items: center;
+        column-gap: clamp(2rem, 4vw, 3.5rem);
+    }
+    .hpartner__band > p.eyebrow { justify-content: flex-start; }
+}
+
+@media (min-width: 1080px) {
+    .hcrop__title { line-height: 1.05; }
+    .hstories__title { line-height: 1.05; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hstories__panel { animation: none; }
+    .hmap__svg > .hmap__region { transition: none; }
+    .hmap__trace { display: none; }
+    .hmap__lines, .hmap__halo { transition: none; }
+
+    /* Partner marquee (D13). nf.css only shortens ".nf *" animation-duration
+       to .001ms !important under reduced motion, which would make an infinite
+       loop spin ~1000 times a second -- so the list gets an explicit
+       "animation: none" and the strip becomes the static wrapped row, with
+       the duplicate lists and the pause toggle hidden. */
+    .hpartner__viewport[data-motion="marquee"] { justify-content: center; -webkit-mask-image: none; mask-image: none; }
+    .hpartner__viewport[data-motion="marquee"] .hpartner__list {
+        animation: none;
+        flex: 1 1 auto;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1.25rem 3rem;
+        padding-inline-end: 0;
+    }
+    .hpartner__viewport[data-motion="marquee"] .hpartner__item { min-inline-size: 0; }
+    .hpartner__list[aria-hidden="true"] { display: none; }
+    .hpartner__toggle { display: none; }
+}
+.err-icon .ico { width: 3.5rem; height: 3.5rem; color: var(--gold); }

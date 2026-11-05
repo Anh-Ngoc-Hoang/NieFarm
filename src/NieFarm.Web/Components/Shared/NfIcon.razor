@@ -1,0 +1,277 @@
+@*
+    Single-glyph line icon for the NieFarm 2.0 redesign — one component, one switch
+    over an icon name, rather than 28 tiny components: the SVG path data is the only
+    thing that varies between glyphs, so a single switch is the smallest reviewable
+    surface (docs/plans/public-site-redesign-nf2.md §5, step 1.4).
+
+    Path data is ported verbatim from the approved design-preview prototype: the eight
+    process-stage glyphs (seedling/sprout/shield-leaf/cherries/drop/drying-rack/roaster/
+    cup) come from docs/design-preview/quy-trinh.html's ".stage__glyph" markup; the
+    shared UI glyphs come from the header/body markup repeated across index.html,
+    cua-hang.html and san-pham.html. Glyphs the plan lists with no prototype source
+    (chevron-down, close, menu, user, logout, receipt, calendar, location, phone, mail)
+    are drawn fresh at the same 24x24 viewBox and stroke weight as the rest. "share" was
+    added in Phase 3 (ArticleDetail.razor's share button, step 3.3) for the same reason —
+    no prototype source, drawn fresh at the same viewBox/stroke weight. "pause" and "play"
+    were added for PartnerMarquee.razor's pause toggle
+    (docs/plans/home-partners-marquee.md D11), drawn fresh the same way.
+
+    Not wired into any page yet — Phase 1 only creates the component. It renders
+    ".ico" (nf.css) so it inherits currentColor/stroke-width/stroke-linecap from there;
+    passing Draw="true" additionally stamps pathLength="1" and a staggered "--d" delay
+    on every path/shape directly in markup, so nf-motion.js's own normalisation pass is
+    only ever a fallback for hand-written SVG elsewhere (plan §6).
+*@
+<svg class="ico @(Draw ? "draw" : null) @CssClass"
+     width="@Size" height="@Size" viewBox="@_viewBox"
+     stroke-width="@StrokeWidth.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+     aria-hidden="@(AriaHidden ? "true" : "false")">
+    @_content
+</svg>
+
+@code {
+    /// <summary>Glyph name — see the switch below for the supported set.</summary>
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = "";
+
+    /// <summary>Rendered width/height in pixels (the SVG is square).</summary>
+    [Parameter]
+    public int Size { get; set; } = 20;
+
+    [Parameter]
+    public double StrokeWidth { get; set; } = 1.4;
+
+    /// <summary>Stamps pathLength="1" + a staggered --d delay on every path/shape so
+    /// nf.css's ".draw" self-drawing animation can run on this glyph.</summary>
+    [Parameter]
+    public bool Draw { get; set; }
+
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    /// <summary>False for glyphs that carry their own visible label (e.g. inside a
+    /// button whose text already names the action) — otherwise this is a decorative
+    /// glyph and stays hidden from assistive tech.</summary>
+    [Parameter]
+    public bool AriaHidden { get; set; } = true;
+
+    private string _viewBox = "0 0 24 24";
+    private MarkupString _content;
+
+    protected override void OnParametersSet()
+    {
+        var (viewBox, elements) = Glyph(Name);
+        _viewBox = viewBox;
+
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < elements.Length; i++)
+            sb.Append(Draw ? WithDrawAttributes(elements[i], i) : elements[i]);
+
+        // Safe as MarkupString: every value returned by Glyph() below is a compile-time
+        // constant selected from a fixed table by Name — nothing here is built from
+        // request/user input (the same reasoning app.css/ArticleBlock rendering relies
+        // on; see CLAUDE.md's MarkupString safety note).
+        _content = new MarkupString(sb.ToString());
+    }
+
+    private static string WithDrawAttributes(string element, int index)
+    {
+        var delay = System.Math.Min(index * 0.11, 1.2)
+            .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        var insertion = $" pathLength=\"1\" style=\"--d:{delay}s\"";
+        var closeTagIndex = element.LastIndexOf("/>", System.StringComparison.Ordinal);
+        return closeTagIndex < 0 ? element : element.Insert(closeTagIndex, insertion);
+    }
+
+    private static (string ViewBox, string[] Elements) Glyph(string name) => name switch
+    {
+        // --- Chrome / shop / product-detail glyphs (design-preview/*.html headers & bodies) ---
+        "search" => ("0 0 24 24", new[]
+        {
+            "<circle cx=\"11\" cy=\"11\" r=\"7\"/>",
+            "<path d=\"m20 20-3.5-3.5\"/>",
+        }),
+        "cart" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M6 8h12l-1 12H7L6 8Z\"/>",
+            "<path d=\"M9 8a3 3 0 0 1 6 0\"/>",
+        }),
+        "arrow-right" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M5 12h13\"/>",
+            "<path d=\"m12 6 6 6-6 6\"/>",
+        }),
+        "plus" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M12 5v14\"/>",
+            "<path d=\"M5 12h14\"/>",
+        }),
+        "minus" => ("0 0 24 24", new[] { "<path d=\"M5 12h14\"/>" }),
+        "check" => ("0 0 24 24", new[] { "<path d=\"m4 12.5 5 5 11-11\"/>" }),
+        "star" => ("0 0 24 24", new[]
+        {
+            "<path d=\"m12 3 2.7 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17.3 6.4 20.3l1.2-6.3L3 9.6l6.3-.8L12 3Z\"/>",
+        }),
+        "shield" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M12 3l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6l8-3Z\"/>",
+            "<path d=\"m9 12 2 2 4-4\"/>",
+        }),
+        "truck" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M3 8h13v9H3z\"/>",
+            "<path d=\"M16 11h3.5L22 14v3h-6\"/>",
+            "<circle cx=\"7\" cy=\"18\" r=\"1.8\"/>",
+            "<circle cx=\"18\" cy=\"18\" r=\"1.8\"/>",
+        }),
+        "clock" => ("0 0 24 24", new[]
+        {
+            "<circle cx=\"12\" cy=\"12\" r=\"9\"/>",
+            "<path d=\"M12 7v5l3 2\"/>",
+        }),
+
+        // --- Drawn fresh: no prototype source, same 24x24 viewBox and stroke weight ---
+        "chevron-down" => ("0 0 24 24", new[] { "<path d=\"m6 9 6 6 6-6\"/>" }),
+        "close" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M6 6l12 12\"/>",
+            "<path d=\"M18 6 6 18\"/>",
+        }),
+        "menu" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M4 7h16\"/>",
+            "<path d=\"M4 12h16\"/>",
+            "<path d=\"M4 17h16\"/>",
+        }),
+        "user" => ("0 0 24 24", new[]
+        {
+            "<circle cx=\"12\" cy=\"8\" r=\"4\"/>",
+            "<path d=\"M4 20c0-4.5 3.5-7 8-7s8 2.5 8 7\"/>",
+        }),
+        "logout" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4\"/>",
+            "<path d=\"m15 16 5-4-5-4\"/>",
+            "<path d=\"M20 12H9\"/>",
+        }),
+        "receipt" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M6 3h12v18l-3-2-3 2-3-2-3 2V3Z\"/>",
+            "<path d=\"M9 8h6\"/>",
+            "<path d=\"M9 12h6\"/>",
+            "<path d=\"M9 16h4\"/>",
+        }),
+        "calendar" => ("0 0 24 24", new[]
+        {
+            "<rect x=\"4\" y=\"5\" width=\"16\" height=\"16\" rx=\"2\"/>",
+            "<path d=\"M8 3v4\"/>",
+            "<path d=\"M16 3v4\"/>",
+            "<path d=\"M4 10h16\"/>",
+        }),
+        "location" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12Z\"/>",
+            "<circle cx=\"12\" cy=\"9\" r=\"2.5\"/>",
+        }),
+        "phone" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M8 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-4l-5-2-2 2a13 13 0 0 1-6-6l2-2-2-5Z\"/>",
+        }),
+        "mail" => ("0 0 24 24", new[]
+        {
+            "<rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"2\"/>",
+            "<path d=\"m4 7 8 6 8-6\"/>",
+        }),
+        "share" => ("0 0 24 24", new[]
+        {
+            "<circle cx=\"18\" cy=\"5\" r=\"3\"/>",
+            "<circle cx=\"6\" cy=\"12\" r=\"3\"/>",
+            "<circle cx=\"18\" cy=\"19\" r=\"3\"/>",
+            "<path d=\"m8.6 10.6 6.8-3.9\"/>",
+            "<path d=\"m8.6 13.4 6.8 3.9\"/>",
+        }),
+        // Added Phase 5 (docs/plans/public-site-redesign-nf2.md §7, step 5.2) for
+        // Error.razor's banner — no prototype source, same reasoning as "share" above.
+        // The dot is a zero-length round-linecap stroke (".ico{stroke-linecap:round}"),
+        // not a fill, so it survives ".ico{fill:none}" untouched.
+        "warning" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M12 4 2.5 20h19L12 4Z\"/>",
+            "<path d=\"M12 10v4\"/>",
+            "<path d=\"M12 16.5v.01\"/>",
+        }),
+        // Added for PartnerMarquee.razor's pause/play toggle (home-partners-marquee.md D11).
+        "pause" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M9 6v12\"/>",
+            "<path d=\"M15 6v12\"/>",
+        }),
+        "play" => ("0 0 24 24", new[] { "<path d=\"M8 5.5v13l10-6.5z\"/>" }),
+
+        // --- Process-tour stage glyphs (design-preview/quy-trinh.html ".stage__glyph") ---
+        "seedling" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M6 38h36\"/>",
+            "<path d=\"M24 34c-5 0-9-4-9-9s4-9 9-9 9 4 9 9-4 9-9 9Z\"/>",
+            "<path d=\"M24 16v18\"/>",
+            "<path d=\"M14 8v4\"/>",
+            "<path d=\"M34 6v4\"/>",
+        }),
+        "sprout" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M24 42V20\"/>",
+            "<path d=\"M24 26c0-7 5-11 12-11 0 7-5 11-12 11Z\"/>",
+            "<path d=\"M24 33c0-6-4-10-10-10 0 6 4 10 10 10Z\"/>",
+            "<path d=\"M12 42h24\"/>",
+        }),
+        "shield-leaf" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M24 6l15 5v11c0 10-6 17-15 21-9-4-15-11-15-21V11l15-5Z\"/>",
+            "<path d=\"M18 28c0-6 5-10 12-10 0 7-5 11-12 10Z\"/>",
+            "<path d=\"M18 31l8-8\"/>",
+        }),
+        "cherries" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M17 20a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z\"/>",
+            "<path d=\"M32 24a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z\"/>",
+            "<path d=\"M17 20c0-6 4-10 10-12\"/>",
+            "<path d=\"M32 24c0-5 3-9 8-11\"/>",
+            "<path d=\"M8 10c10 0 18 3 24 8\"/>",
+        }),
+        "drop" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M10 18h28l-3 21a4 4 0 0 1-4 3.5H17A4 4 0 0 1 13 39L10 18Z\"/>",
+            "<path d=\"M15 29c3-2.5 6-2.5 9 0s6 2.5 9 0\"/>",
+            "<path d=\"M24 4c3 4.5 5 7 5 9.5a5 5 0 1 1-10 0C19 11 21 8.5 24 4Z\"/>",
+        }),
+        "drying-rack" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M24 5v5\"/>",
+            "<path d=\"M11 11l3.5 3.5\"/>",
+            "<path d=\"M37 11l-3.5 3.5\"/>",
+            "<path d=\"M24 15a8 8 0 1 0 0 16 8 8 0 0 0 0-16Z\"/>",
+            "<path d=\"M6 35h36\"/>",
+            "<path d=\"M6 40h36\"/>",
+            "<path d=\"M11 35v8\"/>",
+            "<path d=\"M37 35v8\"/>",
+        }),
+        "roaster" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M24 16a13 13 0 1 0 0 26 13 13 0 0 0 0-26Z\"/>",
+            "<path d=\"M18 29c4-4 8 4 12 0\"/>",
+            "<path d=\"M17 4c-2 3.5 2 4.5 0 8\"/>",
+            "<path d=\"M24 3c-2 3.5 2 4.5 0 8\"/>",
+            "<path d=\"M31 4c-2 3.5 2 4.5 0 8\"/>",
+        }),
+        "cup" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M10 20h24v11a12 12 0 0 1-24 0V20Z\"/>",
+            "<path d=\"M34 23h3a5 5 0 0 1 0 10h-3\"/>",
+            "<path d=\"M8 44h30\"/>",
+            "<path d=\"M18 7c-2 3.5 2 4.5 0 8\"/>",
+            "<path d=\"M26 6c-2 3.5 2 4.5 0 8\"/>",
+        }),
+
+        _ => ("0 0 24 24", System.Array.Empty<string>()),
+    };
+}

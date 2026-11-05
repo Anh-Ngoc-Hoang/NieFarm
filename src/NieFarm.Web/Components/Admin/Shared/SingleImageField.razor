@@ -22,7 +22,7 @@
 
 @if (!string.IsNullOrWhiteSpace(Value))
 {
-    <div class="image-preview">
+    <div class="image-preview @(ContainPreview ? "image-preview--contain" : null)">
         <img src="@Value" alt="@Label" />
         <button type="button" class="btn-icon btn-icon--danger image-preview__remove" title="Remove"
                 disabled="@(Disabled || _uploading)" @onclick="RemoveImage">
@@ -60,6 +60,12 @@
     [Parameter] public IReadOnlyList<string> AllowedContentTypes { get; set; } = ManagedImages.AllowedContentTypes;
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public EventCallback<bool> UploadingChanged { get; set; }
+
+    /// <summary>
+    /// Letterboxes the preview (object-fit: contain) instead of cropping it — for logos, whose
+    /// edges must stay visible. Off by default, so photo fields are unchanged.
+    /// </summary>
+    [Parameter] public bool ContainPreview { get; set; }
 
     private string _inputKey = string.Empty;
     private bool _uploading;

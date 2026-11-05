@@ -1,11 +1,12 @@
 @inherits LayoutComponentBase
 
-<div class="min-h-screen flex flex-col bg-cream-ivory text-on-background antialiased">
+<div class="nf nf-shell">
+    <div class="progressbar" aria-hidden="true"></div>
     <CartInitializer />
     <SiteHeader />
 
-    @* pt-20 clears the fixed 80px header. *@
-    <main class="flex-grow pt-20">
+    @* .nf-main's padding-top:var(--hdr-h) clears the fixed header (nf.css). *@
+    <main class="nf-main">
         @Body
     </main>
 

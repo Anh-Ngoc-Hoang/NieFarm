@@ -551,6 +551,11 @@
     object-fit: cover;
 }
 
+/* Logos (partners) must never be cropped. */
+.table-thumb--contain img {
+    object-fit: contain;
+}
+
 .row-actions {
     display: flex;
     gap: 6px;
@@ -812,6 +817,12 @@ textarea.form-control-admin {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+/* SingleImageField ContainPreview="true": letterbox logos instead of cropping them. */
+.image-preview--contain img {
+    object-fit: contain;
+    padding: 8px;
 }
 
 .image-preview__remove {
@@ -1204,4 +1215,71 @@ textarea.form-control-admin {
     .admin-app .repeat-row .btn-icon {
         margin-left: 0;
     }
+}
+
+/* =====================================================================
+   Self-sufficiency — things app.css / Tailwind preflight / the Tailwind
+   forms plugin used to lend the admin document for free. Appended in
+   Phase 0 of the NieFarm 2.0 redesign (step 0.2) so /admin no longer
+   depends on any of the three once they are removed in Phase 6. See
+   docs/plans/public-site-redesign-nf2.md §4.
+   ===================================================================== */
+
+/* Material Symbols "filled" variant — StarRating.razor's filled/half stars
+   (rendered on ReviewsPage and ReviewDetailModal) toggle this class. */
+.admin-app .icon-fill,
+.login-wrap .icon-fill {
+    font-variation-settings: 'FILL' 1;
+}
+
+/* Blazor's built-in EditForm/InputBase validation classes. */
+.admin-app .valid.modified:not([type=checkbox]),
+.login-wrap .valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26B050;
+}
+
+.admin-app .invalid,
+.login-wrap .invalid {
+    outline: 1px solid var(--admin-warning);
+}
+
+.admin-app .validation-message,
+.login-wrap .validation-message {
+    color: var(--admin-warning);
+    font-size: 13px;
+}
+
+/* Tailwind preflight replacements — scoped, so they cannot leak into the public site. */
+.admin-app img,
+.login-wrap img {
+    display: block;
+    max-width: 100%;
+}
+
+/* Tailwind forms-plugin replacements: native chrome + accent-color rather than
+   reimplementing the plugin's own custom checkbox/radio/select skins. */
+.admin-app input[type=checkbox],
+.admin-app input[type=radio],
+.login-wrap input[type=checkbox],
+.login-wrap input[type=radio] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--admin-accent);
+    margin: 0;
+}
+
+.admin-app select.form-control-admin,
+.login-wrap select.form-control-admin {
+    appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+
+/* English override for the Vietnamese default in blazor-ui.css's .blazor-error-boundary::after
+   — that rule wraps public content only, so admin needs its own copy in its own language. */
+.admin-app .blazor-error-boundary::after,
+.login-wrap .blazor-error-boundary::after {
+    content: "An error has occurred.";
 }

@@ -1,0 +1,874 @@
+/* =====================================================================
+   NieFarm 2.0 — design language.
+
+   Ported from the approved static prototype at docs/design-preview/nf2.css
+   (source of truth for every token, rule and SVG path — see
+   docs/plans/public-site-redesign-nf2.md). This file carries Phase 1's slice
+   only: tokens, the .nf-scoped reset/typography, layout primitives, motion
+   primitives, chrome, the footer, and .rich-text-content / .article-content
+   ported by name. Page-specific blocks (.jhero/.journey/.rail/.stage/.cupout,
+   .shophead/.filterbar, .pdp, .pcard/.gallery/.acc/.chip/.opt/.qty, …) are
+   NOT here yet — they land in wwwroot/css/nf-pages.css one page-migration
+   commit at a time, starting in Phase 2. Nothing in the current markup
+   carries the ".nf" root class yet (that starts in Phase 2 step 2.1), so
+   every ".nf …" rule below is inert until then.
+
+   Why the ".nf" root class exists at all: nf2.css styles body/h1-h4/p/a/
+   img/button/* directly, and so does Tailwind preflight (injected into
+   <head> at runtime by the play CDN, i.e. after this static <link>, so it
+   would win unpredictably). Every element-level rule here is therefore
+   scoped under ".nf"; every component class (.btn, .eyebrow, .shell, …)
+   stays unprefixed because none of those names exist in app.css or as a
+   Tailwind utility (verified — see §3.2 of the plan). ".nf" is applied
+   permanently to PublicLayout/CheckoutLayout/AuthLayout's root, mirroring
+   admin.css's own ".admin-app" / ".login-wrap" convention, so the two
+   design systems can never leak into each other for the rest of the
+   migration.
+   ===================================================================== */
+
+/* --- Tokens --------------------------------------------------------------
+   Verbatim from nf2.css:9-52, plus five additions (--hdr-h, --ok, --warn,
+   --z-hdr, --z-modal) the prototype hard-codes and the app needs as tokens
+   (plan §3.3). Coexists for the whole migration with app.css's own :root
+   block (--deep-red, --amber-gold, --forest-green, the --cream tokens,
+   --soft-border) — no name collides.
+   NB: never write a bare asterisk-slash inside a comment here — it closes the
+   comment early and the parser then swallows the whole :root block. */
+:root {
+    /* Ink & paper — the page is mostly light, air does the work */
+    --ink: #14110F;
+    --ink-70: rgba(20, 17, 15, .70);
+    --ink-55: rgba(20, 17, 15, .55);
+    --ink-38: rgba(20, 17, 15, .38);
+    --paper: #FBFAF7;
+    --surface: #FFFFFF;
+    --tint: #F3F0E9;
+    --tint-warm: #F7F1E6;
+    --line: rgba(20, 17, 15, .12);
+    --line-soft: rgba(20, 17, 15, .07);
+
+    /* Brand — kept, but used as accents instead of large fills */
+    --red: #6B1313;
+    --red-soft: #8E2020;
+    --green: #2C4A34;
+    --gold: #D4A359;
+
+    /* Type */
+    --font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-accent: "Playfair Display", Georgia, serif;
+    --fs-display: clamp(2.6rem, 7.2vw, 6.2rem);
+    --fs-h1: clamp(2.1rem, 4.6vw, 3.6rem);
+    --fs-h2: clamp(1.7rem, 3.2vw, 2.6rem);
+    --fs-h3: clamp(1.15rem, 1.7vw, 1.45rem);
+    --fs-body: 1.0625rem;
+    --fs-sm: .9375rem;
+    --fs-xs: .8125rem;
+    --fs-eyebrow: .6875rem;
+
+    /* Geometry */
+    --r-xs: 3px;
+    --r-sm: 6px;
+    --r-lg: 18px;
+    --r-pill: 999px;
+    --shell: 1280px;
+    --gutter: clamp(1.25rem, 4vw, 3rem);
+
+    /* Motion */
+    --ease: cubic-bezier(.22, 1, .36, 1);
+    --ease-soft: cubic-bezier(.4, 0, .2, 1);
+    --dur: .55s;
+
+    /* Additions — not in the prototype's :root, but hard-coded repeatedly
+       there; promoted to tokens here (plan §3.3). */
+    --hdr-h: 74px;
+    --ok: var(--green);
+    --warn: #B45309;
+    --z-hdr: 60;
+    --z-modal: 100;
+}
+
+/* --- .nf root scope: reset + base typography ------------------------------
+   The ~9 element-level rules nf2.css applied to the whole document, now
+   scoped so they only ever affect NieFarm-2.0 markup (plan §3.2). */
+.nf {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: var(--fs-body);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* :where(.nf) contributes zero specificity, so these element resets weigh the
+   same as the bare "h1 { }" / "button { }" rules they replace from the
+   prototype. Written as ".nf button" they outranked every component class —
+   .btn lost its background, .jhero__title its display size, a.btn its colour. */
+:where(.nf) *,
+:where(.nf) *::before,
+:where(.nf) *::after {
+    box-sizing: border-box;
+}
+
+:where(.nf) h1,
+:where(.nf) h2,
+:where(.nf) h3,
+:where(.nf) h4 {
+    margin: 0;
+    font-weight: 700;
+    line-height: 1.06;
+    letter-spacing: -.035em;
+    text-wrap: balance;
+}
+
+:where(.nf) h1 { font-size: var(--fs-h1); }
+:where(.nf) h2 { font-size: var(--fs-h2); }
+:where(.nf) h3 { font-size: var(--fs-h3); letter-spacing: -.02em; line-height: 1.25; }
+:where(.nf) p { margin: 0; }
+:where(.nf) img { display: block; max-width: 100%; }
+:where(.nf) a { color: inherit; text-decoration: none; }
+:where(.nf) button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+:where(.nf) ::selection { background: var(--red); color: #fff; }
+
+/* Document-level: html cannot sit inside .nf. */
+html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: calc(var(--hdr-h) + 2rem);
+}
+
+.accent {
+    font-family: var(--font-accent);
+    font-style: italic;
+    font-weight: 500;
+    letter-spacing: -.01em;
+}
+
+/* --- Layout primitives ---------------------------------------------------- */
+.shell { width: 100%; max-width: var(--shell); margin-inline: auto; padding-inline: var(--gutter); }
+.section { padding-block: clamp(4.5rem, 10vw, 9rem); }
+.stack > * + * { margin-top: var(--gap, 1rem); }
+.hairline { height: 1px; background: var(--line); border: 0; margin: 0; }
+
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: .6rem;
+    font-size: var(--fs-eyebrow);
+    font-weight: 600;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--ink-55);
+}
+.eyebrow::before {
+    content: "";
+    width: 28px;
+    height: 1px;
+    background: currentColor;
+    opacity: .5;
+}
+.eyebrow--plain::before { display: none; }
+
+.lede { font-size: clamp(1.0625rem, 1.5vw, 1.25rem); line-height: 1.7; color: var(--ink-70); max-width: 54ch; }
+.muted { color: var(--ink-55); }
+
+/* Public layout shell — PublicLayout's root (Phase 2 step 2.1). ".nf-shell" is the
+   flex-column frame that pins the footer to the bottom of a short page; ".nf-main"
+   replaces the old "pt-20" utility with the token-driven header offset, so the fixed
+   ".hdr" (height: var(--hdr-h)) never overlaps the first section. */
+.nf-shell { min-height: 100vh; display: flex; flex-direction: column; }
+.nf-main { flex: 1 0 auto; padding-top: var(--hdr-h); }
+
+/* --- Buttons ---------------------------------------------------------------- */
+/* "a.btn" beats ".nf a{color:inherit}" (root scope, above) on specificity — both are
+   (0,1,1), and this rule comes later in the file, so source order decides the tie. Without
+   it every "<a class=btn ...>" (Home's hero CTA, Process's CTAs, ArticleDetail's banner
+   button, Checkout's empty-cart CTA) silently loses its --btn-fg colour to the inherited
+   (dark) text colour — invisible white-on-dark-red text, or fully invisible dark-on-black
+   text for a plain ".btn" with no colour modifier. Found screenshotting Checkout's
+   empty-cart state (Phase 4 step 4.1); ".btn"'s own JS-free colour scheme never worked for
+   an anchor, only for a real <button>, until this rule existed. */
+a.btn { color: var(--btn-fg); }
+
+.btn {
+    --btn-bg: var(--ink);
+    --btn-fg: #fff;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: .7rem;
+    padding: .9rem 1.6rem;
+    border-radius: var(--r-pill);
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    letter-spacing: -.01em;
+    overflow: hidden;
+    transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.btn span { position: relative; z-index: 1; }
+/* An icon sibling next to .btn's text (checkout's submit-button arrow) needs the same
+   stacking-context lift as .btn span, or the hover-fill ".btn::after" overlay (positioned
+   after it in DOM order) paints over it while unhovered->hovered transitions run. It also
+   needs an explicit size: .btn is a flex container (inline-flex, or a definite-width row
+   once ".btn--block" applies), and ".ico{width:100%}" resolves a flex item's percentage
+   width against that definite flex-container main size — the same ballooning mechanism
+   already documented above ".linkline svg" — ballooning the arrow to the button's full
+   width on ".btn--block" (found migrating Checkout.razor's submit button, Phase 4 step 4.1). */
+.btn .ico { position: relative; z-index: 1; width: 1.1rem; height: 1.1rem; flex: none; }
+.btn::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--red);
+    transform: translateY(101%);
+    transition: transform .45s var(--ease);
+}
+.btn:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -14px rgba(20, 17, 15, .55); }
+.btn:hover::after { transform: translateY(0); }
+.btn--ghost { --btn-bg: transparent; --btn-fg: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+.btn--ghost:hover { --btn-fg: #fff; }
+.btn--red { --btn-bg: var(--red); }
+.btn--red::after { background: var(--ink); }
+.btn--block { width: 100%; justify-content: center; }
+.btn--sm { padding: .62rem 1.1rem; font-size: var(--fs-xs); }
+
+/* Text link with an animated underline + arrow */
+.linkline {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    padding-bottom: 2px;
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0% 1px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size .45s var(--ease);
+}
+.linkline:hover { background-size: 100% 1px; }
+/* Explicit em-based size, not just the inherited ".ico{width:100%;height:100%}": a percentage
+   size on an inline-flex child can only resolve against a *definite* container size, and
+   ".linkline" itself is width:auto (shrink-to-fit). Nested inside a flex container that
+   happens to hand it a definite size (a stretched column-flex child, a shrinking row-flex
+   item, …) that 100% suddenly has something concrete — and usually oversized — to resolve
+   against, ballooning the arrow (found in Phase 3, steps 3.2/3.3, migrating Article.razor's
+   ".acard" grid and ArticleDetail.razor's sidebar list onto this shared Phase-1 component).
+   flex:none keeps it from being asked to shrink below that size either. */
+.linkline svg { width: 1em; height: 1em; flex: none; transition: transform .45s var(--ease); }
+.linkline:hover svg { transform: translateX(4px); }
+
+/* --- Site chrome ------------------------------------------------------------- */
+.hdr {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: var(--z-hdr);
+    background: rgba(251, 250, 247, 0);
+    border-bottom: 1px solid transparent;
+    transition: background .4s var(--ease-soft), border-color .4s var(--ease-soft), backdrop-filter .4s;
+}
+.hdr.is-stuck {
+    background: rgba(251, 250, 247, .82);
+    backdrop-filter: blur(14px) saturate(1.2);
+    border-bottom-color: var(--line);
+}
+.hdr__in {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    height: var(--hdr-h);
+}
+.wordmark {
+    font-size: .95rem;
+    font-weight: 800;
+    letter-spacing: .26em;
+    text-transform: uppercase;
+}
+.wordmark em { font-family: var(--font-accent); font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--red); }
+.nav { display: none; gap: 1.25rem; }
+.nav a {
+    position: relative;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    letter-spacing: .02em;
+    color: var(--ink-70);
+    transition: color .3s var(--ease);
+}
+.nav a::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -6px;
+    height: 1px;
+    background: var(--red);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .4s var(--ease);
+}
+.nav a:hover, .nav a[aria-current] { color: var(--ink); }
+.nav a:hover::after, .nav a[aria-current]::after { transform: scaleX(1); }
+.hdr__actions { display: flex; align-items: center; gap: 1.1rem; }
+.iconbtn {
+    display: grid;
+    place-items: center;
+    width: 40px; height: 40px;
+    border-radius: var(--r-pill);
+    transition: background .3s var(--ease);
+}
+.iconbtn:hover { background: var(--tint); }
+/* ".ico{width:100%;height:100%}" outranks NfIcon's width/height attributes, so its Size
+   parameter has no effect on its own: unsized, these icons fill the 40px button, and in the
+   flex rows below they balloon against the row's width and squeeze the text beside them. */
+.iconbtn .ico { width: 20px; height: 20px; }
+.hdr__user-btn .ico,
+.hdr__login .ico,
+.hdr__user-menu .ico,
+.hdr__drawer .ico { width: 18px; height: 18px; flex: none; }
+.hdr__user-btn .hdr__user-caret { width: 14px; height: 14px; }
+
+/* --- Header actions: cart badge, signed-in user menu, mobile drawer ---------
+   New chrome the static prototype doesn't need to show (it has no cart state,
+   no auth) but the real header does (Phase 2 step 2.2). */
+.hdr__cart { position: relative; }
+.hdr__cart-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: var(--r-pill);
+    background: var(--red);
+    color: #fff;
+    font-size: .625rem;
+    font-weight: 700;
+    line-height: 17px;
+    text-align: center;
+}
+
+.hdr__user { position: relative; display: none; }
+.hdr__user-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    color: var(--ink-70);
+    transition: color .3s var(--ease);
+}
+.hdr__user-btn:hover { color: var(--ink); }
+.hdr__user-name { max-width: 5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hdr__user-caret { transition: transform .3s var(--ease); }
+.hdr__user-caret--up { transform: rotate(180deg); }
+.hdr__user-scrim { position: fixed; inset: 0; z-index: calc(var(--z-hdr) - 1); }
+.hdr__user-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + .6rem);
+    min-width: 208px;
+    background: var(--surface);
+    border-radius: var(--r-sm);
+    box-shadow: inset 0 0 0 1px var(--line), 0 20px 45px -22px rgba(20, 17, 15, .35);
+    padding: .4rem;
+    display: grid;
+    z-index: var(--z-hdr);
+}
+.hdr__user-menu a {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .6rem .7rem;
+    border-radius: var(--r-xs);
+    font-size: var(--fs-sm);
+    color: var(--ink-70);
+    white-space: nowrap;
+    transition: background .2s var(--ease), color .2s var(--ease);
+}
+.hdr__user-menu a:hover { background: var(--tint); color: var(--ink); }
+
+.hdr__login {
+    display: none;
+    align-items: center;
+    gap: .45rem;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    color: var(--ink-70);
+    white-space: nowrap;
+    transition: color .3s var(--ease);
+}
+.hdr__login:hover { color: var(--ink); }
+
+.hdr__burger { display: grid; }
+
+.hdr__drawer {
+    border-top: 1px solid var(--line);
+    background: var(--paper);
+    padding: .5rem var(--gutter) 1.5rem;
+    display: grid;
+    gap: 0;
+}
+.hdr__drawer a {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .85rem 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: var(--fs-sm);
+    color: var(--ink-70);
+}
+.hdr__drawer a[aria-current] { color: var(--red); font-weight: 600; }
+
+/* Reading progress bar */
+.progressbar {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 70;
+    height: 2px;
+    background: var(--red);
+    transform: scaleX(var(--p, 0));
+    transform-origin: left;
+}
+
+/* --- Reveal animation --------------------------------------------------------- */
+[data-reveal] {
+    opacity: 0;
+    transform: translateY(26px);
+    transition:
+        opacity .9s var(--ease) var(--d, 0s),
+        transform .9s var(--ease) var(--d, 0s);
+}
+[data-reveal="fade"] { transform: none; }
+[data-reveal="right"] { transform: translateX(34px); }
+/* No clip-path here: a revealed element must not clip its own overflow. The
+   hero photo hangs off .jhero__art's edge and the stage glyph badges hang off
+   .stage__media's, and an inset(0) left behind by the reveal sliced both flat. */
+.is-in[data-reveal] { opacity: 1; transform: none; }
+
+/* Mask wipe. The finished state opens the clip well beyond the box so overhanging
+   children and soft shadows stay whole; --r-mask rounds the wipe's leading edge
+   for boxes that are themselves rounded (the hero photo). */
+[data-reveal="mask"] {
+    transform: none;
+    clip-path: inset(0 0 100% 0 round var(--r-mask, 0));
+    transition-property: opacity, clip-path;
+}
+.is-in[data-reveal="mask"] { clip-path: inset(-6rem round var(--r-mask, 0)); }
+
+/* Line drawing — every path carries pathLength="1" (NfIcon.razor emits it
+   directly on Draw="true"; nf-motion.js normalises any hand-written SVG
+   that doesn't). */
+.draw path, .draw circle, .draw line, .draw polyline, .draw rect {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    transition: stroke-dashoffset 1.5s var(--ease-soft) var(--d, 0s);
+}
+.is-in .draw path, .is-in .draw circle, .is-in .draw line,
+.is-in .draw polyline, .is-in .draw rect,
+.draw.is-in path, .draw.is-in circle, .draw.is-in line,
+.draw.is-in polyline, .draw.is-in rect { stroke-dashoffset: 0; }
+
+.ico { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Public star rating rows (StarRating.razor, NfStars.razor) — redeclared
+   here (also in blazor-ui.css, which loads first and covers Phase 0/1
+   before this file existed) so nf.css is self-contained going forward. */
+.nf-stars {
+    display: flex;
+    font-size: 1rem;
+    color: var(--gold);
+}
+/* NfStars.razor's root sets "--nf-star-size" from its Size parameter. Without this rule
+   each star's SVG only carries the ".ico{width:100%;height:100%}" default, which resolves
+   correctly against a shrink-to-fit flex parent (PDP's rating rows) but balloons inside a
+   wide block-level ".nf-stars" (home's testimonial figure) because the percentage then
+   resolves against that whole container instead of the star itself. Specificity (0,1,1)
+   beats ".ico" (0,1,0), so this wins without touching ".ico" itself. */
+.nf-stars > svg { width: var(--nf-star-size, 1em); height: var(--nf-star-size, 1em); flex: none; }
+.nf-stars--sm { font-size: .875rem; }
+.nf-stars--lg { font-size: 1.125rem; }
+
+/* Visually-hidden-but-accessible utility — StarRatingInput.razor's legend and
+   per-star labels use this instead of Tailwind's "sr-only" (which only keeps
+   working here for as long as the play CDN is still loaded). */
+.sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Public star-rating input (StarRatingInput.razor) — a radiogroup of real
+   radio inputs with an inline SVG star per option, sized larger than the
+   read-only .nf-stars row since these are also click targets. */
+.nf-stars-input { display: flex; gap: .35rem; border: 0; padding: 0; margin: 0; }
+.nf-stars-input__star { display: inline-flex; }
+.nf-stars-input label {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--r-sm);
+    color: var(--gold);
+    cursor: pointer;
+    transition: background .2s var(--ease);
+}
+.nf-stars-input label:hover { background: var(--tint); }
+.nf-stars-input label svg { width: 1.5rem; height: 1.5rem; }
+.nf-stars-input[disabled] label { cursor: not-allowed; opacity: .55; }
+.nf-stars-input input:focus-visible + label { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* ==========================================================================
+   Shared shop/PDP components — .chips/.chip, .opt, .qty, .pcard, .gallery,
+   .acc. Table in docs/plans/public-site-redesign-nf2.md §3.1 puts these here
+   rather than in nf-pages.css because they are reused across pages (Home's
+   featured grid reuses .pcard from Phase 3 onward; .gallery/.acc are generic
+   patterns, not Shop/PDP-only). Ported verbatim from docs/design-preview/
+   nf2.css's Shop and Product-detail sections, alongside Components/Pages/
+   {Shop,ProductDetail}.razor (plan §7, steps 2.6-2.7). Their page-specific
+   wrappers (.filterbar, .shophead, .grid-products, .pdp, .optgroup/.opts,
+   .buyrow, .assure, .crumbs) live in nf-pages.css instead.
+   ========================================================================== */
+.chips { display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+    flex: none;
+    padding: .5rem 1.05rem;
+    border-radius: var(--r-pill);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    color: var(--ink-70);
+    box-shadow: inset 0 0 0 1px var(--line);
+    white-space: nowrap;
+    transition: color .35s var(--ease), box-shadow .35s var(--ease), background .35s var(--ease);
+}
+.chip:hover { box-shadow: inset 0 0 0 1px var(--ink-38); color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); color: #fff; box-shadow: none; }
+
+.opt {
+    padding: .62rem 1.1rem;
+    border-radius: var(--r-pill);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    box-shadow: inset 0 0 0 1px var(--line);
+    transition: box-shadow .3s var(--ease), background .3s var(--ease), color .3s var(--ease);
+}
+.opt:hover { box-shadow: inset 0 0 0 1px var(--ink-38); }
+.opt[aria-pressed="true"] { background: var(--ink); color: #fff; box-shadow: none; }
+
+.qty { display: flex; align-items: center; border-radius: var(--r-pill); box-shadow: inset 0 0 0 1px var(--line); }
+.qty button { width: 44px; height: 48px; display: grid; place-items: center; color: var(--ink-55); transition: color .3s; }
+.qty button:hover { color: var(--ink); }
+.qty button:disabled { opacity: .35; cursor: not-allowed; }
+.qty output, .qty input {
+    width: 34px;
+    text-align: center;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+.qty input:focus { outline: none; }
+.qty input::-webkit-outer-spin-button, .qty input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qty input[type="number"] { -moz-appearance: textfield; }
+
+.pcard { position: relative; display: flex; flex-direction: column; }
+.pcard__media {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--tint-warm);
+    isolation: isolate;
+}
+.pcard__media img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transition: transform .9s var(--ease), filter .6s var(--ease);
+}
+.pcard:hover .pcard__media img { transform: scale(1.05); }
+.pcard__tag {
+    position: absolute;
+    left: .85rem; top: .85rem;
+    z-index: 2;
+    padding: .3rem .6rem;
+    border-radius: var(--r-xs);
+    background: rgba(251, 250, 247, .92);
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+}
+.pcard__tag--new { color: var(--green); }
+.pcard__tag--sale { color: var(--red); }
+.pcard__quick {
+    position: absolute;
+    inset: auto .75rem .75rem;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .7rem .75rem .7rem 1.05rem;
+    border-radius: var(--r-pill);
+    background: rgba(251, 250, 247, .95);
+    backdrop-filter: blur(8px);
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity .4s var(--ease), transform .4s var(--ease);
+}
+.pcard:hover .pcard__quick, .pcard:focus-within .pcard__quick { opacity: 1; transform: none; }
+.pcard__quick i { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; }
+.pcard__body { padding-top: 1rem; display: flex; flex-direction: column; gap: .3rem; }
+.pcard__cat { font-size: .6875rem; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-38); }
+.pcard__name { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.3; }
+.pcard__foot { display: flex; align-items: baseline; gap: .6rem; margin-top: .3rem; }
+.pcard__price { font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.pcard__old { font-size: var(--fs-xs); color: var(--ink-38); text-decoration: line-through; }
+.pcard__rate { margin-left: auto; display: inline-flex; align-items: center; gap: .3rem; font-size: var(--fs-xs); color: var(--ink-55); }
+.pcard__rate svg { width: 14px; height: 14px; color: var(--gold); fill: currentColor; stroke: none; }
+
+.gallery { display: grid; gap: .75rem; }
+.gallery__main { position: relative; aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden; background: var(--tint-warm); }
+.gallery__main img { width: 100%; height: 100%; object-fit: cover; }
+.gallery__thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
+.gallery__thumbs button {
+    aspect-ratio: 1;
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    background: var(--tint-warm);
+    box-shadow: inset 0 0 0 1px transparent;
+    transition: box-shadow .35s var(--ease), opacity .35s var(--ease);
+    opacity: .62;
+}
+.gallery__thumbs button:hover { opacity: 1; }
+.gallery__thumbs button[aria-current="true"] { opacity: 1; box-shadow: inset 0 0 0 1.5px var(--ink); }
+.gallery__thumbs img { width: 100%; height: 100%; object-fit: cover; }
+
+.acc { border-top: 1px solid var(--line); }
+.acc__item { border-bottom: 1px solid var(--line); }
+.acc__btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.15rem 0;
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    text-align: left;
+}
+.acc__btn i { display: grid; place-items: center; width: 22px; height: 22px; color: var(--ink-55); transition: transform .4s var(--ease); }
+.acc__item.is-open .acc__btn i { transform: rotate(45deg); }
+.acc__panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .45s var(--ease); }
+.acc__item.is-open .acc__panel { grid-template-rows: 1fr; }
+.acc__panel > div { overflow: hidden; }
+.acc__panel p, .acc__panel dl { padding-bottom: 1.3rem; color: var(--ink-70); font-size: var(--fs-sm); }
+.acc__panel dl { display: grid; grid-template-columns: auto 1fr; gap: .55rem 1.5rem; margin: 0; }
+.acc__panel dt { color: var(--ink-38); }
+.acc__panel dd { margin: 0; }
+
+/* Minimal shared field chrome — the review textarea (step 2.7) is the first
+   consumer; grows as later phases (checkout forms, phase 4) need it. Star
+   input styling lives with NfStars/StarRatingInput instead. */
+.nf-field {
+    display: block;
+    width: 100%;
+    padding: .85rem 1rem;
+    border: 0; /* the hairline is the box-shadow; the UA's 2px inset border otherwise doubles it */
+    border-radius: var(--r-sm);
+    box-shadow: inset 0 0 0 1px var(--line);
+    background: var(--surface);
+    font: inherit;
+    color: var(--ink);
+    resize: vertical;
+    transition: box-shadow .3s var(--ease);
+}
+.nf-field:focus { outline: none; box-shadow: inset 0 0 0 1px var(--ink); }
+.nf-field:disabled { opacity: .6; cursor: not-allowed; }
+
+/* A <select class="nf-field"> needs its own chrome — same caret treatment as
+   ".sortwrap select" (nf-pages.css, Shop), just applied to the block field instead
+   of the inline sort control. */
+select.nf-field {
+    appearance: none;
+    padding-right: 2.75rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2314110F' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    cursor: pointer;
+}
+select.nf-field:disabled { cursor: not-allowed; }
+
+/* Form row label — the first consumer beyond the review textarea's implicit
+   markup (checkout's address/payment forms, Phase 4 step 4.1). */
+.nf-label { display: block; font-size: var(--fs-xs); font-weight: 600; color: var(--ink-70); margin-bottom: .5rem; }
+
+/* Two-up form row (e.g. "Họ và tên" / "Số điện thoại"), collapsing to one column
+   below 640px per ui.md's mobile-first rule. Generic — not checkout-only. */
+.nf-row { display: grid; gap: 1.25rem; }
+@media (min-width: 640px) {
+    .nf-row--2 { grid-template-columns: 1fr 1fr; }
+}
+
+/* Blazor's built-in validation classes (EditForm/InputText/ValidationMessage) styled
+   with the --warn token so a rejected field is unmistakable (plan §7, step 4.1).
+   Scoped under .nf so it never reaches admin's own (differently-themed) validation
+   styling in admin.css. */
+.nf .invalid { box-shadow: inset 0 0 0 1.5px var(--warn) !important; }
+.nf .validation-message { display: block; margin-top: .4rem; font-size: var(--fs-xs); color: var(--warn); }
+
+/* Hairline radio card — real <input type="radio"> kept for keyboard/form semantics,
+   just restyled from app.css's ".radio-custom" pill dot (plan §7, step 4.1: payment
+   method). Generic enough for any future radio group (shipping method, …). */
+.radio-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: var(--r-sm);
+    box-shadow: inset 0 0 0 1px var(--line);
+    cursor: pointer;
+    transition: box-shadow .3s var(--ease), background .3s var(--ease);
+}
+.radio-card:hover { box-shadow: inset 0 0 0 1px var(--ink-38); }
+.radio-card--checked { background: var(--tint-warm); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.radio-card input[type="radio"] { width: 1.15rem; height: 1.15rem; accent-color: var(--ink); flex: none; margin: 0; }
+.radio-card__body { flex: 1 1 auto; display: grid; gap: .2rem; }
+.radio-card__title { font-weight: 600; font-size: var(--fs-sm); }
+.radio-card__desc { font-size: var(--fs-xs); color: var(--ink-55); }
+/* Explicit size for the same reason as ".btn .ico" above: ".radio-card" is a flex row with
+   a definite width, so an unsized ".ico" balloons to it. */
+.radio-card .ico { width: 1.25rem; height: 1.25rem; color: var(--ink-55); flex: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    /* Scoped to .nf (unlike the prototype's bare "*"): reduced-motion should
+       make NieFarm-2.0 transitions instant without also reaching into /admin,
+       which has never opted into this design system. */
+    .nf *, .nf *::before, .nf *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+    [data-reveal] { opacity: 1; transform: none; clip-path: none; }
+    .draw path, .draw circle, .draw line, .draw polyline, .draw rect { stroke-dashoffset: 0; }
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+.ftr { border-top: 1px solid var(--line); padding-block: clamp(3rem, 6vw, 5rem) 2rem; margin-top: clamp(4rem, 8vw, 7rem); }
+.ftr__grid { display: grid; gap: 2.5rem; }
+.ftr h4 { font-size: var(--fs-xs); letter-spacing: .16em; text-transform: uppercase; color: var(--ink-38); font-weight: 600; margin-bottom: 1rem; }
+.ftr ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; font-size: var(--fs-sm); color: var(--ink-70); }
+.ftr a:hover { color: var(--red); }
+.ftr__base { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line-soft); font-size: var(--fs-xs); color: var(--ink-38); }
+
+/* ==========================================================================
+   Rich text / article content — ported BY NAME, not renamed, so their many
+   call sites (Activities.razor's sanitised Quill HTML, ArticleDetail.razor's
+   ArticleBlock markup) need no markup change. Rule bodies retuned to the new
+   ink/red tokens and type scale; read from wwwroot/app.css:243-271 and
+   :374-417 before editing so nothing already relied upon is lost.
+   ========================================================================== */
+.rich-text-content p,
+.rich-text-content ul,
+.rich-text-content ol {
+    margin-bottom: 1rem;
+}
+
+.rich-text-content p:last-child,
+.rich-text-content ul:last-child,
+.rich-text-content ol:last-child {
+    margin-bottom: 0;
+}
+
+.rich-text-content ul,
+.rich-text-content ol {
+    padding-left: 1.5rem;
+}
+
+.rich-text-content ul { list-style: disc; }
+.rich-text-content ol { list-style: decimal; }
+
+.rich-text-content p { color: var(--ink-70); }
+
+.rich-text-content strong {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.article-content h2 {
+    font-size: var(--fs-h2);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    color: var(--red);
+    margin-top: 3rem;
+    margin-bottom: 1.5rem;
+}
+
+.article-content h3 {
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--ink);
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+.article-content p {
+    font-size: var(--fs-body);
+    line-height: 1.7;
+    color: var(--ink-70);
+    margin-bottom: 1.5rem;
+}
+
+.article-content ul {
+    list-style: disc;
+    margin-left: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.article-content li {
+    font-size: var(--fs-body);
+    line-height: 1.7;
+    color: var(--ink-70);
+    margin-bottom: .5rem;
+}
+
+.article-content strong {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Breakpoints — filtered to only the selectors already ported above.
+   Page-specific rules from nf2.css's own breakpoint block (.grid-products,
+   .jhero__grid, .shophead__row, .stage, .pdp__grid, .journey__layout, .rail,
+   …) are NOT here; they arrive with their own section of nf-pages.css in
+   Phase 2, alongside the min-width tier they belong to.
+   ========================================================================== */
+@media (min-width: 640px) {
+    .ftr__grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 860px) {
+    .nav { display: flex; }
+    .hdr__user { display: block; }
+    .hdr__login { display: inline-flex; }
+    .hdr__burger { display: none; }
+    .ftr__grid { grid-template-columns: 2fr 1fr 1fr 1fr; }
+}
+
+/* Below this width a long signed-in name pushes the nav links onto two lines, so the
+   header starts tighter (name truncated) and only gets its full spacing here. */
+@media (min-width: 1024px) {
+    .hdr__in { gap: 2rem; }
+    .nav { gap: 2rem; }
+    .hdr__user-name { max-width: 10rem; }
+}

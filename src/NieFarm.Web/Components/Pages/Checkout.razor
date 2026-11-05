@@ -16,374 +16,345 @@
 @inject CartState CartState
 @implements IDisposable
 
+@*
+    Markup-only rewrite onto NieFarm 2.0 (docs/plans/public-site-redesign-nf2.md
+    §7, step 4.1) — every piece of @code below is unchanged: cart loading, address
+    lookup/manual-entry fallback, payment method, CreateOrderCommand wiring, the
+    unavailable-line / HasUnavailableLines gate, and the promo/total arithmetic
+    (all server-authoritative — CartAssembler re-derives every amount from the
+    Products table, see security.md). The only @code edit is cosmetic: the two
+    PaymentOption.Icon strings move from Material Symbol names to NfIcon glyph
+    names, the same swap SiteHeader/ProductDetail already made — nothing reads
+    that string except this page's own markup.
+
+    The stepper (CurrentStep, the Steps <ol>) is preserved exactly — it is the
+    shopper's only "where am I" signal. Its Tailwind state classes become
+    .nf-steps__dot--now/--done/--next and .nf-steps__bar--done/--todo
+    (nf-pages.css). The three <section> cards lose their borders/shadows and
+    become hairline-delimited ".checkout__section" bands in one column; the
+    summary becomes a soft tint-warm panel, not a bordered card. Forms use
+    .nf-field/.nf-label/.nf-row; the payment radio group keeps real
+    <input type="radio"> under a new ".radio-card" hairline style. No
+    data-reveal on any form content — only the page's own small heading, so a
+    reveal glitch can never make a transactional field invisible.
+*@
+
 <PageTitle>Thanh toán - Nie Farm Việt Nam</PageTitle>
 <HeadContent>
     <meta name="robots" content="noindex" />
 </HeadContent>
 
-<div class="w-full max-w-container-max mx-auto px-gutter py-12">
+<div class="checkout">
+    <div class="shell">
 
-    <div class="mb-10 text-center">
-        <h1 class="text-headline-md text-on-surface mb-2">Thanh Toán</h1>
-        <p class="text-body-lg text-secondary">Hoàn tất đơn hàng của bạn</p>
-    </div>
-
-    @* Stepper *@
-    <ol class="w-full max-w-3xl mx-auto mb-16 flex items-start justify-between relative list-none">
-        @for (var i = 0; i < Steps.Length; i++)
-        {
-            var step = Steps[i];
-            var state = i < CurrentStep ? "step-completed" : i == CurrentStep ? "step-active" : "step-inactive";
-
-            <li class="flex flex-col items-center relative z-10 w-32">
-                <span class="w-10 h-10 rounded-full flex items-center justify-center border-2 @state text-label-bold font-semibold mb-2"
-                      aria-hidden="true">
-                    @if (i < CurrentStep)
-                    {
-                        <span class="material-symbols-outlined text-[20px]">check</span>
-                    }
-                    else
-                    {
-                        @(i + 1)
-                    }
-                </span>
-                <span class="text-label-bold font-semibold text-center @(i <= CurrentStep ? "text-on-surface" : "text-secondary")"
-                      aria-current="@(i == CurrentStep ? "step" : null)">
-                    @step
-                </span>
-            </li>
-
-            @if (i < Steps.Length - 1)
-            {
-                <li class="flex-grow h-0.5 mx-2 mt-5 @(i < CurrentStep ? "step-line-active" : "step-line-inactive")"
-                    aria-hidden="true"></li>
-            }
-        }
-    </ol>
-
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-        @* Left: cart, address, payment *@
-        <div class="lg:col-span-8 space-y-8">
-
-            <section class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-headline-sm text-on-surface flex items-center gap-2">
-                        <span class="material-symbols-outlined text-amber-gold" aria-hidden="true">shopping_cart</span>
-                        Sản phẩm trong giỏ
-                    </h2>
-                    <a class="text-label-bold font-semibold text-amber-gold hover:underline" href="/cua-hang">Tiếp tục mua sắm</a>
-                </div>
-
-                @if (_lastRemoved is not null)
-                {
-                    <div class="mb-4 flex items-center justify-between gap-4 rounded-lg border border-amber-gold/30 bg-cream-ivory p-3 text-body-sm text-on-surface">
-                        <span>Đã xóa @_lastRemoved.Value.Name.</span>
-                        <button type="button" class="text-amber-gold font-semibold underline" @onclick="UndoRemoveAsync">
-                            Hoàn tác
-                        </button>
-                    </div>
-                }
-
-                @if (_cartUnavailable)
-                {
-                    <div class="text-body-sm text-alert-rust bg-alert-rust/5 border border-alert-rust/20 rounded-lg p-4" role="alert">
-                        Trình duyệt đang chặn cookie nên giỏ hàng không thể được lưu. Vui lòng bật cookie hoặc
-                        <a class="underline font-semibold" href="/dang-nhap?returnUrl=%2Fthanh-toan">đăng nhập</a>
-                        để tiếp tục.
-                    </div>
-                }
-                else if (_cart is null)
-                {
-                    <div class="space-y-4">
-                        @for (var i = 0; i < 2; i++)
-                        {
-                            <div class="h-24 bg-cream-ivory rounded-lg animate-pulse"></div>
-                        }
-                    </div>
-                }
-                else if (_cart.IsEmpty)
-                {
-                    <div class="text-center py-12">
-                        <span class="material-symbols-outlined text-amber-gold text-[48px]" aria-hidden="true">shopping_cart</span>
-                        <p class="text-body-lg text-secondary mt-4 mb-6">Giỏ hàng của bạn đang trống.</p>
-                        <a class="btn-brand inline-flex px-8 py-3 rounded-lg font-label-bold text-label-bold" href="/cua-hang">
-                            Tiếp tục mua sắm
-                        </a>
-                    </div>
-                }
-                else
-                {
-                    <ul class="space-y-4">
-                        @foreach (var line in _cart.Lines)
-                        {
-                            <li class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-soft-border pb-4 last:border-0 last:pb-0 @(line.IsAvailable ? null : "opacity-60")">
-                                <div class="flex items-center gap-4">
-                                    <img class="w-20 h-20 object-cover rounded-lg border border-soft-border"
-                                         src="@line.ImageUrl" alt="@line.ImageAlt" />
-                                    <div>
-                                        <h3 class="text-label-bold font-semibold text-on-surface">
-                                            <a class="hover:text-forest-green transition-colors duration-250" href="@($"/san-pham/{line.Slug}")">@line.Name</a>
-                                        </h3>
-                                        @if (!string.IsNullOrWhiteSpace(line.Variant))
-                                        {
-                                            <p class="text-body-sm text-secondary mt-1">@line.Variant</p>
-                                        }
-                                        @if (!line.IsAvailable)
-                                        {
-                                            <span class="inline-block mt-1 text-xs font-semibold text-alert-rust bg-alert-rust/10 px-2 py-1 rounded-full">Tạm hết hàng</span>
-                                        }
-                                    </div>
-                                </div>
-
-                                <div class="flex items-center gap-3 sm:gap-4">
-                                    <div class="flex items-center border border-amber-gold/30 rounded-lg w-max overflow-hidden bg-white">
-                                        <button type="button"
-                                                class="p-3 w-11 h-11 flex items-center justify-center text-forest-green hover:bg-surface-container-low transition-colors duration-250 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                disabled="@(_updating || line.Quantity <= 1)"
-                                                @onclick="() => DecrementAsync(line)" aria-label="Giảm số lượng @line.Name">
-                                            <span class="material-symbols-outlined" aria-hidden="true">remove</span>
-                                        </button>
-                                        <input type="number" min="1" max="99" value="@line.Quantity" disabled="@_updating"
-                                               @onchange="e => OnQuantityInputAsync(line, e)"
-                                               class="w-14 text-center border-none focus:ring-0 font-medium bg-transparent text-on-surface p-2" />
-                                        <button type="button"
-                                                class="p-3 w-11 h-11 flex items-center justify-center text-forest-green hover:bg-surface-container-low transition-colors duration-250 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                disabled="@_updating"
-                                                @onclick="() => IncrementAsync(line)" aria-label="Tăng số lượng @line.Name">
-                                            <span class="material-symbols-outlined" aria-hidden="true">add</span>
-                                        </button>
-                                    </div>
-
-                                    <div class="text-right min-w-[6rem]">
-                                        <p class="text-label-bold font-semibold text-on-surface">@SiteContent.Vnd(line.LineTotal)</p>
-                                        <p class="text-body-sm text-secondary">@SiteContent.Vnd(line.UnitPrice)/sp</p>
-                                    </div>
-
-                                    <button type="button"
-                                            class="p-3 w-11 h-11 flex items-center justify-center text-secondary hover:text-alert-rust transition-colors duration-250 disabled:opacity-40 disabled:cursor-not-allowed"
-                                            disabled="@_updating"
-                                            @onclick="() => RemoveAsync(line)" aria-label="Xóa @line.Name khỏi giỏ hàng">
-                                        <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-                                    </button>
-                                </div>
-                            </li>
-                        }
-                    </ul>
-                }
-            </section>
-
-            <AuthorizeView>
-                <NotAuthorized>
-                    <div class="bg-white border border-amber-gold/40 rounded-xl p-4 text-body-sm text-secondary flex flex-wrap gap-2 items-center">
-                        <span class="material-symbols-outlined text-amber-gold text-[20px]" aria-hidden="true">info</span>
-                        Đã có tài khoản?
-                        <a class="text-amber-gold font-semibold underline" href="/dang-nhap?returnUrl=%2Fthanh-toan">Đăng nhập</a>
-                        để lưu đơn hàng vào tài khoản của bạn. Bạn vẫn có thể đặt hàng mà không cần tài khoản.
-                    </div>
-                </NotAuthorized>
-            </AuthorizeView>
-
-            <section class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm">
-                <h2 class="text-headline-sm text-on-surface flex items-center gap-2 mb-6">
-                    <span class="material-symbols-outlined text-amber-gold" aria-hidden="true">location_on</span>
-                    Địa chỉ nhận hàng
-                </h2>
-
-                <div class="space-y-6">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="flex flex-col">
-                            <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="full-name">
-                                Họ và tên *
-                            </label>
-                            <input id="full-name" type="text" placeholder="Nhập họ và tên" @bind="_fullName"
-                                   class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
-                        </div>
-                        <div class="flex flex-col">
-                            <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="phone">
-                                Số điện thoại *
-                            </label>
-                            <input id="phone" type="tel" placeholder="Nhập số điện thoại" @bind="_phone"
-                                   class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="email">Email</label>
-                        <input id="email" type="email" placeholder="Nhập email (để nhận hóa đơn)" @bind="_email"
-                               class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
-                    </div>
-
-                    @if (_addressLookupFailed)
-                    {
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="flex flex-col">
-                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="province">
-                                    Tỉnh / Thành phố *
-                                </label>
-                                <input id="province" type="text" placeholder="Nhập tỉnh/thành phố"
-                                       @bind="_provinceName"
-                                       class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
-                            </div>
-                            <div class="flex flex-col">
-                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="ward">
-                                    Phường / Xã *
-                                </label>
-                                <input id="ward" type="text" placeholder="Nhập phường/xã"
-                                       @bind="_wardName"
-                                       class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
-                            </div>
-                        </div>
-                        <p class="text-body-sm text-secondary">Không tải được danh sách tỉnh/phường. Vui lòng nhập thủ công.</p>
-                    }
-                    else
-                    {
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="flex flex-col">
-                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="province">
-                                    Tỉnh / Thành phố *
-                                </label>
-                                <select id="province" @bind="_provinceCode" @bind:after="OnProvinceChangedAsync"
-                                        disabled="@_provincesLoading"
-                                        class="input-flat w-full p-3 text-body-sm bg-white text-on-surface disabled:bg-cream-ivory disabled:cursor-not-allowed">
-                                    <option value="">@(_provincesLoading ? "Đang tải..." : "Chọn Tỉnh/Thành")</option>
-                                    @foreach (var p in _provinces)
-                                    {
-                                        <option value="@p.Code">@p.Name</option>
-                                    }
-                                </select>
-                            </div>
-                            <div class="flex flex-col">
-                                <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="ward">
-                                    Phường / Xã *
-                                </label>
-                                <select id="ward" @bind="_wardCode"
-                                        disabled="@(string.IsNullOrEmpty(_provinceCode) || _wardsLoading)"
-                                        class="input-flat w-full p-3 text-body-sm bg-white text-on-surface disabled:bg-cream-ivory disabled:cursor-not-allowed">
-                                    <option value="">@WardPlaceholder</option>
-                                    @foreach (var w in _wards)
-                                    {
-                                        <option value="@w.Code">@w.Name</option>
-                                    }
-                                </select>
-                            </div>
-                        </div>
-                    }
-
-                    <div class="flex flex-col">
-                        <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="street">
-                            Địa chỉ cụ thể *
-                        </label>
-                        <input id="street" type="text" placeholder="Số nhà, tên đường..." @bind="_street"
-                               class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="note">
-                            Ghi chú đơn hàng
-                        </label>
-                        <textarea id="note" placeholder="Ghi chú thêm về đơn hàng..." @bind="_note"
-                                  class="input-flat w-full p-3 text-body-sm bg-white text-on-surface h-24 resize-none"></textarea>
-                    </div>
-                </div>
-            </section>
-
-            <section class="bg-white border border-soft-border rounded-xl p-card-padding shadow-sm">
-                <h2 class="text-headline-sm text-on-surface flex items-center gap-2 mb-6">
-                    <span class="material-symbols-outlined text-amber-gold" aria-hidden="true">payments</span>
-                    Phương thức thanh toán
-                </h2>
-
-                <div class="space-y-4">
-                    @foreach (var method in PaymentMethods)
-                    {
-                        var current = method;
-
-                        <label class="flex items-center gap-4 p-4 border rounded-lg cursor-pointer transition-colors @(_payment == current.Id ? "border-amber-gold bg-cream-ivory" : "border-soft-border hover:bg-cream-ivory")">
-                            <input type="radio" name="payment_method" class="radio-custom w-5 h-5 text-amber-gold"
-                                   checked="@(_payment == current.Id)" @onchange="() => _payment = current.Id" />
-                            <span class="flex-grow">
-                                <span class="block text-label-bold font-semibold text-on-surface">@current.Title</span>
-                                <span class="block text-body-sm text-secondary mt-1">@current.Description</span>
-                            </span>
-                            <span class="material-symbols-outlined text-secondary" aria-hidden="true">@current.Icon</span>
-                        </label>
-                    }
-                </div>
-            </section>
+        <div style="text-align:center;margin-bottom:clamp(2rem,4vw,3rem)" data-reveal="fade">
+            <p class="eyebrow eyebrow--plain" style="justify-content:center">Thanh toán</p>
+            <h1 style="margin-top:.6rem;font-size:var(--fs-h2)">Hoàn tất đơn hàng của bạn</h1>
         </div>
 
-        @* Right: summary *@
-        <div class="lg:col-span-4">
-            <div class="bg-white border border-soft-border rounded-xl p-card-padding sticky top-28 shadow-sm">
-                <h2 class="text-headline-sm text-on-surface mb-6 border-b border-soft-border pb-4">Tóm tắt đơn hàng</h2>
+        @* Stepper *@
+        <ol class="nf-steps">
+            @for (var i = 0; i < Steps.Length; i++)
+            {
+                var step = Steps[i];
+                var state = i < CurrentStep ? "done" : i == CurrentStep ? "now" : "next";
 
-                <dl class="space-y-4 mb-6" aria-live="polite">
-                    <div class="flex justify-between items-center">
-                        <dt class="text-body-sm text-secondary">Tạm tính (@(_cart?.ItemCount ?? 0) sản phẩm)</dt>
-                        <dd class="text-label-bold font-semibold text-on-surface">@SiteContent.Vnd(_cart?.Subtotal ?? 0m)</dd>
+                <li class="nf-steps__item">
+                    <span class="nf-steps__dot nf-steps__dot--@state" aria-hidden="true">
+                        @if (i < CurrentStep)
+                        {
+                            <NfIcon Name="check" Size="18" />
+                        }
+                        else
+                        {
+                            @(i + 1)
+                        }
+                    </span>
+                    <span class="nf-steps__label @(i <= CurrentStep ? "nf-steps__label--active" : null)"
+                          aria-current="@(i == CurrentStep ? "step" : null)">
+                        @step
+                    </span>
+                </li>
+
+                @if (i < Steps.Length - 1)
+                {
+                    <li class="nf-steps__bar @(i < CurrentStep ? "nf-steps__bar--done" : "nf-steps__bar--todo")" aria-hidden="true"></li>
+                }
+            }
+        </ol>
+
+        <div class="checkout__grid">
+
+            @* Left: cart, address, payment *@
+            <div>
+
+                <section class="checkout__section">
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem">
+                        <h2><NfIcon Name="cart" Size="20" /> Sản phẩm trong giỏ</h2>
+                        <a class="linkline" href="/cua-hang">Tiếp tục mua sắm <NfIcon Name="arrow-right" Size="15" /></a>
                     </div>
-                    <div class="flex justify-between items-center">
-                        <dt class="text-body-sm text-secondary">Phí vận chuyển</dt>
-                        <dd class="text-label-bold font-semibold text-on-surface">
-                            @SiteContent.Vnd(_cart?.ShippingFee ?? 0m)
-                        </dd>
+
+                    @if (_lastRemoved is not null)
+                    {
+                        <div class="alert" style="background:var(--tint-warm);color:var(--ink-70);display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.25rem">
+                            <span>Đã xóa @_lastRemoved.Value.Name.</span>
+                            <button type="button" class="linkbtn" @onclick="UndoRemoveAsync">Hoàn tác</button>
+                        </div>
+                    }
+
+                    @if (_cartUnavailable)
+                    {
+                        <div class="alert alert--error" role="alert">
+                            Trình duyệt đang chặn cookie nên giỏ hàng không thể được lưu. Vui lòng bật cookie hoặc
+                            <a class="linkbtn" href="/dang-nhap?returnUrl=%2Fthanh-toan">đăng nhập</a>
+                            để tiếp tục.
+                        </div>
+                    }
+                    else if (_cart is null)
+                    {
+                        <div style="display:grid;gap:1rem">
+                            @for (var i = 0; i < 2; i++)
+                            {
+                                <div style="height:6rem;border-radius:var(--r-sm);background:var(--tint)"></div>
+                            }
+                        </div>
+                    }
+                    else if (_cart.IsEmpty)
+                    {
+                        <div style="text-align:center;padding-block:3rem">
+                            <NfIcon Name="cart" Size="40" CssClass="checkout__empty-icon" />
+                            <p class="muted" style="margin:1rem 0 1.5rem">Giỏ hàng của bạn đang trống.</p>
+                            <a class="btn" href="/cua-hang"><span>Tiếp tục mua sắm</span></a>
+                        </div>
+                    }
+                    else
+                    {
+                        <ul style="list-style:none;margin:0;padding:0">
+                            @foreach (var line in _cart.Lines)
+                            {
+                                <li class="checkout__cart-item @(line.IsAvailable ? null : "checkout__cart-item--unavailable")">
+                                    <div class="checkout__cart-item-info">
+                                        <div class="checkout__cart-item-media">
+                                            <img src="@line.ImageUrl" alt="@line.ImageAlt" />
+                                        </div>
+                                        <div>
+                                            <p class="checkout__cart-item-name">
+                                                <a href="@($"/san-pham/{line.Slug}")">@line.Name</a>
+                                            </p>
+                                            @if (!string.IsNullOrWhiteSpace(line.Variant))
+                                            {
+                                                <p class="muted" style="font-size:var(--fs-xs);margin-top:.2rem">@line.Variant</p>
+                                            }
+                                            @if (!line.IsAvailable)
+                                            {
+                                                <span class="badge-error" style="margin-top:.35rem">Tạm hết hàng</span>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div class="checkout__cart-item-actions">
+                                        <div class="qty">
+                                            <button type="button" disabled="@(_updating || line.Quantity <= 1)"
+                                                    @onclick="() => DecrementAsync(line)" aria-label="Giảm số lượng @line.Name">
+                                                <NfIcon Name="minus" Size="15" />
+                                            </button>
+                                            <input type="number" min="1" max="99" value="@line.Quantity" disabled="@_updating"
+                                                   aria-label="Số lượng @line.Name"
+                                                   @onchange="e => OnQuantityInputAsync(line, e)" />
+                                            <button type="button" disabled="@_updating"
+                                                    @onclick="() => IncrementAsync(line)" aria-label="Tăng số lượng @line.Name">
+                                                <NfIcon Name="plus" Size="15" />
+                                            </button>
+                                        </div>
+
+                                        <div class="checkout__cart-item-price">
+                                            <b>@Money.Vnd(line.LineTotal)</b>
+                                            <span class="muted" style="font-size:var(--fs-xs)">@Money.Vnd(line.UnitPrice)/sp</span>
+                                        </div>
+
+                                        <button type="button" class="iconbtn checkout__remove" disabled="@_updating"
+                                                @onclick="() => RemoveAsync(line)" aria-label="Xóa @line.Name khỏi giỏ hàng">
+                                            <NfIcon Name="close" Size="17" />
+                                        </button>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                <AuthorizeView>
+                    <NotAuthorized>
+                        <div class="alert checkout__note" style="background:var(--tint-warm);color:var(--ink-70);margin-bottom:1.5rem">
+                            <NfIcon Name="user" Size="18" />
+                            Đã có tài khoản?
+                            <a class="linkbtn" href="/dang-nhap?returnUrl=%2Fthanh-toan">Đăng nhập</a>
+                            để lưu đơn hàng vào tài khoản của bạn. Bạn vẫn có thể đặt hàng mà không cần tài khoản.
+                        </div>
+                    </NotAuthorized>
+                </AuthorizeView>
+
+                <section class="checkout__section">
+                    <h2><NfIcon Name="location" Size="20" /> Địa chỉ nhận hàng</h2>
+
+                    <div style="display:grid;gap:1.5rem">
+                        <div class="nf-row nf-row--2">
+                            <div>
+                                <label class="nf-label" for="full-name">Họ và tên *</label>
+                                <input id="full-name" type="text" placeholder="Nhập họ và tên" @bind="_fullName" class="nf-field" />
+                            </div>
+                            <div>
+                                <label class="nf-label" for="phone">Số điện thoại *</label>
+                                <input id="phone" type="tel" placeholder="Nhập số điện thoại" @bind="_phone" class="nf-field" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="nf-label" for="email">Email</label>
+                            <input id="email" type="email" placeholder="Nhập email (để nhận hóa đơn)" @bind="_email" class="nf-field" />
+                        </div>
+
+                        @if (_addressLookupFailed)
+                        {
+                            <div class="nf-row nf-row--2">
+                                <div>
+                                    <label class="nf-label" for="province">Tỉnh / Thành phố *</label>
+                                    <input id="province" type="text" placeholder="Nhập tỉnh/thành phố" @bind="_provinceName" class="nf-field" />
+                                </div>
+                                <div>
+                                    <label class="nf-label" for="ward">Phường / Xã *</label>
+                                    <input id="ward" type="text" placeholder="Nhập phường/xã" @bind="_wardName" class="nf-field" />
+                                </div>
+                            </div>
+                            <p class="muted" style="font-size:var(--fs-sm)">Không tải được danh sách tỉnh/phường. Vui lòng nhập thủ công.</p>
+                        }
+                        else
+                        {
+                            <div class="nf-row nf-row--2">
+                                <div>
+                                    <label class="nf-label" for="province">Tỉnh / Thành phố *</label>
+                                    <select id="province" @bind="_provinceCode" @bind:after="OnProvinceChangedAsync"
+                                            disabled="@_provincesLoading" class="nf-field">
+                                        <option value="">@(_provincesLoading ? "Đang tải..." : "Chọn Tỉnh/Thành")</option>
+                                        @foreach (var p in _provinces)
+                                        {
+                                            <option value="@p.Code">@p.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="nf-label" for="ward">Phường / Xã *</label>
+                                    <select id="ward" @bind="_wardCode"
+                                            disabled="@(string.IsNullOrEmpty(_provinceCode) || _wardsLoading)" class="nf-field">
+                                        <option value="">@WardPlaceholder</option>
+                                        @foreach (var w in _wards)
+                                        {
+                                            <option value="@w.Code">@w.Name</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        }
+
+                        <div>
+                            <label class="nf-label" for="street">Địa chỉ cụ thể *</label>
+                            <input id="street" type="text" placeholder="Số nhà, tên đường..." @bind="_street" class="nf-field" />
+                        </div>
+
+                        <div>
+                            <label class="nf-label" for="note">Ghi chú đơn hàng</label>
+                            <textarea id="note" placeholder="Ghi chú thêm về đơn hàng..." @bind="_note"
+                                      class="nf-field" style="min-height:6rem"></textarea>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="checkout__section">
+                    <h2><NfIcon Name="receipt" Size="20" /> Phương thức thanh toán</h2>
+
+                    <div style="display:grid;gap:1rem">
+                        @foreach (var method in PaymentMethods)
+                        {
+                            var current = method;
+
+                            <label class="radio-card @(_payment == current.Id ? "radio-card--checked" : null)">
+                                <input type="radio" name="payment_method"
+                                       checked="@(_payment == current.Id)" @onchange="() => _payment = current.Id" />
+                                <span class="radio-card__body">
+                                    <span class="radio-card__title">@current.Title</span>
+                                    <span class="radio-card__desc">@current.Description</span>
+                                </span>
+                                <NfIcon Name="@current.Icon" Size="20" />
+                            </label>
+                        }
+                    </div>
+                </section>
+            </div>
+
+            @* Right: summary *@
+            <div class="checkout__summary">
+                <h2>Tóm tắt đơn hàng</h2>
+
+                <dl aria-live="polite">
+                    <div class="row">
+                        <dt>Tạm tính (@(_cart?.ItemCount ?? 0) sản phẩm)</dt>
+                        <dd>@Money.Vnd(_cart?.Subtotal ?? 0m)</dd>
+                    </div>
+                    <div class="row">
+                        <dt>Phí vận chuyển</dt>
+                        <dd>@Money.Vnd(_cart?.ShippingFee ?? 0m)</dd>
                     </div>
                 </dl>
 
-                <div class="flex gap-2 mb-6 border-t border-b border-soft-border py-4">
+                <div class="checkout__promo">
                     <label class="sr-only" for="promo">Mã giảm giá</label>
-                    <input id="promo" type="text" placeholder="Mã giảm giá"
-                           class="input-flat flex-grow p-2 text-body-sm bg-white" />
-                    <button type="button" class="btn-secondary-brand px-4 rounded-lg font-label-bold text-label-bold">
-                        Áp dụng
-                    </button>
+                    <input id="promo" type="text" placeholder="Mã giảm giá" class="nf-field" style="flex:1" />
+                    <button type="button" class="btn btn--ghost btn--sm"><span>Áp dụng</span></button>
                 </div>
 
-                <div class="flex justify-between items-center mb-8">
-                    <span class="text-label-bold font-semibold text-on-surface text-lg">Tổng cộng</span>
-                    <span class="text-headline-sm font-bold text-amber-gold">@SiteContent.Vnd(_cart?.Total ?? 0m)</span>
+                <div class="checkout__total">
+                    <span>Tổng cộng</span>
+                    <b>@Money.Vnd(_cart?.Total ?? 0m)</b>
                 </div>
 
                 @if (_cart is not null && _cart.IsEmpty && !_cartUnavailable)
                 {
-                    <p class="text-body-sm text-alert-rust text-center mb-4">
+                    <p class="alert alert--error" style="text-align:center;margin-bottom:1rem">
                         Giỏ hàng trống — hãy thêm sản phẩm trước khi đặt hàng.
                     </p>
                 }
 
                 @if (_cart is { HasUnavailableLines: true })
                 {
-                    <p class="text-body-sm text-alert-rust text-center mb-4">
+                    <p class="alert alert--error" style="text-align:center;margin-bottom:1rem">
                         Vui lòng xóa sản phẩm đã hết hàng trước khi đặt hàng.
                     </p>
                 }
 
                 @if (_errors.Count > 0)
                 {
-                    <ul class="mb-4 rounded-lg border border-alert-rust/40 bg-alert-rust/5 p-3 text-body-sm text-alert-rust space-y-1"
-                        role="alert">
+                    <div class="alert alert--error" role="alert" style="margin-bottom:1rem">
                         @foreach (var error in _errors)
                         {
-                            <li>@error</li>
+                            <p>@error</p>
                         }
-                    </ul>
+                    </div>
                 }
 
                 <button type="button"
                         disabled="@(_submitting || _updating || _cartUnavailable || _cart is null || _cart.IsEmpty || _cart.HasUnavailableLines)"
                         @onclick="PlaceOrderAsync"
-                        class="btn-brand w-full py-4 rounded-lg font-label-bold text-label-bold flex justify-center items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
-                    @(_submitting ? "Đang xử lý..." : "Xác nhận đặt hàng")
+                        class="btn btn--red btn--block">
+                    <span>@(_submitting ? "Đang xử lý..." : "Xác nhận đặt hàng")</span>
                     @if (!_submitting)
                     {
-                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">arrow_forward</span>
+                        <NfIcon Name="arrow-right" Size="18" />
                     }
                 </button>
 
-                <p class="text-body-sm text-secondary text-center mt-4 text-xs">
+                <p class="muted" style="text-align:center;font-size:var(--fs-xs);margin-top:1rem">
                     Bằng cách đặt hàng, bạn đồng ý với
-                    <a class="text-amber-gold underline" href="/dieu-khoan-su-dung">Điều khoản sử dụng</a>
+                    <a class="linkbtn" href="/dieu-khoan-su-dung">Điều khoản sử dụng</a>
                     của chúng tôi.
                 </p>
             </div>
@@ -401,8 +372,8 @@
 
     private static readonly PaymentOption[] PaymentMethods =
     [
-        new(PaymentMethod.CashOnDelivery, "Thanh toán khi nhận hàng (COD)", "Nhận hàng và thanh toán trực tiếp.", "local_shipping"),
-        new(PaymentMethod.BankTransfer,   "Chuyển khoản ngân hàng", "Chuyển khoản qua mã QR an toàn và nhanh chóng.", "account_balance")
+        new(PaymentMethod.CashOnDelivery, "Thanh toán khi nhận hàng (COD)", "Nhận hàng và thanh toán trực tiếp.", "truck"),
+        new(PaymentMethod.BankTransfer,   "Chuyển khoản ngân hàng", "Chuyển khoản qua mã QR an toàn và nhanh chóng.", "receipt")
     ];
 
     private PaymentMethod _payment = PaymentMethod.CashOnDelivery;

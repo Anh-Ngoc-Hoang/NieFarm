@@ -1,13 +1,17 @@
 @*
     A single framed photo with a caption underneath, used to build loosely-stacked
-    photo collages (e.g. the farm-to-cup story on the login screen).
+    photo collages (e.g. the farm-to-cup story on the login screen). NieFarm 2.0
+    restyle (docs/plans/public-site-redesign-nf2.md §7, step 5.1): the per-photo
+    drop shadow becomes a ".polaroid" hairline inset — the collage as a whole
+    carries at most one soft photographic shadow, applied by the parent
+    (FarmStoryPanel's ".auth__collage-item--4") rather than by every card here.
 *@
 
-<div class="bg-white p-2 pb-2.5 rounded-lg shadow-lg border border-soft-border">
-    <div class="aspect-[4/3] rounded overflow-hidden">
-        <img class="w-full h-full object-cover" src="@ImageUrl" alt="@ImageAlt" />
+<div class="polaroid">
+    <div class="polaroid__frame">
+        <img src="@ImageUrl" alt="@ImageAlt" />
     </div>
-    <p class="text-center text-[11px] font-semibold text-deep-red mt-2">@Caption</p>
+    <p class="polaroid__caption">@Caption</p>
 </div>
 
 @code {

@@ -1,0 +1,21 @@
+.agents/
+.vs/
+.vscode/
+site/
+.stitch/
+bin/
+obj/
+*/obj/*
+src/NieFarm.Infrastructure/Migrations/
+src/NieFarm.Web/Properties/PublishProfiles/
+appsettings.Development.json
+publish/
+docs/
+.claude/
+CLAUDE.md
+src/NieFarm.Web/wwwroot/images/
+
+# tools/map: one-off map generator (only its sources and lockfile are committed)
+tools/map/node_modules/
+tools/map/data/
+tools/map/out/

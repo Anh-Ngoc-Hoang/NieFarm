@@ -1,9 +1,15 @@
 @*
     Amber star row used on product cards, the product detail header and testimonials.
     Renders filled / half / empty Material Symbols to match the Stitch screens.
+
+    Tailwind-free (docs/plans/public-site-redesign-nf2.md §4, step 0.3): sizing used to come
+    from a "text-*" utility on each glyph plus the root's "text-amber-gold" for colour. ".nf-stars"
+    (defined in blazor-ui.css, later also nf.css) now supplies both the flex layout and the gold
+    colour, so this component no longer depends on the Tailwind CDN or its config. Admin's two
+    call sites (ReviewsPage, ReviewDetailModal) get their colour from that class too.
 *@
 
-<div class="flex text-amber-gold @CssClass" role="img" aria-label="@AriaLabel">
+<div class="nf-stars @CssClass" role="img" aria-label="@AriaLabel">
     @for (var i = 1; i <= 5; i++)
     {
         var filled = Value >= i;
@@ -21,9 +27,9 @@
     [Parameter]
     public double Value { get; set; } = 5;
 
-    /// <summary>Tailwind text-size utility applied to each glyph.</summary>
+    /// <summary>Optional font-size override for each glyph; <c>.nf-stars</c> already sets 1rem.</summary>
     [Parameter]
-    public string SizeClass { get; set; } = "text-sm";
+    public string? SizeClass { get; set; }
 
     [Parameter]
     public string? CssClass { get; set; }

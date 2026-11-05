@@ -18,6 +18,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Review> Reviews => Set<Review>();
+    public DbSet<Testimonial> Testimonials => Set<Testimonial>();
+    public DbSet<Crop> Crops => Set<Crop>();
+    public DbSet<CropProduct> CropProducts => Set<CropProduct>();
+    public DbSet<CoffeeRegion> CoffeeRegions => Set<CoffeeRegion>();
+    public DbSet<CoffeeRegionArea> CoffeeRegionAreas => Set<CoffeeRegionArea>();
+    public DbSet<Partner> Partners => Set<Partner>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

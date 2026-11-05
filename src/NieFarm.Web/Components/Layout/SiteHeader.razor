@@ -1,72 +1,66 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using NieFarm.Web.Services.Cart
 @implements IDisposable
 @inject NavigationManager Navigation
 @inject CartState CartState
 
 @*
-    Sticky top navigation shared by every public page.
-    Nav items and the active-underline treatment follow the Stitch screens.
+    Sticky top navigation shared by every public page — NieFarm 2.0 chrome
+    (docs/plans/public-site-redesign-nf2.md §7, step 2.2). Markup only: every
+    piece of @code below (NavItems, IsActive, LocationChanged, CartState.OnChange,
+    _mobileMenuOpen, _userMenuOpen, DisplayName, IDisposable) is unchanged from the
+    Tailwind version.
 *@
 
-<header class="fixed top-0 w-full z-50 bg-deep-red border-b border-amber-gold">
-    <div class="flex justify-between items-center h-20 px-gutter max-w-container-max mx-auto">
+<header class="hdr">
+    <div class="shell hdr__in">
+        <a class="wordmark" href="/">Nie<em>Farm</em></a>
 
-        <a class="font-headline-sm text-headline-sm font-bold text-white" href="/">Nie Farm Việt Nam</a>
-
-        <nav class="hidden md:flex items-center gap-8">
+        <nav class="nav">
             @foreach (var item in NavItems)
             {
-                <a class="@(IsActive(item) ? ActiveLink : InactiveLink)" href="@item.Href"
-                   aria-current="@(IsActive(item) ? "page" : null)">
+                <a href="@item.Href" aria-current="@(IsActive(item) ? "page" : null)">
                     @item.Label
                 </a>
             }
         </nav>
 
-        <div class="flex items-center gap-4">
-            <a class="relative inline-flex text-white p-2" href="/thanh-toan" aria-label="Giỏ hàng (@CartState.Count sản phẩm)">
-                <span class="material-symbols-outlined">shopping_cart</span>
+        <div class="hdr__actions">
+            <a class="iconbtn hdr__cart" href="/thanh-toan" aria-label="Giỏ hàng (@CartState.Count sản phẩm)">
+                <NfIcon Name="cart" Size="19" />
                 @if (CartState.Count > 0)
                 {
-                    <span class="absolute -top-1 -right-1 min-w-[1.125rem] h-[1.125rem] px-1 rounded-full bg-amber-gold text-deep-red text-[0.625rem] font-bold flex items-center justify-center leading-none">
-                        @CartState.Count
-                    </span>
+                    <span class="hdr__cart-badge">@CartState.Count</span>
                 }
             </a>
+
             <AuthorizeView>
                 <Authorized>
-                    <div class="relative hidden sm:block">
-                        <button type="button"
-                                class="inline-flex items-center gap-1 text-white/90 hover:text-amber-gold text-body-sm font-medium"
+                    <div class="hdr__user">
+                        <button type="button" class="hdr__user-btn"
                                 aria-haspopup="true" aria-expanded="@_userMenuOpen" @onclick="ToggleUserMenu">
-                            <span class="material-symbols-outlined text-[20px]" aria-hidden="true">person</span>
-                            <span class="max-w-[10rem] truncate">@DisplayName(context)</span>
-                            <span class="material-symbols-outlined text-[20px]" aria-hidden="true">
-                                @(_userMenuOpen ? "keyboard_arrow_up" : "keyboard_arrow_down")
-                            </span>
+                            <NfIcon Name="user" Size="18" />
+                            <span class="hdr__user-name">@DisplayName(context)</span>
+                            <NfIcon Name="chevron-down" Size="14" CssClass="@(_userMenuOpen ? "hdr__user-caret hdr__user-caret--up" : "hdr__user-caret")" />
                         </button>
                         @if (_userMenuOpen)
                         {
                             @* Full-viewport click-catcher so clicking anywhere outside the menu closes it. *@
-                            <div class="fixed inset-0 z-40" @onclick="CloseUserMenu"></div>
-                            <div class="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-soft-border py-1 z-50">
-                                <a class="flex items-center gap-2 px-4 py-2 text-body-sm text-on-surface hover:bg-cream-ivory"
-                                   href="/tai-khoan/don-hang" @onclick="CloseUserMenu">
-                                    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">receipt_long</span>
+                            <div class="hdr__user-scrim" @onclick="CloseUserMenu"></div>
+                            <div class="hdr__user-menu">
+                                <a href="/tai-khoan/don-hang" @onclick="CloseUserMenu">
+                                    <NfIcon Name="receipt" Size="18" />
                                     Đơn hàng của tôi
                                 </a>
                                 <AuthorizeView Roles="Admin,SuperAdmin" Context="adminContext">
-                                    <a class="flex items-center gap-2 px-4 py-2 text-body-sm text-on-surface hover:bg-cream-ivory"
-                                       href="/admin" @onclick="CloseUserMenu">
-                                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">admin_panel_settings</span>
+                                    <a href="/admin" @onclick="CloseUserMenu">
+                                        <NfIcon Name="shield" Size="18" />
                                         Trang quản trị
                                     </a>
                                 </AuthorizeView>
                                 @* Full page load: sign-out must reach the Razor Page that clears the cookie. *@
-                                <a class="flex items-center gap-2 px-4 py-2 text-body-sm text-on-surface hover:bg-cream-ivory"
-                                   href="/pages/tai-khoan/dang-xuat">
-                                    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
+                                <a href="/pages/tai-khoan/dang-xuat">
+                                    <NfIcon Name="logout" Size="18" />
                                     Đăng xuất
                                 </a>
                             </div>
@@ -74,50 +68,49 @@
                     </div>
                 </Authorized>
                 <NotAuthorized>
-                    <a class="hidden sm:inline-flex items-center gap-1 text-white/90 hover:text-amber-gold text-body-sm font-medium"
-                       href="/dang-nhap">
-                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">login</span>
+                    <a class="hdr__login" href="/dang-nhap">
+                        <NfIcon Name="user" Size="18" />
                         Đăng nhập
                     </a>
                 </NotAuthorized>
             </AuthorizeView>
-            <button type="button" class="md:hidden text-white p-2" aria-label="Mở menu"
+
+            <button type="button" class="iconbtn hdr__burger" aria-label="Mở menu"
                     aria-expanded="@_mobileMenuOpen" @onclick="ToggleMobileMenu">
-                <span class="material-symbols-outlined">@(_mobileMenuOpen ? "close" : "menu")</span>
+                <NfIcon Name="@(_mobileMenuOpen ? "close" : "menu")" Size="20" />
             </button>
         </div>
     </div>
 
-    @* Mobile drawer — the desktop nav collapses to a stacked list below md. *@
+    @* Mobile drawer — the desktop nav collapses to a stacked list below the ".nav" breakpoint. *@
     @if (_mobileMenuOpen)
     {
-        <nav class="md:hidden bg-deep-red border-t border-amber-gold/40 px-gutter pb-6 pt-2 flex flex-col gap-1">
+        <nav class="hdr__drawer">
             @foreach (var item in NavItems)
             {
-                <a class="@(IsActive(item) ? MobileActiveLink : MobileInactiveLink)" href="@item.Href"
-                   aria-current="@(IsActive(item) ? "page" : null)" @onclick="CloseMobileMenu">
+                <a href="@item.Href" aria-current="@(IsActive(item) ? "page" : null)" @onclick="CloseMobileMenu">
                     @item.Label
                 </a>
             }
             <AuthorizeView>
                 <Authorized>
-                    <a class="@MobileInactiveLink flex items-center gap-2" href="/tai-khoan/don-hang" @onclick="CloseMobileMenu">
-                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">receipt_long</span>
+                    <a href="/tai-khoan/don-hang" @onclick="CloseMobileMenu">
+                        <NfIcon Name="receipt" Size="18" />
                         Đơn hàng của tôi
                     </a>
                     <AuthorizeView Roles="Admin,SuperAdmin" Context="adminContext">
-                        <a class="@MobileInactiveLink flex items-center gap-2" href="/admin" @onclick="CloseMobileMenu">
-                            <span class="material-symbols-outlined text-[20px]" aria-hidden="true">admin_panel_settings</span>
+                        <a href="/admin" @onclick="CloseMobileMenu">
+                            <NfIcon Name="shield" Size="18" />
                             Trang quản trị
                         </a>
                     </AuthorizeView>
-                    <a class="@MobileInactiveLink flex items-center gap-2" href="/pages/tai-khoan/dang-xuat">
-                        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
+                    <a href="/pages/tai-khoan/dang-xuat">
+                        <NfIcon Name="logout" Size="18" />
                         Đăng xuất
                     </a>
                 </Authorized>
                 <NotAuthorized>
-                    <a class="@MobileInactiveLink" href="/dang-nhap" @onclick="CloseMobileMenu">Đăng nhập</a>
+                    <a href="/dang-nhap" @onclick="CloseMobileMenu">Đăng nhập</a>
                 </NotAuthorized>
             </AuthorizeView>
         </nav>
@@ -125,18 +118,6 @@
 </header>
 
 @code {
-    private const string InactiveLink =
-        "text-white/90 font-medium hover:text-amber-gold transition-colors duration-250 font-body-lg text-body-lg";
-
-    private const string ActiveLink =
-        "text-white font-bold border-b-2 border-amber-gold pb-1 font-body-lg text-body-lg";
-
-    private const string MobileInactiveLink =
-        "text-white/90 font-medium hover:text-amber-gold transition-colors duration-250 py-3 border-b border-white/10";
-
-    private const string MobileActiveLink =
-        "text-amber-gold font-bold py-3 border-b border-white/10";
-
     private bool _mobileMenuOpen;
     private bool _userMenuOpen;
     private string _path = "/";

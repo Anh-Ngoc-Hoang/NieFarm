@@ -1,32 +1,37 @@
 @page "/dat-hang-thanh-cong/{Code}"
 @using Microsoft.AspNetCore.Components.Authorization
 
+@*
+    Markup-only rewrite onto NieFarm 2.0 (docs/plans/public-site-redesign-nf2.md
+    §7, step 4.3). No @code logic at all beyond the [Parameter] — the
+    AuthorizeView gate that shows "Xem đơn hàng của tôi" only to a signed-in
+    customer is unchanged.
+*@
+
 <PageTitle>Đặt hàng thành công - Nie Farm Việt Nam</PageTitle>
 <HeadContent>
     <meta name="robots" content="noindex" />
 </HeadContent>
 
-<div class="w-full max-w-lg mx-auto px-gutter py-20 text-center">
-    <span class="material-symbols-outlined text-forest-green text-[64px]" aria-hidden="true">check_circle</span>
+<div class="acct-confirm">
+    <div class="shell" style="max-width:34rem">
+        <span class="acct-confirm__icon"><NfIcon Name="check" Size="28" /></span>
 
-    <h1 class="text-headline-md text-on-surface mt-6 mb-2">Đặt hàng thành công!</h1>
-    <p class="text-body-lg text-secondary mb-8">
-        Cảm ơn bạn đã đặt hàng tại Nie Farm. Mã đơn hàng của bạn là:
-    </p>
+        <h1 style="margin-top:1.5rem">Đặt hàng thành công!</h1>
+        <p class="lede" style="margin:.75rem auto 0">
+            Cảm ơn bạn đã đặt hàng tại Nie Farm. Mã đơn hàng của bạn là:
+        </p>
 
-    <p class="text-headline-md font-bold text-deep-red mb-10">@Code</p>
+        <p class="acct-confirm__code">@Code</p>
 
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/tra-cuu-don-hang" class="btn-secondary-brand px-8 py-3 rounded-lg font-label-bold text-label-bold">
-            Tra cứu đơn hàng
-        </a>
-        <AuthorizeView>
-            <Authorized>
-                <a href="/tai-khoan/don-hang" class="btn-brand px-8 py-3 rounded-lg font-label-bold text-label-bold">
-                    Xem đơn hàng của tôi
-                </a>
-            </Authorized>
-        </AuthorizeView>
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:center">
+            <a href="/tra-cuu-don-hang" class="btn btn--ghost"><span>Tra cứu đơn hàng</span></a>
+            <AuthorizeView>
+                <Authorized>
+                    <a href="/tai-khoan/don-hang" class="btn btn--red"><span>Xem đơn hàng của tôi</span></a>
+                </Authorized>
+            </AuthorizeView>
+        </div>
     </div>
 </div>
 

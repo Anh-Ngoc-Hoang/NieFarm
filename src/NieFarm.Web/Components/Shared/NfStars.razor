@@ -1,0 +1,64 @@
+@*
+    Public star-rating row for the NieFarm 2.0 redesign — inline SVG stars in the
+    design system's --gold token, with half-star support, replacing StarRating.razor
+    (Material Symbols) on public pages once they migrate (docs/plans/public-site-
+    redesign-nf2.md §5, step 1.5). StarRating.razor itself is unchanged and stays the
+    admin's component (see StarRating.razor's own Tailwind-removal note).
+
+    Wired into the PDP rating rows and the home page's testimonial carousel. Star path
+    data is the same one used throughout the prototype for ".pcard__rate" / PDP rating
+    (design-preview/{cua-hang,san-pham}.html). Sizing is carried through the
+    "--nf-star-size" custom property (docs/plans/home-redesign-crop-testimonials.md D11)
+    rather than relying on ".ico"'s 100% width/height, which only resolves correctly
+    inside a shrink-to-fit flex parent — a block-level ".nf-stars" in a wide container
+    (home's testimonial figure) otherwise stretches each star to a fraction of the
+    container's width instead of Size pixels.
+*@
+<div class="nf-stars @CssClass" role="img" aria-label="@AriaLabel" style="@($"--nf-star-size:{Size}px")">
+    @for (var i = 1; i <= 5; i++)
+    {
+        var star = i;
+        var filled = Value >= star;
+        var half = !filled && Value >= star - 0.5;
+        var gradientId = $"nf-star-half-{_id}-{star}";
+
+        <svg class="ico" width="@Size" height="@Size" viewBox="0 0 24 24" stroke-width="1.3" aria-hidden="true">
+            @if (half)
+            {
+                <defs>
+                    <linearGradient id="@gradientId">
+                        <stop offset="50%" stop-color="currentColor" />
+                        <stop offset="50%" stop-color="transparent" />
+                    </linearGradient>
+                </defs>
+                <path d="m12 3 2.7 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17.3 6.4 20.3l1.2-6.3L3 9.6l6.3-.8L12 3Z"
+                      fill="@($"url(#{gradientId})")" stroke="currentColor" />
+            }
+            else
+            {
+                <path d="m12 3 2.7 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17.3 6.4 20.3l1.2-6.3L3 9.6l6.3-.8L12 3Z"
+                      fill="@(filled ? "currentColor" : "none")" stroke="currentColor" />
+            }
+        </svg>
+    }
+</div>
+
+@code {
+    /// <summary>Rating out of five; halves render as a half-filled gradient star.</summary>
+    [Parameter]
+    public double Value { get; set; } = 5;
+
+    /// <summary>Rendered width/height of each star, in pixels.</summary>
+    [Parameter]
+    public int Size { get; set; } = 16;
+
+    [Parameter]
+    public string? CssClass { get; set; }
+
+    // Unique per component instance so several star rows on the same page (a shop
+    // grid full of .pcard__rate, say) don't collide on the half-star gradient id.
+    private readonly string _id = System.Guid.NewGuid().ToString("N");
+
+    private string AriaLabel =>
+        $"Đánh giá {Value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} trên 5 sao";
+}

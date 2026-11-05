@@ -6,74 +6,67 @@
     <meta name="robots" content="noindex" />
 </HeadContent>
 
-<div class="min-h-screen w-full flex flex-col lg:flex-row">
+@*
+    NieFarm 2.0 restyle (docs/plans/public-site-redesign-nf2.md §7, step 5.1) —
+    markup/classes only. The form still POSTs to the Razor Page that owns
+    SignInManager (a Blazor EditForm cannot set the auth cookie, because the
+    circuit has no HTTP response) — action, input names, the RememberMe value
+    and the hidden ReturnUrl field are all untouched.
+*@
+
+<div class="auth">
 
     <FarmStoryPanel />
 
-    @* Right panel: the login form. *@
-    <main class="flex-1 flex flex-col justify-center items-center px-gutter py-16">
+    <main class="auth__main">
+        <a class="auth__mobile-word wordmark" href="/">Nie<em>Farm</em></a>
 
-        <a class="lg:hidden mb-8 font-headline-sm text-headline-sm font-bold text-deep-red" href="/">Nie Farm Việt Nam</a>
-
-        <div class="w-full max-w-[360px]">
-            <h2 class="text-headline-md text-on-surface mb-2">Đăng nhập</h2>
-            <p class="text-body-lg text-secondary mb-8">
-                Đăng nhập để xem lịch sử đơn hàng của bạn.
-            </p>
+        <div class="auth__panel">
+            <h2>Đăng nhập</h2>
+            <p class="lede">Đăng nhập để xem lịch sử đơn hàng của bạn.</p>
 
             @if (Error is not null)
             {
-                <div class="mb-6 flex items-start gap-3 rounded-lg border border-alert-rust/40 bg-alert-rust/5 p-3 text-body-sm text-alert-rust"
-                     role="alert">
-                    <span class="material-symbols-outlined text-[20px] leading-none">warning</span>
-                    <span>@ErrorMessage</span>
+                <div class="alert alert--error" style="margin-bottom:1.5rem" role="alert">
+                    <p>@ErrorMessage</p>
                 </div>
             }
 
-            @*
-                A plain HTML form, posted to the Razor Page that owns SignInManager. A Blazor
-                EditForm cannot set the auth cookie, because the circuit has no HTTP response.
-            *@
-            <form action="/pages/tai-khoan/dang-nhap" method="post" class="space-y-6">
+            <form action="/pages/tai-khoan/dang-nhap" method="post" class="auth__form">
                 <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
 
-                <div class="flex flex-col">
-                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="Email">Email</label>
+                <div>
+                    <label class="nf-label" for="Email">Email</label>
                     <input id="Email" name="Email" type="email" required autofocus autocomplete="username"
-                           value="@Email" placeholder="ban@vidu.vn"
-                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                           value="@Email" placeholder="ban@vidu.vn" class="nf-field" />
                 </div>
 
-                <div class="flex flex-col">
-                    <label class="text-label-bold font-semibold text-on-surface-variant mb-2" for="Password">Mật khẩu</label>
+                <div>
+                    <label class="nf-label" for="Password">Mật khẩu</label>
                     <input id="Password" name="Password" type="password" required autocomplete="current-password"
-                           placeholder="••••••••"
-                           class="input-flat w-full p-3 text-body-sm bg-white text-on-surface" />
+                           placeholder="••••••••" class="nf-field" />
                 </div>
 
-                <label class="flex items-center gap-2 text-body-sm text-secondary">
+                <label class="auth__remember">
                     <input type="checkbox" name="RememberMe" value="true" />
                     Ghi nhớ đăng nhập
                 </label>
 
-                <button type="submit"
-                        class="btn-brand w-full py-4 rounded-lg font-label-bold text-label-bold flex items-center justify-center gap-2">
-                    Đăng nhập
-                    <span class="material-symbols-outlined text-[18px] leading-none">arrow_forward</span>
+                <button type="submit" class="btn btn--red btn--block">
+                    <span>Đăng nhập</span>
+                    <NfIcon Name="arrow-right" Size="18" />
                 </button>
             </form>
 
-            <p class="text-body-sm text-secondary text-center mt-6">
+            <p class="auth__switch">
                 Chưa có tài khoản?
-                <a class="text-amber-gold font-semibold underline" href="/dang-ky">Đăng ký ngay</a>
+                <a class="auth__link" href="/dang-ky">Đăng ký ngay</a>
             </p>
 
-            <div class="mt-6 text-center">
-                <a class="inline-flex items-center gap-1 text-body-sm text-secondary hover:text-on-surface" href="/">
-                    <span class="material-symbols-outlined text-[16px] leading-none">arrow_back</span>
-                    Quay lại trang chủ
-                </a>
-            </div>
+            <a class="auth__back" href="/">
+                <NfIcon Name="arrow-right" Size="16" />
+                Quay lại trang chủ
+            </a>
         </div>
     </main>
 </div>

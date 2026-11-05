@@ -22,6 +22,10 @@ public static class Seeder
         await SeedIdentityAsync(scope, superAdminPassword);
         await SeedActivitiesAsync(scope);
         await SeedProductsAsync(scope);
+        await SeedCropsAsync(scope);
+        await SeedTestimonialsAsync(scope);
+        await SeedPartnersAsync(scope);
+        await SeedCoffeeRegionsAsync(scope);
     }
 
     /// <summary>
@@ -147,5 +151,102 @@ public static class Seeder
         await db.SaveChangesAsync();
 
         logger.LogInformation("Seeded {Count} products", missing.Count);
+    }
+
+    /// <summary>
+    /// Populates the Crops table with a single 2027 "New Crop" placeholder the first time it is
+    /// empty — the table-empty guard matters here for correctness, not just idempotency: a
+    /// "does 2027 exist" guard would re-insert a current 2027 crop beside an admin-chosen current
+    /// crop after 2027 was deleted, and the filtered unique index on IsCurrent would then crash
+    /// seeding. Runs after <see cref="SeedProductsAsync"/> because it resolves product slugs to
+    /// ids for its "shop the crop" links.
+    /// </summary>
+    private static async Task SeedCropsAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        if (await db.Crops.AnyAsync())
+            return;
+
+        var productIdBySlug = await db.Products.ToDictionaryAsync(p => p.Slug, p => p.Id);
+        var crop = CropSeedData.Build(productIdBySlug);
+
+        db.Crops.Add(crop);
+        await db.SaveChangesAsync();
+
+        const int seededCropCount = 1;
+        logger.LogInformation("Seeded {Count} crop", seededCropCount);
+    }
+
+    /// <summary>
+    /// Populates the Testimonials table with the original design fixture the first time it is
+    /// empty — the same table-empty guard as <see cref="SeedActivitiesAsync"/>. An admin who
+    /// deletes every testimonial on purpose will get them re-seeded on the next restart, which is
+    /// acceptable and matches Activities.
+    /// </summary>
+    private static async Task SeedTestimonialsAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        if (await db.Testimonials.AnyAsync())
+            return;
+
+        var testimonials = TestimonialSeedData.Build();
+        db.Testimonials.AddRange(testimonials);
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Seeded {Count} testimonials", testimonials.Count);
+    }
+
+    /// <summary>
+    /// Populates the Partners table with the default "Cà Phê Văn Phòng" row the first time it is
+    /// empty — the same table-empty guard as <see cref="SeedTestimonialsAsync"/>. An admin who
+    /// deletes every partner gets the default re-seeded on the next restart (accepted at plan
+    /// review, docs/plans/home-partners-marquee.md D17); the supported way to hide the home band is
+    /// to untick Visible, and /admin/partners says so.
+    /// </summary>
+    private static async Task SeedPartnersAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        if (await db.Partners.AnyAsync())
+            return;
+
+        var partners = PartnerSeedData.Build();
+        db.Partners.AddRange(partners);
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Seeded {Count} partners", partners.Count);
+    }
+
+    /// <summary>
+    /// Ensures one CoffeeRegions row exists per CoffeeRegionKey. On an empty table this inserts
+    /// all three, exactly like a table-empty guard; it also inserts any single key that is
+    /// missing, and it never overwrites an existing row, so admin edits are safe.
+    ///
+    /// Per-key rather than table-empty because there is no admin delete: the only way a row goes
+    /// missing is a manual SQL delete, and without this that region would silently drop off the
+    /// home page map until someone intervened. No dependencies, so it runs last.
+    /// </summary>
+    private static async Task SeedCoffeeRegionsAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        var existingKeys = await db.CoffeeRegions.Select(r => r.Key).ToListAsync();
+        var missing = CoffeeRegionSeedData.Build()
+            .Where(r => !existingKeys.Contains(r.Key))
+            .ToList();
+
+        if (missing.Count == 0)
+            return;
+
+        db.CoffeeRegions.AddRange(missing);
+        await db.SaveChangesAsync();
+
+        logger.LogInformation("Seeded {Count} coffee regions", missing.Count);
     }
 }

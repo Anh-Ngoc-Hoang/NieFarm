@@ -3,23 +3,26 @@
 
 <PageTitle>Đã xảy ra lỗi - Nie Farm Việt Nam</PageTitle>
 
-<section class="max-w-3xl mx-auto px-gutter py-section-padding-y text-center">
-    <span class="material-symbols-outlined text-[64px] text-amber-gold mb-4" aria-hidden="true">error</span>
-    <h1 class="text-headline-md text-deep-red mb-6">Đã xảy ra lỗi</h1>
-    <p class="text-body-lg text-on-surface-variant mb-10">
+@* NieFarm 2.0 restyle (docs/plans/public-site-redesign-nf2.md §7, step 5.2) —
+   rendered inside PublicLayout's ".nf" scope (DefaultLayout); RequestId/dev-mode
+   logic below is unchanged. *@
+<section class="shell" style="max-width:42rem;padding-block:clamp(6rem,14vh,9rem);text-align:center">
+    <div class="err-icon">
+        <NfIcon Name="warning" />
+    </div>
+    <h1 style="margin:1rem 0 1.25rem">Đã xảy ra lỗi</h1>
+    <p class="lede" style="margin-inline:auto;margin-bottom:@(ShowRequestId ? "1.5rem" : "2.5rem")">
         Rất tiếc, đã có lỗi xảy ra khi xử lý yêu cầu của bạn. Vui lòng thử lại sau ít phút.
     </p>
 
     @if (ShowRequestId)
     {
-        <p class="text-body-sm text-on-surface-variant mb-10">
-            Mã yêu cầu: <code class="bg-surface-container px-2 py-1 rounded">@RequestId</code>
+        <p class="muted" style="font-size:var(--fs-sm);margin-bottom:2.5rem">
+            Mã yêu cầu: <code style="background:var(--tint);padding:.2rem .5rem;border-radius:var(--r-xs)">@RequestId</code>
         </p>
     }
 
-    <a class="btn-brand inline-flex px-8 py-3 rounded-lg font-label-bold text-label-bold" href="/">
-        Về trang chủ
-    </a>
+    <a class="btn btn--red" href="/"><span>Về trang chủ</span></a>
 </section>
 
 @code {

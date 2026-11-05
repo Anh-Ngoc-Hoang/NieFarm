@@ -2,10 +2,14 @@
 
 @*
     Distraction-free shell for auth screens (login, register): no site header or
-    footer, so a full-height split layout can run edge-to-edge.
+    footer, so a full-height split layout can run edge-to-edge. NieFarm 2.0
+    restyle (docs/plans/public-site-redesign-nf2.md §7, step 5.1) — only the
+    ".nf" root class is added here; the split/collage layout itself lives in
+    ".auth" (nf-pages.css) on LoginPage/RegisterPage's own root, same pattern
+    as CheckoutLayout.
 *@
 
-<div class="min-h-screen bg-cream-ivory text-on-surface antialiased">
+<div class="nf">
     @Body
 </div>
 

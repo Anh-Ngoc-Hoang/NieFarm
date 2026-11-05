@@ -1,164 +1,153 @@
 @page "/tra-cuu-don-hang"
 
+@*
+    Markup-only rewrite onto NieFarm 2.0 (docs/plans/public-site-redesign-nf2.md
+    §7, step 4.2). @code is unchanged except for one addition: StepGlyph(), a
+    pure display mapping from the fixture's Material Symbol icon names to
+    NfIcon glyph names (NfIcon has no "inventory_2"/"local_shipping"/"task_alt"
+    glyphs). Search()/ProgressWidth are byte-for-byte the same; the page still
+    matches only the SiteContent.SampleOrderCode ("NF12345") fixture — that is
+    unchanged.
+*@
+
 <PageTitle>Tra cứu đơn hàng - Nie Farm Việt Nam</PageTitle>
 <HeadContent>
     <meta name="description"
           content="Nhập mã đơn hàng Nie Farm để kiểm tra tình trạng giao hàng, thông tin người nhận và chi tiết sản phẩm." />
 </HeadContent>
 
-<div class="px-gutter max-w-container-max mx-auto w-full pt-12 pb-section-padding-y">
+<div class="nf-track">
+    <div class="shell">
 
-    <section class="max-w-3xl mx-auto mb-16 text-center">
-        <h1 class="text-headline-md text-deep-red mb-6">Tra cứu đơn hàng</h1>
-        <p class="text-body-lg text-secondary mb-10">
-            Nhập mã đơn hàng của bạn để kiểm tra tình trạng giao hàng và chi tiết sản phẩm.
-        </p>
-
-        <EditForm Model="this" OnValidSubmit="Search"
-                  class="flex flex-col sm:flex-row gap-4 justify-center items-stretch max-w-lg mx-auto">
-            <div class="relative flex-grow">
-                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-forest-green"
-                      aria-hidden="true">search</span>
-                <label class="sr-only" for="order-code">Mã đơn hàng</label>
-                <InputText id="order-code" @bind-Value="_code" placeholder="@($"Ví dụ: {SiteContent.SampleOrderCode}")"
-                           class="w-full pl-12 pr-4 py-4 rounded-lg border border-amber-gold bg-white focus:border-forest-green focus:ring-4 focus:ring-forest-green/15 transition-all duration-250 text-body-lg text-on-surface outline-none" />
-            </div>
-            <button type="submit"
-                    class="btn-brand px-8 py-4 rounded-lg font-label-bold text-label-bold whitespace-nowrap">
-                Tra cứu
-            </button>
-        </EditForm>
-
-        @if (_notFound)
-        {
-            <p class="mt-6 text-body-lg text-alert-rust" role="status">
-                Không tìm thấy đơn hàng với mã &ldquo;@_code&rdquo;. Vui lòng kiểm tra lại mã đơn.
+        <div class="nf-track__intro" data-reveal="fade">
+            <p class="eyebrow eyebrow--plain" style="justify-content:center">Tra cứu đơn hàng</p>
+            <h1 style="margin-top:.6rem">Theo dõi đơn hàng của bạn</h1>
+            <p class="lede" style="margin:1rem auto 0">
+                Nhập mã đơn hàng của bạn để kiểm tra tình trạng giao hàng và chi tiết sản phẩm.
             </p>
-        }
-    </section>
 
-    @if (_order is not null)
-    {
-        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 fade-in-up" @key="_order.Code">
+            <EditForm Model="this" OnValidSubmit="Search" class="nf-track__form">
+                <div class="nf-track__field">
+                    <NfIcon Name="search" Size="18" CssClass="nf-track__field-ico" />
+                    <label class="sr-only" for="order-code">Mã đơn hàng</label>
+                    <InputText id="order-code" @bind-Value="_code" placeholder="@($"Ví dụ: {SiteContent.SampleOrderCode}")"
+                               class="nf-field nf-track__field-input" />
+                </div>
+                <button type="submit" class="btn btn--red"><span>Tra cứu</span></button>
+            </EditForm>
 
-            @* Progress *@
-            <div class="col-span-1 lg:col-span-12 glass-panel rounded-xl p-card-padding hover-lift">
-                <div class="flex flex-wrap gap-4 justify-between items-center mb-8">
-                    <div>
-                        <h2 class="text-headline-sm text-on-surface mb-1">
-                            Mã đơn: <span class="font-bold text-deep-red">@_order.Code</span>
-                        </h2>
-                        <p class="text-body-sm text-secondary">Ngày đặt: @_order.PlacedOn</p>
+            @if (_notFound)
+            {
+                <p class="nf-track__error" role="status">
+                    Không tìm thấy đơn hàng với mã &ldquo;@_code&rdquo;. Vui lòng kiểm tra lại mã đơn.
+                </p>
+            }
+        </div>
+
+        @if (_order is not null)
+        {
+            <div class="nf-track__result" data-reveal="fade" @key="_order.Code">
+
+                @* Progress *@
+                <div class="nf-track__panel">
+                    <div class="nf-track__head">
+                        <div>
+                            <h2>Mã đơn: <span class="nf-track__code">@_order.Code</span></h2>
+                            <p class="muted" style="font-size:var(--fs-sm);margin-top:.3rem">Ngày đặt: @_order.PlacedOn</p>
+                        </div>
+                        <span class="badge-status badge-status--ok">@_order.Status</span>
                     </div>
-                    <p class="bg-forest-green/10 text-forest-green px-4 py-2 rounded-full text-label-bold font-semibold border border-forest-green/20">
-                        @_order.Status
-                    </p>
-                </div>
 
-                <ol class="relative pt-6 pb-2 flex justify-between list-none">
-                    <div class="absolute top-1/2 left-0 w-full h-1 bg-amber-gold/30 -translate-y-1/2 rounded-full z-0"
-                         aria-hidden="true"></div>
-                    <div class="absolute top-1/2 left-0 h-1 bg-forest-green -translate-y-1/2 rounded-full z-0 transition-all duration-1000 ease-out"
-                         style="width: @ProgressWidth" aria-hidden="true"></div>
-
-                    @foreach (var step in _order.Steps)
-                    {
-                        <li class="relative z-10 flex flex-col items-center">
-                            <span class="w-10 h-10 rounded-full flex items-center justify-center mb-3 ring-4 ring-white @(step.Reached ? "bg-forest-green text-white shadow-md" : "bg-surface-container text-forest-green border border-amber-gold")">
-                                <span class="material-symbols-outlined @(step.Reached ? "icon-fill" : null)"
-                                      aria-hidden="true">@step.Icon</span>
-                            </span>
-                            <span class="text-label-bold font-semibold text-center @(step.Reached ? "text-on-surface" : "text-secondary")">
-                                @step.Label
-                            </span>
-                            <span class="text-body-sm text-secondary text-center mt-1">@step.Timestamp</span>
-                        </li>
-                    }
-                </ol>
-            </div>
-
-            @* Recipient *@
-            <div class="col-span-1 lg:col-span-4">
-                <div class="glass-panel rounded-xl p-card-padding hover-lift h-full">
-                    <h2 class="text-label-bold font-semibold text-on-surface uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-amber-gold pb-3">
-                        <span class="material-symbols-outlined text-forest-green" aria-hidden="true">person</span>
-                        Thông tin người nhận
-                    </h2>
-                    <dl class="space-y-4">
-                        <div>
-                            <dt class="text-body-sm text-secondary mb-1">Họ và tên</dt>
-                            <dd class="text-body-lg font-medium text-on-surface">@_order.RecipientName</dd>
-                        </div>
-                        <div>
-                            <dt class="text-body-sm text-secondary mb-1">Số điện thoại</dt>
-                            <dd class="text-body-lg font-medium text-on-surface">@_order.RecipientPhone</dd>
-                        </div>
-                        <div>
-                            <dt class="text-body-sm text-secondary mb-1">Địa chỉ giao hàng</dt>
-                            <dd class="text-body-lg text-on-surface leading-relaxed">@_order.ShippingAddress</dd>
-                        </div>
-                    </dl>
-                </div>
-            </div>
-
-            @* Lines + totals *@
-            <div class="col-span-1 lg:col-span-8 flex flex-col gap-4">
-                <div class="glass-panel rounded-xl p-card-padding hover-lift flex-grow">
-                    <h2 class="text-label-bold font-semibold text-on-surface uppercase tracking-wider mb-6 flex items-center gap-2 border-b border-amber-gold pb-3">
-                        <span class="material-symbols-outlined text-forest-green" aria-hidden="true">shopping_bag</span>
-                        Chi tiết sản phẩm
-                    </h2>
-
-                    <ul class="space-y-6">
-                        @foreach (var line in _order.Lines)
+                    <ol class="nf-track__steps" style="--track-progress: @ProgressWidth">
+                        @foreach (var step in _order.Steps)
                         {
-                            <li class="flex items-start gap-4 pb-6 border-b border-amber-gold last:border-0 last:pb-0">
-                                <img class="w-24 h-24 rounded-lg object-cover border border-amber-gold flex-shrink-0"
-                                     src="@line.ImageUrl" alt="@line.ImageAlt" />
-                                <div class="flex-grow">
-                                    <div class="flex flex-wrap justify-between items-start gap-4">
-                                        <div>
-                                            <h3 class="text-body-lg font-semibold text-on-surface mb-1">@line.Name</h3>
-                                            <p class="text-body-sm text-secondary">Phân loại: @line.Variant</p>
-                                        </div>
-                                        <span class="text-body-lg font-medium text-on-surface whitespace-nowrap">
-                                            @SiteContent.Vnd(line.UnitPrice)
-                                        </span>
-                                    </div>
-                                    <p class="mt-4 text-body-sm text-secondary">
-                                        @* Parenthesised so Razor does not read "x@..." as an email literal. *@
-                                        Số lượng: <span class="font-medium text-on-surface">x@(line.Quantity)</span>
-                                    </p>
-                                </div>
+                            <li class="nf-track__step @(step.Reached ? "nf-track__step--reached" : null)">
+                                <span class="nf-track__dot">
+                                    <NfIcon Name="@StepGlyph(step.Icon)" Size="18" />
+                                </span>
+                                <span class="nf-track__label">@step.Label</span>
+                                <span class="nf-track__time">@step.Timestamp</span>
                             </li>
                         }
-                    </ul>
+                    </ol>
                 </div>
 
-                <div class="glass-panel rounded-xl p-card-padding hover-lift">
-                    <dl class="flex flex-col gap-3">
-                        <div class="flex justify-between items-center">
-                            <dt class="text-body-lg text-secondary">Tạm tính</dt>
-                            <dd class="text-body-lg font-medium text-on-surface">@SiteContent.Vnd(_order.Subtotal)</dd>
+                <div class="nf-track__cols">
+
+                    @* Recipient *@
+                    <div class="nf-track__panel">
+                        <h3 class="nf-track__panel-title"><NfIcon Name="user" Size="18" /> Thông tin người nhận</h3>
+                        <dl class="nf-track__meta">
+                            <div>
+                                <dt>Họ và tên</dt>
+                                <dd>@_order.RecipientName</dd>
+                            </div>
+                            <div>
+                                <dt>Số điện thoại</dt>
+                                <dd>@_order.RecipientPhone</dd>
+                            </div>
+                            <div>
+                                <dt>Địa chỉ giao hàng</dt>
+                                <dd>@_order.ShippingAddress</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    @* Lines + totals *@
+                    <div style="display:grid;gap:clamp(1.5rem,3vw,2rem)">
+                        <div class="nf-track__panel">
+                            <h3 class="nf-track__panel-title"><NfIcon Name="cart" Size="18" /> Chi tiết sản phẩm</h3>
+
+                            <ul class="nf-track__lines">
+                                @foreach (var line in _order.Lines)
+                                {
+                                    <li class="nf-track__line">
+                                        <div class="nf-track__line-media">
+                                            <img src="@line.ImageUrl" alt="@line.ImageAlt" />
+                                        </div>
+                                        <div class="nf-track__line-body">
+                                            <div class="nf-track__line-row">
+                                                <div>
+                                                    <p class="nf-track__line-name">@line.Name</p>
+                                                    <p class="nf-track__line-meta">Phân loại: @line.Variant</p>
+                                                </div>
+                                                <span class="nf-track__line-price">@SiteContent.Vnd(line.UnitPrice)</span>
+                                            </div>
+                                            <p class="nf-track__line-qty">
+                                                @* Parenthesised so Razor does not read "x@..." as an email literal. *@
+                                                Số lượng: <b>x@(line.Quantity)</b>
+                                            </p>
+                                        </div>
+                                    </li>
+                                }
+                            </ul>
                         </div>
-                        <div class="flex justify-between items-center">
-                            <dt class="text-body-lg text-secondary">Phí vận chuyển</dt>
-                            <dd class="text-body-lg font-medium text-on-surface">@SiteContent.Vnd(_order.ShippingFee)</dd>
+
+                        <div class="nf-track__panel">
+                            <dl class="nf-track__totals">
+                                <div class="row">
+                                    <dt>Tạm tính</dt>
+                                    <dd>@SiteContent.Vnd(_order.Subtotal)</dd>
+                                </div>
+                                <div class="row">
+                                    <dt>Phí vận chuyển</dt>
+                                    <dd>@SiteContent.Vnd(_order.ShippingFee)</dd>
+                                </div>
+                                <div class="row">
+                                    <dt>Giảm giá</dt>
+                                    <dd style="color:var(--green)">-@SiteContent.Vnd(_order.Discount)</dd>
+                                </div>
+                                <div class="total">
+                                    <dt>Tổng cộng</dt>
+                                    <dd>@SiteContent.Vnd(_order.Total)</dd>
+                                </div>
+                            </dl>
                         </div>
-                        <div class="flex justify-between items-center">
-                            <dt class="text-body-lg text-secondary">Giảm giá</dt>
-                            <dd class="text-body-lg font-medium text-success-forest">-@SiteContent.Vnd(_order.Discount)</dd>
-                        </div>
-                        <div class="w-full h-px bg-amber-gold opacity-50 my-2" aria-hidden="true"></div>
-                        <div class="flex justify-between items-center">
-                            <dt class="text-headline-sm font-bold text-on-surface">Tổng cộng</dt>
-                            <dd class="text-headline-sm font-bold text-deep-red">@SiteContent.Vnd(_order.Total)</dd>
-                        </div>
-                    </dl>
+                    </div>
                 </div>
             </div>
-        </section>
-    }
+        }
+    </div>
 </div>
 
 @code {
@@ -189,4 +178,14 @@
             return $"{reached * 100 / (_order.Steps.Length - 1)}%";
         }
     }
+
+    // Display-only mapping from the fixture's Material Symbol icon names to NfIcon
+    // glyph names — added for the redesign, no fixture change (SiteContent.cs untouched).
+    private static string StepGlyph(string materialIcon) => materialIcon switch
+    {
+        "inventory_2" => "receipt",
+        "local_shipping" => "truck",
+        "task_alt" => "check",
+        _ => "clock"
+    };
 }

@@ -1,0 +1,79 @@
+/* =====================================================================
+   Blazor framework chrome.
+
+   The document-level rules every page needs, public and admin alike:
+   zeroed html/body margins, a fallback body face, the h1 focus reset for
+   FocusOnNavigate, and the framework's reconnect / error UI. These used to
+   come from Tailwind preflight and the old app.css; both are gone. Loaded
+   on every page from App.razor, ahead of nf.css and the admin stylesheet.
+   ===================================================================== */
+
+html,
+body {
+    margin: 0;
+}
+
+/* Fallback face for the few things that render outside every design root
+   (the reconnect dialog, #blazor-error-ui). .nf and .admin-app/.login-wrap
+   each set their own family on top of this. */
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* <FocusOnNavigate Selector="h1"> focuses each page's h1 after navigation so
+   screen readers announce it; without this, every navigation paints a focus
+   ring round the heading. Carried over from app.css when it was deleted. */
+h1:focus,
+h1:focus-visible {
+    outline: none;
+}
+
+/* Public star rating rows — StarRating.razor (also rendered by two
+   admin pages) and NfStars.razor both use this class for their flex
+   layout and gold colour. Declared here so it exists before nf.css
+   does; redeclared in nf.css once that file lands (Phase 1). Admin's
+   own English error-boundary override lives in admin.css, not here. */
+.nf-stars {
+    display: flex;
+    font-size: 1rem;
+    color: var(--gold, #D4A359);
+}
+
+.nf-stars--sm {
+    font-size: .875rem;
+}
+
+.nf-stars--lg {
+    font-size: 1.125rem;
+}
+
+.blazor-error-boundary {
+    background: #b32121;
+    padding: 1rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "Đã xảy ra lỗi.";
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}

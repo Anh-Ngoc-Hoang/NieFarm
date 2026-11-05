@@ -210,13 +210,19 @@ public static partial class SiteContent
             .Take(take);
 
     /// <summary>
-    /// The two products promoted in the article sidebar. A property rather than a field:
-    /// static field initialisation order across partial-class files is not guaranteed, so
-    /// reading <see cref="FeaturedProducts"/> eagerly here could observe it unset.
+    /// The fields the article sidebar card needs. A private shape rather than reusing the home
+    /// page's product query DTO: /bai-viet/{slug} is still SiteContent fixture data (out of
+    /// scope for docs/plans/home-redesign-crop-testimonials.md), so this stays fixture-only too,
+    /// independent of whichever real query now backs the home page's featured products.
     /// </summary>
-    public static ProductCard[] ArticleSidebarProducts =>
+    public sealed record SidebarProductCard(string Slug, string Name, decimal Price, string ImageUrl, string ImageAlt);
+
+    /// <summary>The two products promoted in the article sidebar.</summary>
+    public static readonly SidebarProductCard[] ArticleSidebarProducts =
     [
-        FeaturedProducts[1],
-        FeaturedProducts[0]
+        new("arabica-cau-dat", "Arabica Cầu Đất", 250_000,
+            "/images/home-4.jpg", "Túi cà phê Arabica Cầu Đất của Nie Farm"),
+        new("robusta-honey-dac-biet", "Robusta Honey Đặc Biệt", 185_000,
+            "/images/home-3.jpg", "Túi cà phê Robusta Honey Đặc Biệt của Nie Farm")
     ];
 }

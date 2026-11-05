@@ -1,85 +1,143 @@
 @page "/quy-trinh"
 
+@*
+    Full rewrite from docs/design-preview/quy-trinh.html — the "from seed to cup" journey
+    tour (docs/plans/public-site-redesign-nf2.md §7, step 2.5). The rail <ol> and every stage
+    come from SiteContent.ProcessSteps; the timeline's old reversed/last bookkeeping is gone —
+    alternation is ".stage:nth-child(even)" in CSS now (nf-pages.css).
+*@
+
 <PageTitle>Quy trình sản xuất - Nie Farm Việt Nam</PageTitle>
 <HeadContent>
     <meta name="description"
-          content="Hành trình tạo nên cà phê sạch tại Nie Farm: thu hoạch chín 100%, sơ chế chuyên sâu, phơi giàn trong nhà màng và rang xay kiểm soát nhiệt." />
+          content="Tám chặng làm nên cà phê sạch Nie Farm: từ vườn ươm, canh tác hữu cơ, thu hái chín 100%, sơ chế chuyên sâu, phơi giàn trong nhà màng, rang kiểm soát nhiệt đến khi vào ly của bạn." />
 </HeadContent>
 
-@* Hero *@
-<section class="relative py-section-padding-y overflow-hidden">
-    <div class="max-w-container-max mx-auto px-gutter relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+@* ============================ HERO ============================ *@
+<section class="jhero">
+    <div class="shell jhero__grid">
         <div>
-            <h1 class="text-headline-lg-mobile md:text-headline-lg text-deep-red mb-6">
-                Hành Trình Tạo Nên Cà Phê Sạch &amp; Chất Lượng Cao
+            <p class="eyebrow" data-reveal="fade">Quy trình sản xuất</p>
+            <h1 class="jhero__title" data-reveal style="--d:.08s">
+                Từ hạt giống
+                <span class="accent">đến ly cà phê</span>
             </h1>
-            <p class="text-on-surface-variant text-body-lg mb-8 max-w-xl">
-                Tại Nie Farm, mỗi hạt cà phê là kết tinh của sự tỉ mỉ từ nông trại đến ly sứ. Chúng tôi tuân
-                thủ nghiêm ngặt quy trình kiểm soát chất lượng, mang đến hương vị nguyên bản và an toàn
-                tuyệt đối.
+            <p class="lede" style="margin-top:1.75rem" data-reveal="fade">
+                Tám chặng, một đường thẳng không đứt quãng. Cuộn xuống để đi hết hành trình của một
+                hạt cà phê Nie Farm — từ vườn ươm trên cao nguyên đến mẻ rang cuối cùng.
             </p>
-            <a class="btn-brand inline-flex py-3 px-6 rounded font-label-bold text-label-bold" href="#tieu-chuan">
-                Khám Phá Quy Trình
-            </a>
+
+            <div class="jhero__meta" data-reveal="fade" style="--d:.16s">
+                @foreach (var stat in SiteContent.ProcessStats)
+                {
+                    <div class="jhero__stat">
+                        <div class="n">@stat.Value</div>
+                        <div class="l">@stat.Label</div>
+                    </div>
+                }
+            </div>
+
+            <a class="btn btn--red" style="margin-top:2.5rem" href="#s1"><span>Khám phá quy trình</span></a>
+
+            <div class="scrollcue"><i></i> Cuộn để bắt đầu</div>
         </div>
-        <div class="relative h-[500px] rounded-xl overflow-hidden shadow-lg border border-amber-gold">
-            <img class="w-full h-full object-cover" src="/images/process-1.jpg"
-                 alt="Quả cà phê chín đỏ mọng trên cành trong sương sớm vùng cao nguyên" />
+
+        <div class="jhero__art" data-reveal="fade" style="--d:.1s">
+            <svg class="ico draw" viewBox="0 0 420 420" aria-hidden="true">
+                <path d="M20 392h380" />
+                <path d="M74 392c0-78 6-140 40-186s92-76 100-132" />
+                <path d="M96 302c-24-6-36-26-34-48 26 2 40 20 34 48Z" />
+                <path d="M106 238c24-10 34-32 28-54-26 8-36 30-28 54Z" />
+                <path d="M134 186c-24-8-34-30-28-52 26 10 36 30 28 52Z" />
+                <path d="M176 122a17 17 0 1 0 0 34 17 17 0 0 0 0-34Z" />
+                <path d="M212 90a14 14 0 1 0 0 28 14 14 0 0 0 0-28Z" />
+                <path d="M230 100c58 14 98 62 98 122" />
+                <path d="M250 300h104v32a52 52 0 0 1-104 0v-32Z" />
+                <path d="M354 310h14a22 22 0 0 1 0 44h-14" />
+                <path d="M232 392h140" />
+                <path d="M286 258c-10 13 8 19 0 31" />
+                <path d="M318 252c-10 13 8 19 0 31" />
+            </svg>
         </div>
     </div>
 </section>
 
-@* Timeline *@
-<section class="py-section-padding-y" id="tieu-chuan">
-    <div class="max-w-container-max mx-auto px-gutter">
-        <div class="text-center mb-16">
-            <h2 class="text-headline-md text-deep-red mb-4">Tiêu Chuẩn Sản Xuất Khắt Khe</h2>
-            <p class="text-on-surface-variant max-w-2xl mx-auto">
-                Mỗi bước trong quy trình đều được kiểm soát bởi các chuyên gia để đảm bảo chất lượng hạt
-                nhân xanh đạt chuẩn Specialty.
-            </p>
-        </div>
+@* ============================ TOUR ============================ *@
+<section class="journey">
+    <div class="shell journey__layout">
 
-        <ol class="relative timeline-line list-none">
+        @* Sticky progress rail — duplicates the stage headings, so it stays aria-hidden. *@
+        <aside class="rail" aria-hidden="true">
+            <div class="rail__inner">
+                <p class="eyebrow eyebrow--plain" style="margin-bottom:1.5rem">Hành trình</p>
+                <div class="rail__route">
+                    <svg viewBox="0 0 2 100" preserveAspectRatio="none">
+                        <line class="track" x1="1" y1="0" x2="1" y2="100" />
+                        <line class="fill" pathLength="1" x1="1" y1="0" x2="1" y2="100" />
+                    </svg>
+                </div>
+                <ol class="rail__list">
+                    @foreach (var step in SiteContent.ProcessSteps)
+                    {
+                        <li><a href="#@step.Anchor">@step.RailLabel</a></li>
+                    }
+                </ol>
+                <svg class="rail__cup ico" viewBox="0 0 48 58" aria-hidden="true">
+                    <clipPath id="cupClip"><path d="M11 17h26v14a13 13 0 0 1-26 0V17Z" /></clipPath>
+                    <rect class="liquid" x="11" y="17" width="26" height="27" clip-path="url(#cupClip)" stroke="none" />
+                    <path d="M11 17h26v14a13 13 0 0 1-26 0V17Z" />
+                    <path d="M37 20h3a5 5 0 0 1 0 10h-3" />
+                    <path d="M8 50h32" />
+                </svg>
+                <p class="rail__pct">0%</p>
+            </div>
+        </aside>
+
+        <div class="stages">
             @foreach (var step in SiteContent.ProcessSteps)
             {
-                var reversed = step.Number % 2 == 0;
-                var last = step.Number == SiteContent.ProcessSteps.Length;
-
-                <li class="relative flex flex-col @(reversed ? "md:flex-row-reverse" : "md:flex-row") justify-between items-center w-full @(last ? "" : "mb-24") z-10 group">
-
-                    <div class="w-full md:w-5/12 mb-8 md:mb-0 @(reversed ? "md:text-left md:pl-12" : "md:text-right md:pr-12") pl-20 md:pl-0">
-                        <h3 class="text-headline-sm text-deep-red mb-3">@step.Number. @step.Title</h3>
-                        <p class="text-on-surface-variant">@step.Body</p>
+                <article class="stage" id="@step.Anchor" data-reveal="fade">
+                    <div class="stage__text">
+                        <div class="stage__num"><b>@step.Number.ToString("00")</b> @step.Eyebrow</div>
+                        <h2 class="stage__title">@step.Title</h2>
+                        <p class="stage__body">@step.Body</p>
+                        <ul class="stage__facts">
+                            @foreach (var fact in step.Facts)
+                            {
+                                <li><NfIcon Name="check" Size="17" /> @fact</li>
+                            }
+                        </ul>
                     </div>
-
-                    <div class="absolute left-8 md:left-1/2 top-0 md:top-auto -translate-x-1/2 flex items-center justify-center w-16 h-16 rounded-full bg-cream-ivory border-4 border-amber-gold shadow-sm z-20 group-hover:scale-110 transition-transform duration-300">
-                        <span class="text-headline-sm font-bold text-deep-red" aria-hidden="true">
-                            @step.Number.ToString("00")
-                        </span>
-                    </div>
-
-                    <div class="w-full md:w-5/12 pl-20 md:pl-0 @(reversed ? "md:pr-12" : "md:pl-12")">
-                        <div class="rounded-lg overflow-hidden border border-amber-gold shadow-sm group-hover:shadow-md transition-shadow duration-300">
-                            <img class="w-full h-64 object-cover" src="@step.ImageUrl" alt="@step.ImageAlt" />
+                    <div class="stage__media" data-reveal="mask">
+                        <figure class="stage__photo" style="margin:0">
+                            <img src="@step.ImageUrl" alt="@step.ImageAlt" />
+                        </figure>
+                        <div class="stage__glyph">
+                            <NfIcon Name="@step.Glyph" Size="44" Draw="true" />
                         </div>
                     </div>
-                </li>
+                </article>
             }
-        </ol>
+        </div>
     </div>
 </section>
 
-@* CTA *@
-<section class="py-section-padding-y border-t border-amber-gold">
-    <div class="max-w-3xl mx-auto px-gutter text-center">
-        <h2 class="text-headline-md text-deep-red mb-6">Trải Nghiệm Sự Khác Biệt Của Cà Phê Sạch</h2>
-        <p class="text-on-surface-variant mb-8">
-            Liên hệ ngay với đội ngũ chuyên gia của chúng tôi để nhận mẫu thử và tư vấn giải pháp cà phê
-            phù hợp cho doanh nghiệp của bạn.
-        </p>
-        <a class="btn-brand inline-flex py-3 px-8 rounded-lg font-label-bold text-label-bold" href="#lien-he">
-            Nhận tư vấn miễn phí
-        </a>
+@* ============================ CTA ============================ *@
+<section class="section" style="padding-top:0">
+    <div class="shell">
+        <div class="cupout" data-reveal>
+            <div class="cupout__glow" aria-hidden="true"></div>
+            <p class="eyebrow eyebrow--plain">Kết thúc hành trình</p>
+            <h2 style="margin-top:.75rem">Uống thử chặng cuối cùng</h2>
+            <p style="max-width:48ch">
+                Mỗi túi cà phê Nie Farm là kết quả của tám chặng bạn vừa đi qua. Chọn một mẻ rang mới
+                và bắt đầu từ ly đầu tiên.
+            </p>
+            <div style="display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;margin-top:2rem">
+                <a class="btn btn--red" href="/cua-hang"><span>Xem cà phê đang có</span></a>
+                <a class="btn btn--ghost" style="--btn-fg:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)"
+                   href="#lien-he"><span>Đặt lịch thăm nông trại</span></a>
+            </div>
+        </div>
     </div>
 </section>
