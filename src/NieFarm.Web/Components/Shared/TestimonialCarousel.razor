@@ -1,0 +1,90 @@
+@*
+    Home page testimonial carousel (docs/plans/home-redesign-crop-testimonials.md D8). Blazor
+    state, not CSS scroll-snap: prev/next/segment buttons are plain @onclick handlers, matching
+    the codebase's existing precedent of leaving toggles/gallery-thumbs/accordions to Blazor
+    rather than nf-motion.js. All slides render at once, stacked in one CSS grid cell
+    (".hquote__stage", nf-pages.css) — inactive slides are opacity:0/visibility:hidden so the
+    stage height is always the tallest quote and nothing jumps. Prerender emits slide 0 with
+    "is-active" so the first paint is already complete; prev/next only become live once the
+    circuit connects. No auto-advance — a server timer cannot know prefers-reduced-motion and
+    would need pause-on-hover/focus round trips for WCAG 2.2.2, so it is left out entirely.
+
+    The trap: each ".hquote__slide" carries a Razor class expression ("is-active"), so it must
+    never carry data-reveal or .draw — Blazor's class diffing wipes the JS-added "is-in" class,
+    leaving the reveal stuck at opacity:0. The static wrapper around this component in Home.razor
+    carries data-reveal instead.
+*@
+@using NieFarm.Application.Features.Testimonials.Dtos
+
+<div class="hquote__stage" aria-live="polite">
+    @for (var i = 0; i < Items.Count; i++)
+    {
+        var index = i;
+        var testimonial = Items[index];
+
+        <figure class="hquote__slide @(index == _index ? "is-active" : null)">
+            <span class="hquote__mark" aria-hidden="true">&ldquo;</span>
+            <blockquote class="hquote__text accent">@testimonial.Quote</blockquote>
+            <figcaption class="hquote__who">
+                @if (!string.IsNullOrWhiteSpace(testimonial.PhotoUrl))
+                {
+                    <img class="hquote__avatar" src="@testimonial.PhotoUrl" alt="" loading="lazy" width="48" height="48" />
+                }
+                <b>@testimonial.AuthorName</b>
+                <span class="muted">@testimonial.AuthorRole</span>
+                <NfStars Value="@testimonial.Rating" Size="14" />
+            </figcaption>
+        </figure>
+    }
+</div>
+
+@if (Items.Count > 1)
+{
+    <div class="hquote__nav">
+        <span class="hquote__count">@((_index + 1).ToString("00")) / @(Items.Count.ToString("00"))</span>
+
+        <div class="hquote__bar">
+            @for (var i = 0; i < Items.Count; i++)
+            {
+                var index = i;
+                <button type="button" class="hquote__seg"
+                        aria-label="@($"Cảm nhận {index + 1}")"
+                        aria-current="@(index == _index ? "true" : "false")"
+                        data-state="@(index < _index ? "done" : index == _index ? "now" : "todo")"
+                        @onclick="() => GoTo(index)">
+                </button>
+            }
+        </div>
+
+        <button type="button" class="hquote__btn hquote__btn--prev" aria-label="Cảm nhận trước" @onclick="Prev">
+            <NfIcon Name="arrow-right" Size="18" />
+        </button>
+        <button type="button" class="hquote__btn" aria-label="Cảm nhận tiếp theo" @onclick="Next">
+            <NfIcon Name="arrow-right" Size="18" />
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<TestimonialDto> Items { get; set; } = [];
+
+    private int _index;
+
+    protected override void OnParametersSet()
+    {
+        if (Items.Count == 0)
+        {
+            _index = 0;
+            return;
+        }
+
+        _index = Math.Clamp(_index, 0, Items.Count - 1);
+    }
+
+    private void GoTo(int index) => _index = index;
+
+    private void Prev() => _index = Items.Count == 0 ? 0 : (_index - 1 + Items.Count) % Items.Count;
+
+    private void Next() => _index = Items.Count == 0 ? 0 : (_index + 1) % Items.Count;
+}

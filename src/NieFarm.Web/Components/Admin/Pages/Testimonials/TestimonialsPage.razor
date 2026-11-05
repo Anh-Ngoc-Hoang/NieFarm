@@ -1,0 +1,164 @@
+@page "/admin/testimonials"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Testimonials.Commands
+@using NieFarm.Application.Features.Admin.Testimonials.Dtos
+@using NieFarm.Application.Features.Admin.Testimonials.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Testimonials" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Testimonials</h1>
+        <p>Customer quotes shown in the home page carousel.</p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="() => _formModal.OpenForCreate()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Testimonial
+    </button>
+</div>
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by author or quote…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:64px;">Photo</th>
+                <th>Quote</th>
+                <th style="width:180px;">Author</th>
+                <th style="width:110px;">Rating</th>
+                <th style="width:80px;">Order</th>
+                <th style="width:100px;">Status</th>
+                <th style="width:120px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var testimonial in _filtered)
+            {
+                <tr>
+                    <td>
+                        <div class="table-thumb">
+                            @if (!string.IsNullOrWhiteSpace(testimonial.PhotoUrl))
+                            {
+                                <img src="@testimonial.PhotoUrl" alt="" />
+                            }
+                            else
+                            {
+                                <span class="material-symbols-outlined cell-muted" aria-hidden="true">format_quote</span>
+                            }
+                        </div>
+                    </td>
+                    <td class="cell-primary" style="cursor:pointer;" @onclick="() => _formModal.OpenForEditAsync(testimonial.Id)">
+                        @Truncate(testimonial.Quote, 120)
+                    </td>
+                    <td>
+                        @testimonial.AuthorName
+                        <div class="cell-muted" style="font-size:12px;">@testimonial.AuthorRole</div>
+                    </td>
+                    <td><StarRating Value="@testimonial.Rating" CssClass="nf-stars--sm" /></td>
+                    <td class="cell-muted">@testimonial.SortOrder</td>
+                    <td>
+                        @if (testimonial.IsVisible)
+                        {
+                            <AdminBadge Text="Visible" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Hidden" Variant="muted" />
+                        }
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => _formModal.OpenForEditAsync(testimonial.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                    @onclick="() => AskDelete(testimonial)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No testimonials found.</div>
+    }
+</div>
+
+@if (_deleteError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-top:16px;">@_deleteError</div>
+}
+
+<TestimonialFormModal @ref="_formModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete testimonial?"
+              Message="@($"Delete the quote from \"{_deleteTarget?.AuthorName}\"? This cannot be undone.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<TestimonialAdminListDto> _all = [];
+    private List<TestimonialAdminListDto> _filtered = [];
+
+    private string _search = string.Empty;
+    private string? _deleteError;
+
+    private TestimonialFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private TestimonialAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _all = await Sender.Send(new GetTestimonialsAdminQuery());
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(t =>
+            string.IsNullOrWhiteSpace(_search)
+            || t.AuthorName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+            || t.Quote.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : string.Concat(text.AsSpan(0, maxLength), "…");
+
+    private void AskDelete(TestimonialAdminListDto testimonial)
+    {
+        _deleteError = null;
+        _deleteTarget = testimonial;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteTestimonialCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _deleteError = result.Errors.FirstOrDefault() ?? "Could not delete the testimonial.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

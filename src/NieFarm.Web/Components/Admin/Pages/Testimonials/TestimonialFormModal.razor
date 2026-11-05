@@ -1,0 +1,204 @@
+@using NieFarm.Application.Features.Admin.Testimonials.Commands
+@using NieFarm.Application.Features.Admin.Testimonials.Dtos
+@using NieFarm.Application.Features.Admin.Testimonials.Queries
+@using NieFarm.Domain.Entities
+@inject ISender Sender
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="testimonial-form-title">
+        <div class="admin-modal__dialog admin-modal__dialog--wide">
+            <div class="admin-modal__head">
+                <h2 id="testimonial-form-title">@(_model.Id is null ? "Add Testimonial" : "Edit Testimonial")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="CancelAsync">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                <div>
+                    <label class="form-label-admin" for="tm-quote">Quote *</label>
+                    <textarea id="tm-quote" class="form-control-admin" rows="4"
+                              maxlength="@Testimonial.QuoteMaxLength" @bind="_model.Quote"></textarea>
+                    <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                        @(_model.Quote?.Length ?? 0) / @Testimonial.QuoteMaxLength
+                    </div>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        <label class="form-label-admin" for="tm-name">Author name *</label>
+                        <input id="tm-name" class="form-control-admin" @bind="_model.AuthorName" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="tm-role">Author role</label>
+                        <input id="tm-role" class="form-control-admin" @bind="_model.AuthorRole" />
+                    </div>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        @* Unmounted with the modal so each open gets a fresh InputFile. *@
+                        <SingleImageField @ref="_imageField"
+                                          Label="Photo (optional)"
+                                          Subfolder="@TestimonialImageLimits.Subfolder"
+                                          MaxBytes="TestimonialImageLimits.MaxImageBytes"
+                                          Value="@_model.PhotoUrl"
+                                          ValueChanged="url => _model.PhotoUrl = url"
+                                          PersistedValue="@_persistedPhotoUrl"
+                                          Disabled="_saving"
+                                          UploadingChanged="value => _uploading = value" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="tm-rating">Rating *</label>
+                        <select id="tm-rating" class="form-control-admin" @bind="_model.Rating">
+                            <option value="5">5</option>
+                            <option value="4">4</option>
+                            <option value="3">3</option>
+                            <option value="2">2</option>
+                            <option value="1">1</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        <label class="form-label-admin" for="tm-order">Sort order *</label>
+                        <input id="tm-order" class="form-control-admin" type="number" min="0" @bind="_model.SortOrder" />
+                    </div>
+                    <div style="display:flex;align-items:flex-end;">
+                        <label class="form-check-admin">
+                            <input type="checkbox" @bind="_model.IsVisible" /> Visible
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="CancelAsync" disabled="@_saving">
+                    Cancel
+                </button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync"
+                        disabled="@(_saving || _uploading)">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public string Quote { get; set; } = string.Empty;
+        public string AuthorName { get; set; } = string.Empty;
+        public string AuthorRole { get; set; } = string.Empty;
+        public string PhotoUrl { get; set; } = string.Empty;
+        public int Rating { get; set; } = 5;
+        public int SortOrder { get; set; }
+        public bool IsVisible { get; set; } = true;
+    }
+
+    private FormModel _model = new();
+    private SingleImageField? _imageField;
+    private string _persistedPhotoUrl = string.Empty;
+    private List<string> _errors = [];
+
+    private bool _visible;
+    private bool _saving;
+    private bool _uploading;
+
+    public void OpenForCreate()
+    {
+        _model = new FormModel();
+        _persistedPhotoUrl = string.Empty;
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public async Task OpenForEditAsync(int id)
+    {
+        var testimonial = await Sender.Send(new GetTestimonialForEditQuery(id));
+        if (testimonial is null)
+            return;
+
+        _model = new FormModel
+        {
+            Id = testimonial.Id,
+            Quote = testimonial.Quote,
+            AuthorName = testimonial.AuthorName,
+            AuthorRole = testimonial.AuthorRole,
+            PhotoUrl = testimonial.PhotoUrl,
+            Rating = testimonial.Rating,
+            SortOrder = testimonial.SortOrder,
+            IsVisible = testimonial.IsVisible
+        };
+
+        _persistedPhotoUrl = testimonial.PhotoUrl;
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var result = await Sender.Send(new SaveTestimonialCommand(
+                _model.Id,
+                _model.Quote ?? string.Empty,
+                _model.AuthorName ?? string.Empty,
+                _model.AuthorRole,
+                _model.PhotoUrl,
+                _model.Rating,
+                _model.SortOrder,
+                _model.IsVisible));
+
+            if (!result.IsSuccess)
+            {
+                _errors = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .DefaultIfEmpty("Could not save the testimonial.")
+                    .ToList();
+                return;
+            }
+
+            // The upload is now a stored value, so the field must not treat it as an orphan.
+            _persistedPhotoUrl = _model.PhotoUrl ?? string.Empty;
+
+            _visible = false;
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        // Removes an upload that was never persisted, before the field unmounts.
+        if (_imageField is not null)
+            await _imageField.DiscardAsync();
+
+        _visible = false;
+    }
+}
