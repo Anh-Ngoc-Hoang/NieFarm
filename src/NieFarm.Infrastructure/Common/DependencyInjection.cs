@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<IImageStorage, LocalFileImageStorage>();
         services.AddSingleton<ISlugGenerator, SlugGenerator>();
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
+        services.AddSingleton<IOrderLookupThrottle, OrderLookupThrottle>();
 
         services.AddMemoryCache();   // TryAdd-based; safe even if something else already registered it
 

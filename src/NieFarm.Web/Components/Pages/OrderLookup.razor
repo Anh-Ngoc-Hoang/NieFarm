@@ -1,46 +1,62 @@
 @page "/tra-cuu-don-hang"
+@using Ardalis.Result
+@using NieFarm.Application.Features.Orders.Dtos
+@using NieFarm.Application.Features.Orders.Queries
+@using NieFarm.Domain.Enums
+@implements IDisposable
+@inject ISender Sender
 
 @*
-    Markup-only rewrite onto NieFarm 2.0 (docs/plans/public-site-redesign-nf2.md
-    §7, step 4.2). @code is unchanged except for one addition: StepGlyph(), a
-    pure display mapping from the fixture's Material Symbol icon names to
-    NfIcon glyph names (NfIcon has no "inventory_2"/"local_shipping"/"task_alt"
-    glyphs). Search()/ProgressWidth are byte-for-byte the same; the page still
-    matches only the SiteContent.SampleOrderCode ("NF12345") fixture — that is
-    unchanged.
+    Real order lookup by code + phone (docs/plans/order-lookup-real.md). The page opens
+    empty; ?ma= pre-fills only the code. LookupOrderQuery returns a minimal, masked DTO.
+    An unknown code and a wrong phone both come back as NotFound and show the same constant
+    sentence (NotFoundText, never echoing the input), so the page cannot be used to discover
+    which codes exist. Repeated failures are throttled in Application/Infrastructure
+    (IOrderLookupThrottle) and surface here as a plain error message.
 *@
 
 <PageTitle>Tra cứu đơn hàng - Nie Farm Việt Nam</PageTitle>
 <HeadContent>
     <meta name="description"
-          content="Nhập mã đơn hàng Nie Farm để kiểm tra tình trạng giao hàng, thông tin người nhận và chi tiết sản phẩm." />
+          content="Nhập mã đơn hàng và số điện thoại để kiểm tra tình trạng giao hàng và chi tiết đơn tại Nie Farm." />
+    <meta name="robots" content="noindex" />
 </HeadContent>
 
 <div class="nf-track">
     <div class="shell">
 
         <div class="nf-track__intro" data-reveal="fade">
-            <p class="eyebrow eyebrow--plain" style="justify-content:center">Tra cứu đơn hàng</p>
-            <h1 style="margin-top:.6rem">Theo dõi đơn hàng của bạn</h1>
-            <p class="lede" style="margin:1rem auto 0">
-                Nhập mã đơn hàng của bạn để kiểm tra tình trạng giao hàng và chi tiết sản phẩm.
+            <p class="eyebrow eyebrow--plain nf-track__eyebrow">Tra cứu đơn hàng</p>
+            <h1 class="nf-track__title">Theo dõi đơn hàng của bạn</h1>
+            <p class="lede nf-track__lede">
+                Nhập mã đơn hàng và số điện thoại bạn đã dùng khi đặt hàng để kiểm tra tình trạng đơn.
             </p>
 
-            <EditForm Model="this" OnValidSubmit="Search" class="nf-track__form">
+            <EditForm Model="_model" OnValidSubmit="SearchAsync" class="nf-track__form">
                 <div class="nf-track__field">
                     <NfIcon Name="search" Size="18" CssClass="nf-track__field-ico" />
                     <label class="sr-only" for="order-code">Mã đơn hàng</label>
-                    <InputText id="order-code" @bind-Value="_code" placeholder="@($"Ví dụ: {SiteContent.SampleOrderCode}")"
+                    <InputText id="order-code" @bind-Value="_model.Code" placeholder="Mã đơn hàng, ví dụ NF123456"
+                               autocomplete="off" autocapitalize="characters" spellcheck="false"
                                class="nf-field nf-track__field-input" />
                 </div>
-                <button type="submit" class="btn btn--red"><span>Tra cứu</span></button>
+                <div class="nf-track__field">
+                    <NfIcon Name="phone" Size="18" CssClass="nf-track__field-ico" />
+                    <label class="sr-only" for="order-phone">Số điện thoại</label>
+                    <InputText id="order-phone" @bind-Value="_model.Phone" placeholder="Số điện thoại đặt hàng"
+                               type="tel" inputmode="tel" autocomplete="tel"
+                               class="nf-field nf-track__field-input" />
+                </div>
+                <button type="submit" class="btn btn--red" disabled="@_busy"><span>Tra cứu</span></button>
             </EditForm>
 
-            @if (_notFound)
+            @if (_message is not null)
             {
-                <p class="nf-track__error" role="status">
-                    Không tìm thấy đơn hàng với mã &ldquo;@_code&rdquo;. Vui lòng kiểm tra lại mã đơn.
-                </p>
+                <p class="nf-track__error" role="status">@_message</p>
+            }
+            @foreach (var error in _errors)
+            {
+                <p class="nf-track__error" role="status">@error</p>
             }
         </div>
 
@@ -53,48 +69,68 @@
                     <div class="nf-track__head">
                         <div>
                             <h2>Mã đơn: <span class="nf-track__code">@_order.Code</span></h2>
-                            <p class="muted" style="font-size:var(--fs-sm);margin-top:.3rem">Ngày đặt: @_order.PlacedOn</p>
+                            <p class="muted nf-track__placed">Ngày đặt: @VnTime.FromUtc(_order.PlacedAtUtc).ToString("dd/MM/yyyy HH:mm")</p>
                         </div>
-                        <span class="badge-status badge-status--ok">@_order.Status</span>
+                        <span class="badge-status @OrderStatusText.PillClass(_order.Status)">@OrderStatusText.Vi(_order.Status)</span>
                     </div>
 
-                    <ol class="nf-track__steps" style="--track-progress: @ProgressWidth">
-                        @foreach (var step in _order.Steps)
-                        {
-                            <li class="nf-track__step @(step.Reached ? "nf-track__step--reached" : null)">
-                                <span class="nf-track__dot">
-                                    <NfIcon Name="@StepGlyph(step.Icon)" Size="18" />
-                                </span>
-                                <span class="nf-track__label">@step.Label</span>
-                                <span class="nf-track__time">@step.Timestamp</span>
-                            </li>
-                        }
-                    </ol>
+                    @if (_order.Status == OrderStatus.Cancelled)
+                    {
+                        <p class="nf-track__notice">
+                            <NfIcon Name="warning" Size="18" />
+                            <span>
+                                Đơn hàng này đã bị hủy. Nếu cần hỗ trợ, vui lòng liên hệ Nie Farm.
+                                <a href="/#lien-he">Liên hệ</a>
+                            </span>
+                        </p>
+                    }
+                    else
+                    {
+                        <ol class="nf-track__steps" style="--track-progress: @ProgressWidth">
+                            @foreach (var step in Steps)
+                            {
+                                <li class="nf-track__step @(step.Reached ? "nf-track__step--reached" : null)">
+                                    <span class="nf-track__dot">
+                                        <NfIcon Name="@step.Icon" Size="18" />
+                                    </span>
+                                    <span class="nf-track__label">@step.Label</span>
+                                    @if (step.Time is not null)
+                                    {
+                                        <span class="nf-track__time">@step.Time</span>
+                                    }
+                                </li>
+                            }
+                        </ol>
+                    }
                 </div>
 
                 <div class="nf-track__cols">
 
-                    @* Recipient *@
+                    @* Recipient (masked) *@
                     <div class="nf-track__panel">
-                        <h3 class="nf-track__panel-title"><NfIcon Name="user" Size="18" /> Thông tin người nhận</h3>
+                        <h3 class="nf-track__panel-title"><NfIcon Name="user" Size="18" /> Thông tin giao hàng</h3>
                         <dl class="nf-track__meta">
                             <div>
-                                <dt>Họ và tên</dt>
+                                <dt>Người nhận</dt>
                                 <dd>@_order.RecipientName</dd>
                             </div>
                             <div>
                                 <dt>Số điện thoại</dt>
-                                <dd>@_order.RecipientPhone</dd>
+                                <dd>@_order.PhoneMasked</dd>
                             </div>
                             <div>
-                                <dt>Địa chỉ giao hàng</dt>
-                                <dd>@_order.ShippingAddress</dd>
+                                <dt>Khu vực giao hàng</dt>
+                                <dd>@_order.DeliveryArea</dd>
+                            </div>
+                            <div>
+                                <dt>Phương thức thanh toán</dt>
+                                <dd>@OrderStatusText.Vi(_order.PaymentMethod)</dd>
                             </div>
                         </dl>
                     </div>
 
                     @* Lines + totals *@
-                    <div style="display:grid;gap:clamp(1.5rem,3vw,2rem)">
+                    <div class="nf-track__stack">
                         <div class="nf-track__panel">
                             <h3 class="nf-track__panel-title"><NfIcon Name="cart" Size="18" /> Chi tiết sản phẩm</h3>
 
@@ -102,14 +138,20 @@
                                 @foreach (var line in _order.Lines)
                                 {
                                     <li class="nf-track__line">
-                                        <div class="nf-track__line-media">
-                                            <img src="@line.ImageUrl" alt="@line.ImageAlt" />
-                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(line.ImageUrl))
+                                        {
+                                            <div class="nf-track__line-media">
+                                                <img src="@line.ImageUrl" alt="@line.ProductName" />
+                                            </div>
+                                        }
                                         <div class="nf-track__line-body">
                                             <div class="nf-track__line-row">
                                                 <div>
-                                                    <p class="nf-track__line-name">@line.Name</p>
-                                                    <p class="nf-track__line-meta">Phân loại: @line.Variant</p>
+                                                    <p class="nf-track__line-name">@line.ProductName</p>
+                                                    @if (!string.IsNullOrWhiteSpace(line.Variant))
+                                                    {
+                                                        <p class="nf-track__line-meta">Phân loại: @line.Variant</p>
+                                                    }
                                                 </div>
                                                 <span class="nf-track__line-price">@SiteContent.Vnd(line.UnitPrice)</span>
                                             </div>
@@ -135,7 +177,7 @@
                                 </div>
                                 <div class="row">
                                     <dt>Giảm giá</dt>
-                                    <dd style="color:var(--green)">-@SiteContent.Vnd(_order.Discount)</dd>
+                                    <dd class="nf-track__discount">-@SiteContent.Vnd(_order.Discount)</dd>
                                 </div>
                                 <div class="total">
                                     <dt>Tổng cộng</dt>
@@ -151,41 +193,111 @@
 </div>
 
 @code {
-    private string _code = SiteContent.SampleOrderCode;
-    private SiteContent.TrackedOrder? _order = SiteContent.SampleOrder;
-    private bool _notFound;
+    private const string NotFoundText =
+        "Không tìm thấy đơn hàng phù hợp. Vui lòng kiểm tra lại mã đơn hàng và số điện thoại đã dùng khi đặt hàng.";
 
-    // Lookup against the single fixture order. Replaced by a query that also asserts
-    // ownership of the order — see .claude/rules/security.md.
-    private void Search()
+    private sealed class LookupModel
     {
-        var match = string.Equals(_code?.Trim(), SiteContent.SampleOrderCode, StringComparison.OrdinalIgnoreCase);
+        public string Code { get; set; } = "";
+        public string Phone { get; set; } = "";
+    }
 
-        _order = match ? SiteContent.SampleOrder : null;
-        _notFound = !match;
+    private sealed record TrackStep(string Label, string Icon, bool Reached, string? Time);
+
+    private readonly CancellationTokenSource _cts = new();
+    private readonly LookupModel _model = new();
+    private OrderLookupDto? _order;
+    private string? _message;
+    private IEnumerable<string> _errors = [];
+    private bool _busy;
+
+    // Pre-fills the code only; never the phone, and never submits on its own.
+    [SupplyParameterFromQuery(Name = "ma")] public string? PrefillCode { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrWhiteSpace(PrefillCode))
+            _model.Code = PrefillCode.Trim();
+    }
+
+    private async Task SearchAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _order = null;
+        _message = null;
+        _errors = [];
+
+        try
+        {
+            var result = await Sender.Send(new LookupOrderQuery(_model.Code, _model.Phone), _cts.Token);
+
+            if (result.IsSuccess)
+            {
+                _order = result.Value;
+            }
+            else if (result.Status == ResultStatus.NotFound)
+            {
+                _message = NotFoundText;
+            }
+            else
+            {
+                _errors = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .DefaultIfEmpty("Đã có lỗi xảy ra. Vui lòng thử lại.")
+                    .ToList();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Circuit disposed mid-query; nothing to show.
+        }
+        catch (Exception)
+        {
+            _errors = ["Đã có lỗi xảy ra. Vui lòng thử lại."];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // Four steps derived from Status; only the first has a real timestamp (no status history yet).
+    private IReadOnlyList<TrackStep> Steps
+    {
+        get
+        {
+            var rank = _order!.Status switch
+            {
+                OrderStatus.New => 0,
+                OrderStatus.Confirmed => 1,
+                OrderStatus.Delivering => 2,
+                OrderStatus.Completed => 3,
+                _ => 0
+            };
+            return
+            [
+                new("Đã đặt hàng", "receipt", rank >= 0, VnTime.FromUtc(_order.PlacedAtUtc).ToString("dd/MM, HH:mm")),
+                new("Đã xác nhận", "shield", rank >= 1, null),
+                new("Đang giao", "truck", rank >= 2, null),
+                new("Hoàn thành", "check", rank >= 3, null)
+            ];
+        }
     }
 
     private string ProgressWidth
     {
         get
         {
-            if (_order is null || _order.Steps.Length < 2)
-            {
-                return "0%";
-            }
-
-            var reached = Math.Max(0, _order.Steps.Count(s => s.Reached) - 1);
-            return $"{reached * 100 / (_order.Steps.Length - 1)}%";
+            var steps = Steps;
+            var reached = Math.Max(0, steps.Count(s => s.Reached) - 1);
+            return $"{reached * 100 / (steps.Count - 1)}%";
         }
     }
 
-    // Display-only mapping from the fixture's Material Symbol icon names to NfIcon
-    // glyph names — added for the redesign, no fixture change (SiteContent.cs untouched).
-    private static string StepGlyph(string materialIcon) => materialIcon switch
+    public void Dispose()
     {
-        "inventory_2" => "receipt",
-        "local_shipping" => "truck",
-        "task_alt" => "check",
-        _ => "clock"
-    };
+        _cts.Cancel();
+        _cts.Dispose();
+    }
 }

@@ -12,7 +12,7 @@ public class Order : BaseEntity
 {
     private readonly List<OrderItem> _items = [];
 
-    /// <summary>Human-facing reference used by the public order lookup, e.g. NF12345.</summary>
+    /// <summary>Human-facing reference used by the public order lookup, e.g. NF123456.</summary>
     public string Code { get; private set; } = string.Empty;
 
     /// <summary>

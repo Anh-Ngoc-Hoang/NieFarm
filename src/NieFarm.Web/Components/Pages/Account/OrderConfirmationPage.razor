@@ -23,9 +23,12 @@
         </p>
 
         <p class="acct-confirm__code">@Code</p>
+        <p class="muted" style="font-size:var(--fs-sm);margin:0 auto 1.5rem">
+            Hãy lưu lại mã đơn hàng. Bạn có thể tra cứu đơn bằng mã này cùng số điện thoại đã dùng khi đặt hàng.
+        </p>
 
         <div style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:center">
-            <a href="/tra-cuu-don-hang" class="btn btn--ghost"><span>Tra cứu đơn hàng</span></a>
+            <a href="/tra-cuu-don-hang?ma=@Uri.EscapeDataString(Code)" class="btn btn--ghost"><span>Tra cứu đơn hàng</span></a>
             <AuthorizeView>
                 <Authorized>
                     <a href="/tai-khoan/don-hang" class="btn btn--red"><span>Xem đơn hàng của tôi</span></a>

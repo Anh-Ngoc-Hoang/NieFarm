@@ -665,7 +665,7 @@
 .badge-status--cancelled { background: rgba(107, 19, 19, .08); color: var(--red); }
 
 /* ==========================================================================
-   /tra-cuu-don-hang — Order lookup (Phase 4, step 4.2). No prototype source;
+   /tra-cuu-don-hang — Order lookup by code + phone (real data). Two-field form;
    designed fresh in the house language, replacing the old glass-panel/
    hover-lift cards with hairline ".nf-track__panel" bands (same approach as
    /thanh-toan and /bai-viet/{slug}). Reuses .nf-field/.btn/.eyebrow/.lede/
@@ -676,11 +676,20 @@
 .nf-track { padding-block: clamp(6.5rem, 12vh, 8.5rem) clamp(4rem, 8vw, 6rem); }
 .nf-track__intro { max-width: 42rem; margin-inline: auto; text-align: center; }
 
-.nf-track__form { display: flex; flex-direction: column; gap: .85rem; max-width: 30rem; margin: 1.75rem auto 0; }
+.nf-track__form { display: flex; flex-direction: column; gap: .85rem; max-width: 40rem; margin: 1.75rem auto 0; }
 .nf-track__field { position: relative; flex: 1 1 auto; }
 .nf-track__field-ico { position: absolute; left: 1rem; top: 50%; translate: 0 -50%; width: 1.15rem; height: 1.15rem; color: var(--ink-38); pointer-events: none; }
 .nf-track__field-input { padding-left: 2.75rem; }
 .nf-track__error { margin-top: 1rem; color: var(--red); font-size: var(--fs-sm); }
+.nf-track__eyebrow { justify-content: center; }
+.nf-track__title { margin-top: .6rem; }
+.nf-track__lede { margin: 1rem auto 0; }
+.nf-track__placed { font-size: var(--fs-sm); margin-top: .3rem; }
+.nf-track__stack { display: grid; gap: clamp(1.5rem, 3vw, 2rem); }
+.nf-track__discount { color: var(--green); }
+.nf-track__notice { display: flex; align-items: flex-start; gap: .7rem; margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: var(--red); }
+.nf-track__notice .ico { width: 1.15rem; height: 1.15rem; flex: none; margin-top: .15rem; }
+.nf-track__notice a { text-decoration: underline; margin-left: .25rem; }
 
 .nf-track__result { display: grid; gap: clamp(1.5rem, 3vw, 2rem); margin-top: clamp(3rem, 6vw, 4.5rem); }
 .nf-track__panel { border-radius: var(--r-lg); box-shadow: inset 0 0 0 1px var(--line); padding: clamp(1.5rem, 4vw, 2.25rem); }
@@ -760,7 +769,7 @@
 .nf-track__totals .total dd { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--red); font-variant-numeric: tabular-nums; }
 
 @media (min-width: 640px) {
-    .nf-track__form { flex-direction: row; }
+    .nf-track__form { display: grid; grid-template-columns: 1fr 1fr auto; align-items: stretch; }
 }
 
 @media (min-width: 960px) {

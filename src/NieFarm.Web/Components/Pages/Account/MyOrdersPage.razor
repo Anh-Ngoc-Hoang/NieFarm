@@ -54,11 +54,11 @@
                                 <div>
                                     <p class="acct__row-code">Mã đơn: <b>@order.Code</b></p>
                                     <p class="acct__row-meta">
-                                        Ngày đặt: @order.PlacedAt.ToString("dd/MM/yyyy") · @order.ItemCount sản phẩm
+                                        Ngày đặt: @VnTime.FromUtc(order.PlacedAt).ToString("dd/MM/yyyy") · @order.ItemCount sản phẩm
                                     </p>
                                 </div>
                                 <div class="acct__row-right">
-                                    <span class="badge-status @StatusPillClass(order.Status)">
+                                    <span class="badge-status @OrderStatusText.PillClass(order.Status)">
                                         @OrderStatusText.Vi(order.Status)
                                     </span>
                                     <span class="acct__row-total">@SiteContent.Vnd(order.Total)</span>
@@ -82,11 +82,4 @@
         var result = await Sender.Send(new GetMyOrdersQuery());
         _orders = result.IsSuccess ? result.Value : [];
     }
-
-    private static string StatusPillClass(OrderStatus status) => status switch
-    {
-        OrderStatus.Cancelled => "badge-status--cancelled",
-        OrderStatus.Completed => "badge-status--ok",
-        _ => "badge-status--pending"
-    };
 }

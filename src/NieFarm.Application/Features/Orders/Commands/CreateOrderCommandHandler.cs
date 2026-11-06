@@ -49,7 +49,7 @@ public class CreateOrderCommandHandler(
         var attempt = 0;
         do
         {
-            code = $"NF{Random.Shared.Next(100_000, 1_000_000)}";
+            code = OrderCode.Generate();
             attempt++;
         }
         while (await repository.AnyAsync(new OrderByCodeSpec(code), cancellationToken) && attempt < 5);

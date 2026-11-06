@@ -18,6 +18,14 @@ public static class OrderStatusText
         _ => s.ToString()
     };
 
+    /// <summary>Modifier class for <c>.badge-status</c> (nf-pages.css).</summary>
+    public static string PillClass(OrderStatus s) => s switch
+    {
+        OrderStatus.Cancelled => "badge-status--cancelled",
+        OrderStatus.Completed => "badge-status--ok",
+        _ => "badge-status--pending"
+    };
+
     public static string Vi(PaymentMethod p) => p switch
     {
         PaymentMethod.CashOnDelivery => "Thanh toán khi nhận hàng (COD)",
