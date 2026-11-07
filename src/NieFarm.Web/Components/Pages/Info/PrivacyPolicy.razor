@@ -1,0 +1,46 @@
+@page "/chinh-sach-bao-mat"
+
+@* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
+   Replace every [ ... ] value ([đơn vị vận chuyển], [đơn vị thanh toán], [thời gian lưu trữ]),
+   then set UpdatedOn and remove IsDraft.
+   Legal reviewer: personal-data rules (consent wording at registration and checkout, data-subject
+   rights, retention). No decree or law number is cited on purpose.
+   Cookies: the site also sets a technical antiforgery cookie (UseAntiforgery in Program.cs);
+   add a "technical cookies" line if the reviewer wants it listed.
+   Dependent requirements: R-15 (analytics/cookies: the cookie section states no lifetime and says
+   nothing about analytics, update it if tracking is added), R-24 (footer contact details). *@
+
+<InfoPage Href="@InfoPages.Privacy" IsDraft="true"
+          Description="Chính sách bảo mật của Nie Farm Việt Nam: thông tin chúng tôi thu thập, mục đích sử dụng, cookie và quyền của bạn."
+          Lede="Nie Farm tôn trọng quyền riêng tư của bạn. Trang này giải thích chúng tôi thu thập và sử dụng thông tin cá nhân như thế nào.">
+    <h2 id="pham-vi">Phạm vi áp dụng</h2>
+    <p>Chính sách này áp dụng cho thông tin bạn cung cấp khi truy cập, đăng ký tài khoản, đặt hàng hoặc gửi đánh giá trên website Nie Farm.</p>
+
+    <h2 id="thong-tin-thu-thap">Thông tin chúng tôi thu thập</h2>
+    <ul>
+        <li><strong>Đăng ký tài khoản:</strong> họ tên, email, số điện thoại (không bắt buộc) và mật khẩu (mật khẩu được lưu ở dạng mã hóa).</li>
+        <li><strong>Đặt hàng:</strong> họ tên, số điện thoại, email (không bắt buộc), địa chỉ nhận hàng và ghi chú đơn hàng.</li>
+        <li><strong>Đánh giá sản phẩm:</strong> số sao và nội dung nhận xét bạn gửi.</li>
+    </ul>
+
+    <h2 id="muc-dich">Mục đích sử dụng</h2>
+    <p>Chúng tôi sử dụng thông tin để xử lý và giao đơn hàng, hỗ trợ khách hàng, quản lý tài khoản và cải thiện dịch vụ. Nie Farm không bán thông tin cá nhân của bạn cho bên thứ ba.</p>
+
+    <h2 id="cookie">Cookie</h2>
+    <p>Website sử dụng cookie đăng nhập để ghi nhớ phiên của bạn, và một cookie ghi nhớ giỏ hàng cho khách chưa đăng nhập.</p>
+
+    <h2 id="chia-se">Chia sẻ thông tin</h2>
+    <p>Chúng tôi chỉ chia sẻ thông tin cần thiết cho <strong>[đơn vị vận chuyển]</strong> và <strong>[đơn vị thanh toán]</strong> để hoàn tất đơn hàng, hoặc khi pháp luật yêu cầu.</p>
+
+    <h2 id="luu-tru-bao-mat">Lưu trữ và bảo mật</h2>
+    <p>Thông tin được lưu trữ trong thời gian <strong>[thời gian lưu trữ]</strong> và được bảo vệ bằng các biện pháp kỹ thuật phù hợp để hạn chế truy cập trái phép.</p>
+
+    <h2 id="quyen-cua-ban">Quyền của bạn</h2>
+    <p>Bạn có quyền yêu cầu truy cập, chỉnh sửa hoặc xóa thông tin cá nhân, và rút lại sự đồng ý đã cho. Vui lòng liên hệ với chúng tôi qua thông tin ở <a href="@InfoPages.ContactHref(InfoPages.Privacy)">cuối trang</a>.</p>
+
+    <h2 id="thay-doi">Thay đổi chính sách</h2>
+    <p>Chính sách có thể được cập nhật và có hiệu lực kể từ khi được đăng tải tại trang này.</p>
+
+    <h2 id="lien-he-chung">Liên hệ</h2>
+    <p>Mọi thắc mắc về chính sách bảo mật, vui lòng xem thông tin <a href="@InfoPages.ContactHref(InfoPages.Privacy)">liên hệ ở cuối trang</a>. Bạn cũng có thể xem <a href="@InfoPages.Terms">Điều khoản sử dụng</a>.</p>
+</InfoPage>

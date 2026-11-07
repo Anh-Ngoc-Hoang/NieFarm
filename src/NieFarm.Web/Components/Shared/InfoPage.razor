@@ -1,0 +1,97 @@
+@*
+    Shared shell for the static info pages (policies, careers, partnership) — docs/plans/policy-pages.md.
+
+    D1  One component owns PageTitle, the single HeadContent, breadcrumbs, header and side nav.
+        Pages must NOT add their own PageTitle or HeadContent: only one copy of each is shown, so a
+        second one would silently hide this one's description / robots meta.
+    D4  IsDraft emits robots noindex and a muted "being finalised" line. Remove IsDraft="true" from
+        the page only after the copy has been legally reviewed.
+    D6  The side nav follows the article in DOM order (below on mobile, sticky right from 1080px).
+        The active item uses aria-current, never a Razor class expression.
+    D8  Only the static header carries data-reveal; long text and the nav carry none.
+*@
+@using System.Globalization
+
+<PageTitle>@_page.Title - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="description" content="@Description" />
+    @if (IsDraft)
+    {
+        <meta name="robots" content="noindex" />
+    }
+</HeadContent>
+
+<div class="ipage">
+    <div class="shell">
+        <nav class="crumbs" aria-label="Đường dẫn">
+            <a href="/">Trang chủ</a> <span aria-hidden="true">/</span>
+            <span style="color:var(--ink-70)">@_page.Title</span>
+        </nav>
+
+        <header class="ipage__head" data-reveal="fade">
+            <p class="eyebrow">@InfoPages.GroupLabel(_page.Group)</p>
+            <h1>@_page.Title</h1>
+            @if (!string.IsNullOrWhiteSpace(Lede))
+            {
+                <p class="lede ipage__lede">@Lede</p>
+            }
+            @if (UpdatedOn is not null || IsDraft)
+            {
+                <p class="ipage__meta">
+                    @if (UpdatedOn is { } updated)
+                    {
+                        <span>Cập nhật lần cuối: @updated.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)</span>
+                    }
+                    @if (IsDraft)
+                    {
+                        <span>Nội dung đang được hoàn thiện và có thể thay đổi.</span>
+                    }
+                </p>
+            }
+        </header>
+
+        <div class="ipage__grid">
+            <article class="ipage__body">@ChildContent</article>
+
+            <aside class="ipage__aside">
+                <nav class="ipage__nav" aria-label="Chính sách và hợp tác">
+                    <p class="ipage__nav-title">Xem thêm</p>
+                    @foreach (var group in Groups)
+                    {
+                        var labelId = $"ipage-nav-{group.ToString().ToLowerInvariant()}";
+                        <p class="ipage__nav-group" id="@labelId">@InfoPages.GroupLabel(group)</p>
+                        <ul aria-labelledby="@labelId">
+                            @foreach (var link in InfoPages.InGroup(group))
+                            {
+                                <li><a href="@link.Href" aria-current="@(link.Href == Href ? "page" : null)">@link.NavLabel</a></li>
+                            }
+                        </ul>
+                    }
+                </nav>
+            </aside>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly InfoPageGroup[] Groups = [InfoPageGroup.Policy, InfoPageGroup.Partnership];
+
+    private InfoPageLink _page = default!;
+
+    /// <summary>Route of this page; one of the <see cref="InfoPages"/> constants.</summary>
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+
+    /// <summary>Meta description.</summary>
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+
+    [Parameter] public string? Lede { get; set; }
+
+    /// <summary>Shown as "Cập nhật lần cuối" only when set.</summary>
+    [Parameter] public DateOnly? UpdatedOn { get; set; }
+
+    [Parameter] public bool IsDraft { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnParametersSet() => _page = InfoPages.Get(Href);
+}

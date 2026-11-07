@@ -855,6 +855,7 @@ select.nf-field:disabled { cursor: not-allowed; }
    ========================================================================== */
 @media (min-width: 640px) {
     .ftr__grid { grid-template-columns: repeat(2, 1fr); }
+    .ftr__brand { grid-column: 1 / -1; }
 }
 
 @media (min-width: 860px) {
@@ -862,7 +863,12 @@ select.nf-field:disabled { cursor: not-allowed; }
     .hdr__user { display: block; }
     .hdr__login { display: inline-flex; }
     .hdr__burger { display: none; }
-    .ftr__grid { grid-template-columns: 2fr 1fr 1fr 1fr; }
+    .ftr__grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+@media (min-width: 1080px) {
+    .ftr__grid { grid-template-columns: 1.6fr repeat(4, 1fr); }
+    .ftr__brand { grid-column: auto; }
 }
 
 /* Below this width a long signed-in name pushes the nav links onto two lines, so the

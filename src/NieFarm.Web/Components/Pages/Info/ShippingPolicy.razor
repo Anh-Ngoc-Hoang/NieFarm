@@ -1,0 +1,37 @@
+@page "/chinh-sach-van-chuyen"
+@using NieFarm.Application.Features.Carts
+
+@* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
+   Replace every [ ... ] value ([số ngày làm việc], [thời gian giao dự kiến theo khu vực],
+   [đơn vị vận chuyển], [có/không cho đồng kiểm], [số lần giao lại]), then set UpdatedOn and remove IsDraft.
+   Dependent requirements: R-11 (shipping tiers: the flat fee wording "mỗi đơn" becomes wrong when
+   shipping is no longer a flat fee). The fee is quoted from CartPricing, never typed. *@
+
+<InfoPage Href="@InfoPages.Shipping" IsDraft="true"
+          Description="Chính sách vận chuyển của Nie Farm Việt Nam: phạm vi giao hàng, phí vận chuyển, thời gian giao và theo dõi đơn hàng."
+          Lede="Thông tin về phạm vi, phí và thời gian giao hàng khi bạn đặt cà phê tại Nie Farm.">
+    <h2 id="pham-vi">Phạm vi giao hàng</h2>
+    <p>Nie Farm giao hàng toàn quốc.</p>
+
+    <h2 id="phi">Phí vận chuyển</h2>
+    <p>Phí vận chuyển là @Money.Vnd(CartPricing.ShippingFee) mỗi đơn hàng và được tính tự động khi thanh toán.</p>
+
+    <h2 id="thoi-gian">Thời gian xử lý và giao hàng</h2>
+    <p>Thời gian chuẩn bị hàng: <strong>[số ngày làm việc]</strong>. Thời gian giao hàng dự kiến: <strong>[thời gian giao dự kiến theo khu vực]</strong>. Đây chỉ là thời gian ước tính và có thể thay đổi.</p>
+
+    <h2 id="don-vi">Đơn vị vận chuyển</h2>
+    <p>Đơn hàng được giao qua <strong>[đơn vị vận chuyển]</strong>.</p>
+
+    <h2 id="theo-doi">Theo dõi đơn hàng</h2>
+    <p>Bạn có thể theo dõi đơn hàng tại <a href="/tra-cuu-don-hang">Tra cứu đơn hàng</a> bằng mã đơn và số điện thoại, hoặc xem trong <a href="/tai-khoan/don-hang">tài khoản của bạn</a> sau khi đăng nhập.</p>
+
+    <h2 id="kiem-tra-hang">Kiểm tra hàng khi nhận</h2>
+    <p>Đồng kiểm khi nhận hàng: <strong>[có/không cho đồng kiểm]</strong>. Bạn nên quay video lúc mở kiện hàng để thuận tiện cho việc phản ánh nếu có sự cố.</p>
+
+    <h2 id="giao-khong-thanh-cong">Giao hàng không thành công</h2>
+    <p>Nếu không liên lạc được với bạn hoặc không có người nhận, đơn vị vận chuyển sẽ giao lại tối đa <strong>[số lần giao lại]</strong> lần. Sau đó đơn hàng có thể được hoàn về Nie Farm.</p>
+
+    <h2 id="dong-goi">Đóng gói và bảo quản</h2>
+    <p>Cà phê được đóng trong túi kín. Bảo quản nơi khô ráo, tránh ánh nắng trực tiếp.</p>
+    <p>Nếu cần đổi hoặc trả hàng, vui lòng xem <a href="@InfoPages.Returns">Chính sách đổi trả</a>.</p>
+</InfoPage>

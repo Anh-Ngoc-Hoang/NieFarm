@@ -2,12 +2,13 @@
     Site footer — NieFarm 2.0 chrome (docs/plans/public-site-redesign-nf2.md §7, step 2.3).
     The contact column doubles as the "Liên hệ" anchor target, since the design has no
     standalone contact page — id="lien-he" is kept for that reason.
+    The "Chính sách" and "Hợp tác" columns render from the InfoPages registry (R-05).
 *@
 
 <footer class="ftr" id="lien-he">
     <div class="shell">
         <div class="ftr__grid">
-            <div>
+            <div class="ftr__brand">
                 <a class="wordmark" href="/">Nie<em>Farm</em></a>
                 <p class="muted" style="margin-top:1rem;max-width:34ch;font-size:.9375rem">
                     Mang hương vị cà phê mộc nguyên bản từ đại ngàn đến từng không gian làm việc.
@@ -19,16 +20,26 @@
                 <ul>
                     <li><a href="/hoat-dong">Hoạt động</a></li>
                     <li><a href="/tra-cuu-don-hang">Tra cứu đơn hàng</a></li>
-                    <li><a href="/chinh-sach-bao-mat">Chính sách bảo mật</a></li>
-                    <li><a href="/dieu-khoan-su-dung">Điều khoản sử dụng</a></li>
                 </ul>
             </div>
 
             <div>
-                <h4>Hợp tác</h4>
+                <h4>@InfoPages.GroupLabel(InfoPageGroup.Policy)</h4>
                 <ul>
-                    <li><a href="/tuyen-dung">Tuyển dụng</a></li>
-                    <li><a href="/hop-tac-dai-ly">Hợp tác đại lý</a></li>
+                    @foreach (var link in InfoPages.InGroup(InfoPageGroup.Policy))
+                    {
+                        <li><a href="@link.Href">@link.NavLabel</a></li>
+                    }
+                </ul>
+            </div>
+
+            <div>
+                <h4>@InfoPages.GroupLabel(InfoPageGroup.Partnership)</h4>
+                <ul>
+                    @foreach (var link in InfoPages.InGroup(InfoPageGroup.Partnership))
+                    {
+                        <li><a href="@link.Href">@link.NavLabel</a></li>
+                    }
                 </ul>
             </div>
 

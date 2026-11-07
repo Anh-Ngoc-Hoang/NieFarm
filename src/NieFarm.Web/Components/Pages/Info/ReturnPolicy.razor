@@ -1,0 +1,51 @@
+@page "/chinh-sach-doi-tra"
+
+@* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
+   Replace every [ ... ] value ([số ngày], [số ngày làm việc], [bên chịu chi phí đổi trả theo từng trường hợp],
+   [phương thức hoàn tiền]), then set UpdatedOn and remove IsDraft.
+   LEGAL QUESTION: return rules for opened food / coffee products ("Trường hợp không áp dụng" below)
+   must be confirmed by a reviewer before this goes live.
+   Dependent requirements: R-07 (self-service cancellation: the cancel section says to contact Nie Farm
+   and must be updated if customers can cancel on their own). *@
+
+<InfoPage Href="@InfoPages.Returns" IsDraft="true"
+          Description="Chính sách đổi trả và hoàn tiền của Nie Farm Việt Nam: trường hợp áp dụng, thời hạn, quy trình và hủy đơn."
+          Lede="Nếu sản phẩm bạn nhận được có vấn đề, Nie Farm sẽ hỗ trợ đổi trả và hoàn tiền theo chính sách dưới đây.">
+    <h2 id="pham-vi">Phạm vi áp dụng</h2>
+    <p>Chính sách này áp dụng cho các đơn hàng đặt trực tiếp trên website Nie Farm.</p>
+
+    <h2 id="truong-hop">Trường hợp được đổi trả</h2>
+    <ul>
+        <li>Giao sai sản phẩm so với đơn hàng.</li>
+        <li>Sản phẩm bị hư hỏng trong quá trình vận chuyển.</li>
+        <li>Sản phẩm có lỗi chất lượng.</li>
+        <li>Sản phẩm đã hết hạn sử dụng.</li>
+    </ul>
+
+    @* TODO(R-05): legal review of the exclusions below (food return rules). *@
+    <h2 id="khong-ap-dung">Trường hợp không áp dụng</h2>
+    <ul>
+        <li>Sản phẩm thực phẩm đã mở nhưng không có lỗi.</li>
+        <li>Sản phẩm hư hỏng do bảo quản không đúng hướng dẫn.</li>
+    </ul>
+
+    <h2 id="thoi-han">Thời hạn yêu cầu</h2>
+    <p>Bạn cần gửi yêu cầu trong vòng <strong>[số ngày]</strong> kể từ khi nhận hàng.</p>
+
+    <h2 id="quy-trinh">Quy trình</h2>
+    <ol>
+        <li>Liên hệ Nie Farm, cung cấp mã đơn hàng cùng hình ảnh hoặc video sản phẩm.</li>
+        <li>Nie Farm xác nhận yêu cầu.</li>
+        <li>Bạn gửi lại sản phẩm theo hướng dẫn.</li>
+        <li>Nie Farm đổi sản phẩm hoặc hoàn tiền.</li>
+    </ol>
+
+    <h2 id="hoan-tien">Hoàn tiền</h2>
+    <p>Khoản hoàn được chuyển qua <strong>[phương thức hoàn tiền]</strong> trong vòng <strong>[số ngày làm việc]</strong> sau khi yêu cầu được chấp nhận.</p>
+
+    <h2 id="chi-phi">Chi phí đổi trả</h2>
+    <p>Chi phí đổi trả do <strong>[bên chịu chi phí đổi trả theo từng trường hợp]</strong> chịu.</p>
+
+    <h2 id="huy-don">Hủy đơn</h2>
+    <p>Nếu muốn hủy đơn, vui lòng liên hệ Nie Farm khi đơn hàng chưa được xác nhận. Thông tin liên hệ ở <a href="@InfoPages.ContactHref(InfoPages.Returns)">cuối trang</a>.</p>
+</InfoPage>

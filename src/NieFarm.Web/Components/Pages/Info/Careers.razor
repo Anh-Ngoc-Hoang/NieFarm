@@ -1,0 +1,42 @@
+@page "/tuyen-dung"
+
+@* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
+   Replace every [ ... ] value ([danh sách vị trí đang tuyển], [email tuyển dụng]), then set
+   UpdatedOn and remove IsDraft.
+   Dependent requirements: R-12 (forms: replace the contact CTA with an application form),
+   R-24 (footer contact details may not be real). *@
+
+<InfoPage Href="@InfoPages.Careers" IsDraft="true"
+          Description="Cơ hội làm việc tại Nie Farm Việt Nam: vị trí đang tuyển, quyền lợi và quy trình ứng tuyển."
+          Lede="Cùng Nie Farm đưa cà phê mộc nguyên bản từ đại ngàn đến nhiều người hơn.">
+    <h2 id="lam-viec">Làm việc tại Nie Farm</h2>
+    <p>Chúng tôi coi trọng sự tử tế, tinh thần học hỏi và niềm tự hào về sản phẩm do chính mình làm ra. Mỗi thành viên đều góp phần vào hành trình từ nông trại đến tách cà phê.</p>
+
+    <h2 id="vi-tri">Vị trí đang tuyển</h2>
+    <p><strong>[danh sách vị trí đang tuyển]</strong></p>
+    <p>Nếu chưa thấy vị trí phù hợp, Nie Farm vẫn luôn chào đón hồ sơ của bạn.</p>
+
+    <h2 id="quyen-loi">Quyền lợi</h2>
+    <ul>
+        <li>Môi trường làm việc thân thiện, cởi mở.</li>
+        <li>Cơ hội học hỏi và phát triển nghề nghiệp.</li>
+        <li>Được tiếp xúc trực tiếp với quy trình sản xuất cà phê.</li>
+    </ul>
+
+    <h2 id="quy-trinh">Quy trình tuyển dụng</h2>
+    <ol>
+        <li>Gửi hồ sơ ứng tuyển.</li>
+        <li>Nie Farm xem xét hồ sơ.</li>
+        <li>Phỏng vấn.</li>
+        <li>Thông báo kết quả.</li>
+    </ol>
+
+    <h2 id="ung-tuyen">Cách ứng tuyển</h2>
+    <p>Gửi CV đến <strong>[email tuyển dụng]</strong> hoặc liên hệ qua thông tin ở cuối trang. Thông tin ứng viên được xử lý theo <a href="@InfoPages.Privacy">Chính sách bảo mật</a>.</p>
+
+    <div class="ipage__cta">
+        <h3>Liên hệ ứng tuyển</h3>
+        <p>Muốn trao đổi thêm về cơ hội làm việc? Hãy liên hệ với chúng tôi qua thông tin ở cuối trang.</p>
+        <a class="btn btn--red" href="@InfoPages.ContactHref(InfoPages.Careers)"><span>Xem thông tin liên hệ</span></a>
+    </div>
+</InfoPage>

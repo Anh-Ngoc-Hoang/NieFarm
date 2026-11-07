@@ -1,0 +1,45 @@
+@page "/dieu-khoan-su-dung"
+
+@* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
+   Replace every [ ... ] value ([tên doanh nghiệp], [mã số doanh nghiệp], [địa chỉ trụ sở],
+   [cơ chế giải quyết khiếu nại]), then set UpdatedOn and remove IsDraft.
+   /thanh-toan tells customers that ordering means accepting these terms: a reviewer must confirm
+   that wording is enough or a checkbox is needed. Also check the footer contact details (R-24). *@
+
+<InfoPage Href="@InfoPages.Terms" IsDraft="true"
+          Description="Điều khoản sử dụng website Nie Farm Việt Nam: tài khoản, đặt hàng, giá và thanh toán, đánh giá sản phẩm."
+          Lede="Vui lòng đọc kỹ các điều khoản dưới đây trước khi sử dụng website hoặc đặt hàng tại Nie Farm.">
+    <h2 id="gioi-thieu">Giới thiệu</h2>
+    <p>Website này do <strong>[tên doanh nghiệp]</strong> (mã số doanh nghiệp <strong>[mã số doanh nghiệp]</strong>, trụ sở tại <strong>[địa chỉ trụ sở]</strong>) vận hành. Khi truy cập website hoặc đặt hàng, bạn đồng ý với các điều khoản sử dụng này.</p>
+
+    <h2 id="tai-khoan">Tài khoản</h2>
+    <p>Bạn nên cung cấp thông tin chính xác và giữ bí mật mật khẩu của mình. Bạn chịu trách nhiệm về các hoạt động diễn ra dưới tài khoản của bạn.</p>
+    <p>Bạn cũng có thể đặt hàng mà không cần đăng ký tài khoản.</p>
+
+    <h2 id="dat-hang">Đặt hàng và xác nhận đơn</h2>
+    <p>Đơn hàng được ghi nhận khi bạn bấm “Xác nhận đặt hàng”. Nie Farm sẽ xác nhận đơn và có thể liên hệ với bạn về tình trạng hàng hoặc địa chỉ giao hàng.</p>
+
+    <h2 id="gia-thanh-toan">Giá và thanh toán</h2>
+    <p>Giá được niêm yết bằng VNĐ. Tổng tiền đơn hàng được hệ thống tính lại tại thời điểm đặt hàng. Xem thêm tại <a href="@InfoPages.Payment">Chính sách thanh toán</a>.</p>
+
+    <h2 id="giao-hang-doi-tra">Giao hàng và đổi trả</h2>
+    <p>Việc giao hàng được áp dụng theo <a href="@InfoPages.Shipping">Chính sách vận chuyển</a>. Việc đổi trả và hoàn tiền được áp dụng theo <a href="@InfoPages.Returns">Chính sách đổi trả</a>.</p>
+
+    <h2 id="danh-gia">Đánh giá và nội dung do người dùng gửi</h2>
+    <p>Đánh giá sản phẩm được quản trị viên kiểm duyệt trước khi hiển thị công khai. Vui lòng không gửi nội dung trái pháp luật, xúc phạm hoặc sai sự thật.</p>
+
+    <h2 id="so-huu-tri-tue">Sở hữu trí tuệ</h2>
+    <p>Hình ảnh, nội dung và nhãn hiệu trên website thuộc về Nie Farm hoặc bên cấp phép. Bạn không được sao chép hoặc sử dụng cho mục đích thương mại khi chưa có sự đồng ý bằng văn bản.</p>
+
+    <h2 id="gioi-han-trach-nhiem">Giới hạn trách nhiệm</h2>
+    <p>Nie Farm nỗ lực giữ thông tin trên website chính xác và cập nhật, nhưng không đảm bảo website luôn hoạt động liên tục hoặc không có sai sót.</p>
+
+    <h2 id="thay-doi">Thay đổi điều khoản</h2>
+    <p>Điều khoản có thể được cập nhật và có hiệu lực kể từ khi được đăng tải tại trang này.</p>
+
+    <h2 id="luat-ap-dung">Luật áp dụng và giải quyết tranh chấp</h2>
+    <p>Các điều khoản này được điều chỉnh theo pháp luật Việt Nam. Khiếu nại và tranh chấp được giải quyết theo <strong>[cơ chế giải quyết khiếu nại]</strong>.</p>
+
+    <h2 id="lien-he-chung">Liên hệ</h2>
+    <p>Nếu có thắc mắc về các điều khoản này, vui lòng xem thông tin <a href="@InfoPages.ContactHref(InfoPages.Terms)">liên hệ ở cuối trang</a>.</p>
+</InfoPage>

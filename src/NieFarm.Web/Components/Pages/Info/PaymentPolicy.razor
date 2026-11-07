@@ -1,0 +1,41 @@
+@page "/chinh-sach-thanh-toan"
+
+@* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
+   Replace every [ ... ] value ([tên ngân hàng], [số tài khoản], [chủ tài khoản], [thời gian xác nhận],
+   [đã/chưa], [cách yêu cầu hóa đơn]), then set UpdatedOn and remove IsDraft.
+   Dependent requirements: R-01 (QR/bank-transfer flow: do not promise a QR code until it ships),
+   R-18 (online payment: the "no card data" statement must be revisited if card payments are added). *@
+
+<InfoPage Href="@InfoPages.Payment" IsDraft="true"
+          Description="Chính sách thanh toán của Nie Farm Việt Nam: thanh toán khi nhận hàng và chuyển khoản ngân hàng."
+          Lede="Nie Farm hiện hỗ trợ hai phương thức thanh toán: thanh toán khi nhận hàng và chuyển khoản ngân hàng.">
+    <h2 id="phuong-thuc">Phương thức thanh toán</h2>
+    <ul>
+        <li>Thanh toán khi nhận hàng (COD).</li>
+        <li>Chuyển khoản ngân hàng.</li>
+    </ul>
+
+    <h2 id="cod">Thanh toán khi nhận hàng</h2>
+    <p>Bạn thanh toán cho nhân viên giao hàng khi nhận được đơn hàng.</p>
+
+    <h2 id="chuyen-khoan">Chuyển khoản ngân hàng</h2>
+    <p>Bạn chuyển khoản đến tài khoản sau:</p>
+    <ul>
+        <li>Ngân hàng: <strong>[tên ngân hàng]</strong></li>
+        <li>Số tài khoản: <strong>[số tài khoản]</strong></li>
+        <li>Chủ tài khoản: <strong>[chủ tài khoản]</strong></li>
+    </ul>
+    <p>Vui lòng ghi mã đơn hàng vào nội dung chuyển khoản để chúng tôi đối chiếu nhanh hơn.</p>
+
+    <h2 id="xac-nhan">Xác nhận thanh toán</h2>
+    <p>Chúng tôi sẽ xác nhận khoản thanh toán của bạn trong vòng <strong>[thời gian xác nhận]</strong>.</p>
+
+    <h2 id="gia-hoa-don">Giá và hóa đơn</h2>
+    <p>Giá được niêm yết bằng VNĐ và <strong>[đã/chưa]</strong> bao gồm VAT. Hóa đơn điện tử: <strong>[cách yêu cầu hóa đơn]</strong>.</p>
+
+    <h2 id="an-toan">An toàn thanh toán</h2>
+    <p>Website không thu thập và không lưu trữ thông tin thẻ thanh toán của bạn.</p>
+
+    <h2 id="hoan-tien">Hoàn tiền</h2>
+    <p>Việc hoàn tiền được thực hiện theo <a href="@(InfoPages.Returns + "#hoan-tien")">Chính sách đổi trả</a>.</p>
+</InfoPage>

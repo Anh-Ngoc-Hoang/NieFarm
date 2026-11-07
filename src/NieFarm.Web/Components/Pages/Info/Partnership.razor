@@ -1,0 +1,43 @@
+@page "/hop-tac-dai-ly"
+
+@* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
+   Replace every [ ... ] value ([mức chiết khấu], [đơn tối thiểu]), then set UpdatedOn and remove IsDraft.
+   Dependent requirements: R-12 (forms: replace the contact CTA with a dealer-registration form),
+   R-24 (footer contact details may not be real). *@
+
+<InfoPage Href="@InfoPages.Partnership" IsDraft="true"
+          Description="Hợp tác đại lý cùng Nie Farm Việt Nam: đối tượng phù hợp, chính sách hợp tác và quy trình."
+          Lede="Đưa cà phê Nie Farm đến khách hàng của bạn cùng chính sách hợp tác rõ ràng.">
+    <h2 id="vi-sao">Vì sao hợp tác cùng Nie Farm</h2>
+    <p>Nie Farm mang đến cà phê mộc nguyên bản, có nguồn gốc rõ ràng từ vùng trồng, cùng sự đồng hành lâu dài với đối tác.</p>
+
+    <h2 id="doi-tuong">Đối tượng phù hợp</h2>
+    <ul>
+        <li>Quán cà phê.</li>
+        <li>Văn phòng và doanh nghiệp.</li>
+        <li>Cửa hàng bán lẻ.</li>
+        <li>Nhà hàng và khách sạn.</li>
+    </ul>
+
+    <h2 id="chinh-sach">Chính sách hợp tác</h2>
+    <ul>
+        <li>Chiết khấu: <strong>[mức chiết khấu]</strong></li>
+        <li>Đơn hàng tối thiểu: <strong>[đơn tối thiểu]</strong></li>
+        <li>Hỗ trợ tư vấn sản phẩm và tài liệu giới thiệu.</li>
+    </ul>
+
+    <h2 id="quy-trinh">Quy trình hợp tác</h2>
+    <ol>
+        <li>Liên hệ Nie Farm.</li>
+        <li>Được tư vấn và nhận mẫu thử.</li>
+        <li>Ký hợp đồng.</li>
+        <li>Cung cấp hàng định kỳ.</li>
+    </ol>
+    <p>Bạn có thể xem các sản phẩm hiện có tại <a href="/cua-hang">Cửa hàng</a>.</p>
+
+    <div class="ipage__cta">
+        <h3>Liên hệ hợp tác</h3>
+        <p>Quan tâm đến việc trở thành đối tác? Hãy liên hệ với chúng tôi qua thông tin ở cuối trang.</p>
+        <a class="btn btn--red" href="@InfoPages.ContactHref(InfoPages.Partnership)"><span>Xem thông tin liên hệ</span></a>
+    </div>
+</InfoPage>
