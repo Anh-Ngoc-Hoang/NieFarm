@@ -82,7 +82,7 @@ else
                 </tbody>
             </table>
         </div>
-        @if (_order.History.Count == 0 || _order.History[^1].ToStatus != _order.Status)
+        @if (HasHistoryGap(_order))
         {
             <div class="admin-card__body cell-muted" style="font-size:13px;">Earlier status changes were not recorded.</div>
         }
@@ -218,6 +218,22 @@ else
         OrderStatus.Cancelled => "Cancel order",
         _ => to.ToString()
     };
+
+    // Legacy orders only have the backfilled "placed" row, so a later move can leave the last row
+    // matching Status while an earlier step was never recorded. Check the whole chain: it must start
+    // at "placed", every row must continue from the previous row's target, and end at the current status.
+    private static bool HasHistoryGap(OrderDetailDto order)
+    {
+        var history = order.History;
+        if (history.Count == 0 || history[0].FromStatus is not null)
+            return true;
+        for (var i = 1; i < history.Count; i++)
+        {
+            if (history[i].FromStatus != history[i - 1].ToStatus)
+                return true;
+        }
+        return history[^1].ToStatus != order.Status;
+    }
 
     private static string ActorText(OrderStatusChangeDto change) => change.ChangedBy switch
     {

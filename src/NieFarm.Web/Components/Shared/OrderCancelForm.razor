@@ -8,14 +8,14 @@
 <div class="nf-track__cancel">
     <p class="nf-track__cancel-hint">Bạn có thể tự hủy đơn khi Nie Farm chưa xác nhận đơn hàng.</p>
 
-    @if (!_open)
-    {
-        <button type="button" class="btn btn--ghost btn--sm" aria-expanded="false"
-                aria-controls="@PanelId" @onclick="OpenAsync" disabled="@Busy">
-            <span>Hủy đơn hàng</span>
-        </button>
-    }
-    else
+    @* The toggle stays rendered so aria-expanded is announced and focus has somewhere to return to. *@
+    <button type="button" @ref="_toggle" class="btn btn--ghost btn--sm"
+            aria-expanded="@(_open ? "true" : "false")"
+            aria-controls="@(_open ? PanelId : null)" @onclick="Toggle" disabled="@Busy">
+        <span>Hủy đơn hàng</span>
+    </button>
+
+    @if (_open)
     {
         <div id="@PanelId" role="group" aria-labelledby="@TitleId" class="nf-track__cancel-panel">
             <h3 id="@TitleId" class="nf-track__cancel-title">Bạn chắc chắn muốn hủy đơn @Code?</h3>
@@ -26,7 +26,7 @@
                       placeholder="Ví dụ: Tôi muốn đổi sản phẩm hoặc địa chỉ giao hàng"
                       @bind="_reason" @bind:event="oninput" disabled="@Busy"></textarea>
 
-            @if (Error is not null)
+            @if (Error is not null && !_errorDismissed)
             {
                 <p class="nf-track__error" role="alert">@Error</p>
             }
@@ -52,35 +52,54 @@
     private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
     private bool _open;
     private bool _focusPending;
+    private bool _focusTogglePending;
+    private bool _errorDismissed;
     private string? _reason;
     private ElementReference _reasonInput;
+    private ElementReference _toggle;
 
     private string PanelId => $"cancel-panel-{_uid}";
     private string TitleId => $"cancel-title-{_uid}";
     private string ReasonId => $"cancel-reason-{_uid}";
 
-    private Task OpenAsync()
+    private void Toggle()
     {
+        if (_open)
+        {
+            Close();
+            return;
+        }
         _open = true;
         _focusPending = true;
-        return Task.CompletedTask;
     }
 
     private void Close()
     {
         _open = false;
         _reason = null;
+        // A previous failure message must not reappear when the panel is reopened.
+        _errorDismissed = true;
+        _focusTogglePending = true;
     }
 
-    private Task ConfirmAsync() => OnConfirm.InvokeAsync(string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim());
+    private Task ConfirmAsync()
+    {
+        _errorDismissed = false;
+        return OnConfirm.InvokeAsync(string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim());
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_focusPending) return;
+        if (!_focusPending && !_focusTogglePending) return;
+        var focusToggle = _focusTogglePending;
         _focusPending = false;
+        _focusTogglePending = false;
         try
         {
-            await _reasonInput.FocusAsync();
+            if (focusToggle)
+                await _toggle.FocusAsync();
+            else
+                await _reasonInput.FocusAsync();
         }
         catch (JSDisconnectedException)
         {

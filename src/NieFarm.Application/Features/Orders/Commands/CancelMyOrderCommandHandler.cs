@@ -26,7 +26,7 @@ public class CancelMyOrderCommandHandler(
 
         // Ownership is part of the WHERE; "not yours" and "missing" are the same NotFound.
         var order = await repository.FirstOrDefaultAsync(
-            new MyOrderByIdSpec(request.Id, userId), cancellationToken);
+            new MyOrderForCancelSpec(request.Id, userId), cancellationToken);
         if (order is null)
             return Result.NotFound();
 
