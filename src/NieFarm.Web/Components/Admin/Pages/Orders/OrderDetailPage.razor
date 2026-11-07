@@ -4,6 +4,7 @@
 @using NieFarm.Application.Features.Admin.Orders.Commands
 @using NieFarm.Application.Features.Admin.Orders.Dtos
 @using NieFarm.Application.Features.Admin.Orders.Queries
+@using Ardalis.Result
 @using NieFarm.Domain.Enums
 @inject ISender Sender
 @inject NewOrderCountState OrderCountState
@@ -23,7 +24,7 @@ else
     <div class="admin-page-head">
         <div class="admin-page-head__titles">
             <h1>Order @_order.Code</h1>
-            <p>Placed @_order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</p>
+            <p>Placed @VnTime.FromUtc(_order.PlacedAt).ToString("dd/MM/yyyy HH:mm") (GMT+7)</p>
         </div>
         <a class="btn-admin-outline" href="/admin/orders">
             <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span> Back to orders
@@ -39,17 +40,52 @@ else
         <div class="admin-card__body" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
             <AdminBadge Text="@_order.Status.ToString()" Variant="@OrdersPage.StatusVariant(_order.Status)" />
             <AdminBadge Text="@PaymentMethodText(_order.PaymentMethod)" Variant="muted" />
-            <select class="form-control-admin" style="max-width:220px;" @bind="_selectedStatus">
-                @foreach (var status in Enum.GetValues<OrderStatus>())
+            @if (_order.AllowedNextStatuses.Count == 0)
+            {
+                <span class="cell-muted">This order is @_order.Status. Its status can no longer change.</span>
+            }
+            else
+            {
+                @foreach (var next in _order.AllowedNextStatuses)
                 {
-                    <option value="@status">@status</option>
+                    <button type="button" class="@(next == OrderStatus.Cancelled ? "btn-admin-outline" : "btn-admin")"
+                            style="@(next == OrderStatus.Cancelled ? "color:var(--admin-danger);border-color:var(--admin-danger);" : null)"
+                            disabled="@_saving" @onclick="() => OpenStatusModal(next)">
+                        @ActionLabel(next)
+                    </button>
                 }
-            </select>
-            <button class="btn-admin" type="button" @onclick="UpdateStatusAsync"
-                    disabled="@(_saving || _selectedStatus == _order.Status)">
-                @(_saving ? "Saving…" : "Update status")
-            </button>
+            }
         </div>
+    </AdminCard>
+
+    <AdminCard Title="Status history">
+        <div style="overflow-x:auto;">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th style="width:170px;">When (GMT+7)</th>
+                        <th style="width:220px;">Change</th>
+                        <th style="width:200px;">By</th>
+                        <th>Note</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var change in _order.History)
+                    {
+                        <tr>
+                            <td class="cell-muted">@VnTime.FromUtc(change.ChangedAtUtc).ToString("dd/MM/yyyy HH:mm")</td>
+                            <td class="cell-primary">@(change.FromStatus is null ? "Placed" : $"{change.FromStatus} → {change.ToStatus}")</td>
+                            <td>@ActorText(change)</td>
+                            <td>@(string.IsNullOrWhiteSpace(change.Note) ? "—" : change.Note)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_order.History.Count == 0 || _order.History[^1].ToStatus != _order.Status)
+        {
+            <div class="admin-card__body cell-muted" style="font-size:13px;">Earlier status changes were not recorded.</div>
+        }
     </AdminCard>
 
     <div class="admin-grid" style="grid-template-columns:1fr;">
@@ -137,11 +173,14 @@ else
     </div>
 }
 
+<OrderStatusChangeModal @ref="_modal" Busy="_saving" Error="_modalError" OnConfirm="ConfirmStatusChangeAsync" />
+
 @code {
     [Parameter] public int Id { get; set; }
 
     private OrderDetailDto? _order;
-    private OrderStatus _selectedStatus;
+    private OrderStatusChangeModal? _modal;
+    private string? _modalError;
     private string? _statusError;
     private bool _loaded;
     private bool _saving;
@@ -161,7 +200,6 @@ else
     private async Task LoadAsync()
     {
         _order = await Sender.Send(new GetOrderDetailQuery(Id));
-        _selectedStatus = _order?.Status ?? OrderStatus.New;
         _loaded = true;
     }
 
@@ -172,25 +210,70 @@ else
         _ => method.ToString()
     };
 
-    private async Task UpdateStatusAsync()
+    private static string ActionLabel(OrderStatus to) => to switch
     {
+        OrderStatus.Confirmed => "Confirm order",
+        OrderStatus.Delivering => "Mark as delivering",
+        OrderStatus.Completed => "Mark as completed",
+        OrderStatus.Cancelled => "Cancel order",
+        _ => to.ToString()
+    };
+
+    private static string ActorText(OrderStatusChangeDto change) => change.ChangedBy switch
+    {
+        OrderStatusActor.Admin => string.IsNullOrWhiteSpace(change.ChangedByName) ? "Admin" : change.ChangedByName,
+        OrderStatusActor.Customer => change.ByAccount ? "Customer (account)" : "Customer (order lookup)",
+        _ => "System"
+    };
+
+    private void OpenStatusModal(OrderStatus to)
+    {
+        if (_order is null) return;
+        _modalError = null;
+        _statusError = null;
+        _modal?.Show(to, _order.Code);
+    }
+
+    private async Task ConfirmStatusChangeAsync((OrderStatus To, string? Note) args)
+    {
+        if (_order is null || _saving) return;
+
         _saving = true;
+        _modalError = null;
         _statusError = null;
 
         try
         {
-            var result = await Sender.Send(new UpdateOrderStatusCommand(Id, _selectedStatus));
+            var result = await Sender.Send(
+                new UpdateOrderStatusCommand(Id, _order.Status, args.To, args.Note));
 
-            if (!result.IsSuccess)
+            var message = result.ValidationErrors.Select(e => e.ErrorMessage)
+                .Concat(result.Errors)
+                .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
+
+            if (result.IsSuccess)
             {
-                _statusError = result.ValidationErrors.Select(e => e.ErrorMessage)
-                    .Concat(result.Errors)
-                    .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
-                    ?? "Could not update the status.";
-                return;
+                _modal?.Hide();
+                await LoadAsync();
             }
-
-            await LoadAsync();
+            else if (result.Status == ResultStatus.Conflict)
+            {
+                // Someone else changed the order: close the dialog, say so, and show the real state.
+                _modal?.Hide();
+                _statusError = message ?? "This order was updated by someone else. The page has been refreshed.";
+                await LoadAsync();
+            }
+            else if (result.Status == ResultStatus.NotFound)
+            {
+                _modal?.Hide();
+                _statusError = "This order no longer exists.";
+                await LoadAsync();
+            }
+            else
+            {
+                // Invalid or other failure: keep the dialog open with the message.
+                _modalError = message ?? "Could not update the status.";
+            }
         }
         finally
         {

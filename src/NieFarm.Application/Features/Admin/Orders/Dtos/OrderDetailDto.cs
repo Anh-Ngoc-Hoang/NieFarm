@@ -10,6 +10,15 @@ public record OrderLineDto(
     int Quantity,
     decimal LineTotal);
 
+public record OrderStatusChangeDto(
+    OrderStatus? FromStatus,
+    OrderStatus ToStatus,
+    DateTime ChangedAtUtc,
+    OrderStatusActor ChangedBy,
+    bool ByAccount,
+    string? ChangedByName,
+    string? Note);
+
 public record OrderDetailDto(
     int Id,
     string Code,
@@ -25,4 +34,6 @@ public record OrderDetailDto(
     decimal Discount,
     decimal Total,
     DateTime PlacedAt,
-    List<OrderLineDto> Lines);
+    List<OrderLineDto> Lines,
+    IReadOnlyList<OrderStatus> AllowedNextStatuses,
+    List<OrderStatusChangeDto> History);

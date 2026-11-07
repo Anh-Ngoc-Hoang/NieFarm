@@ -1,6 +1,8 @@
 @page "/tra-cuu-don-hang"
 @using Ardalis.Result
+@using NieFarm.Application.Features.Orders.Commands
 @using NieFarm.Application.Features.Orders.Dtos
+@using NieFarm.Application.Features.Orders
 @using NieFarm.Application.Features.Orders.Queries
 @using NieFarm.Domain.Enums
 @implements IDisposable
@@ -13,6 +15,12 @@
     sentence (NotFoundText, never echoing the input), so the page cannot be used to discover
     which codes exist. Repeated failures are throttled in Application/Infrastructure
     (IOrderLookupThrottle) and surface here as a plain error message.
+
+    Order workflow (docs/plans/order-workflow.md): the progress rail is OrderTrackProgress with
+    real step times, and a guest New order can be cancelled here. The cancel command re-verifies
+    code + phone server-side, so the page sends the values captured at the successful lookup
+    (_verifiedCode/_verifiedPhone), not whatever is typed in the inputs now. Account orders show a
+    sign-in hint instead.
 *@
 
 <PageTitle>Tra cứu đơn hàng - Nie Farm Việt Nam</PageTitle>
@@ -74,33 +82,25 @@
                         <span class="badge-status @OrderStatusText.PillClass(_order.Status)">@OrderStatusText.Vi(_order.Status)</span>
                     </div>
 
-                    @if (_order.Status == OrderStatus.Cancelled)
+                    <OrderTrackProgress Status="_order.Status" Timeline="_order.Timeline" />
+
+                    @if (_order.CanCancel)
                     {
-                        <p class="nf-track__notice">
-                            <NfIcon Name="warning" Size="18" />
-                            <span>
-                                Đơn hàng này đã bị hủy. Nếu cần hỗ trợ, vui lòng liên hệ Nie Farm.
-                                <a href="/#lien-he">Liên hệ</a>
-                            </span>
-                        </p>
+                        <OrderCancelForm Code="@_order.Code" Busy="_cancelBusy" Error="@_cancelError" OnConfirm="CancelAsync" />
                     }
-                    else
+                    else if (_order.CancelRequiresSignIn)
                     {
-                        <ol class="nf-track__steps" style="--track-progress: @ProgressWidth">
-                            @foreach (var step in Steps)
-                            {
-                                <li class="nf-track__step @(step.Reached ? "nf-track__step--reached" : null)">
-                                    <span class="nf-track__dot">
-                                        <NfIcon Name="@step.Icon" Size="18" />
-                                    </span>
-                                    <span class="nf-track__label">@step.Label</span>
-                                    @if (step.Time is not null)
-                                    {
-                                        <span class="nf-track__time">@step.Time</span>
-                                    }
-                                </li>
-                            }
-                        </ol>
+                        <div class="nf-track__cancel">
+                            <p class="nf-track__cancel-hint">
+                                @OrderLookupMessages.AccountOrderRequiresSignIn
+                                <a href="/dang-nhap?returnUrl=%2Ftai-khoan%2Fdon-hang">Đăng nhập</a>
+                            </p>
+                        </div>
+                    }
+
+                    @if (_cancelNotice is not null)
+                    {
+                        <p class="nf-track__ok" role="status">@_cancelNotice</p>
                     }
                 </div>
 
@@ -202,14 +202,17 @@
         public string Phone { get; set; } = "";
     }
 
-    private sealed record TrackStep(string Label, string Icon, bool Reached, string? Time);
-
     private readonly CancellationTokenSource _cts = new();
     private readonly LookupModel _model = new();
     private OrderLookupDto? _order;
     private string? _message;
     private IEnumerable<string> _errors = [];
     private bool _busy;
+    private bool _cancelBusy;
+    private string? _cancelError;
+    private string? _cancelNotice;
+    private string _verifiedCode = "";
+    private string _verifiedPhone = "";
 
     // Pre-fills the code only; never the phone, and never submits on its own.
     [SupplyParameterFromQuery(Name = "ma")] public string? PrefillCode { get; set; }
@@ -227,6 +230,8 @@
         _order = null;
         _message = null;
         _errors = [];
+        _cancelError = null;
+        _cancelNotice = null;
 
         try
         {
@@ -235,6 +240,8 @@
             if (result.IsSuccess)
             {
                 _order = result.Value;
+                _verifiedCode = _model.Code;
+                _verifiedPhone = _model.Phone;
             }
             else if (result.Status == ResultStatus.NotFound)
             {
@@ -262,36 +269,50 @@
         }
     }
 
-    // Four steps derived from Status; only the first has a real timestamp (no status history yet).
-    private IReadOnlyList<TrackStep> Steps
+    private async Task CancelAsync(string? reason)
     {
-        get
-        {
-            var rank = _order!.Status switch
-            {
-                OrderStatus.New => 0,
-                OrderStatus.Confirmed => 1,
-                OrderStatus.Delivering => 2,
-                OrderStatus.Completed => 3,
-                _ => 0
-            };
-            return
-            [
-                new("Đã đặt hàng", "receipt", rank >= 0, VnTime.FromUtc(_order.PlacedAtUtc).ToString("dd/MM, HH:mm")),
-                new("Đã xác nhận", "shield", rank >= 1, null),
-                new("Đang giao", "truck", rank >= 2, null),
-                new("Hoàn thành", "check", rank >= 3, null)
-            ];
-        }
-    }
+        if (_cancelBusy) return;
+        _cancelBusy = true;
+        _cancelError = null;
+        _cancelNotice = null;
 
-    private string ProgressWidth
-    {
-        get
+        try
         {
-            var steps = Steps;
-            var reached = Math.Max(0, steps.Count(s => s.Reached) - 1);
-            return $"{reached * 100 / (steps.Count - 1)}%";
+            var result = await Sender.Send(
+                new CancelLookedUpOrderCommand(_verifiedCode, _verifiedPhone, reason), _cts.Token);
+
+            if (result.IsSuccess || result.Status == ResultStatus.Conflict)
+            {
+                // Re-query with the verified values so the page shows the real, latest state.
+                var refreshed = await Sender.Send(new LookupOrderQuery(_verifiedCode, _verifiedPhone), _cts.Token);
+                if (refreshed.IsSuccess)
+                    _order = refreshed.Value;
+
+                _cancelNotice = result.IsSuccess ? "Đơn hàng đã được hủy." : OrderLookupMessages.Conflict;
+            }
+            else if (result.Status == ResultStatus.NotFound)
+            {
+                _cancelError = NotFoundText;
+            }
+            else
+            {
+                _cancelError = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+                    ?? "Đã có lỗi xảy ra. Vui lòng thử lại.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Circuit disposed mid-command; nothing to show.
+        }
+        catch (Exception)
+        {
+            _cancelError = "Đã có lỗi xảy ra. Vui lòng thử lại.";
+        }
+        finally
+        {
+            _cancelBusy = false;
         }
     }
 

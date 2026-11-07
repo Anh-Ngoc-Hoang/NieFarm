@@ -9,5 +9,11 @@ namespace NieFarm.Application.Features.Orders.Specifications;
 /// </summary>
 public sealed class OrderByCodeWithItemsSpec : Specification<Order>, ISingleResultSpecification<Order>
 {
-    public OrderByCodeWithItemsSpec(string code) => Query.Include(o => o.Items).Where(o => o.Code == code);
+    public OrderByCodeWithItemsSpec(string code)
+    {
+        Query.Include(o => o.Items)
+             .Include(o => o.StatusChanges)
+             .AsSplitQuery()
+             .Where(o => o.Code == code);
+    }
 }

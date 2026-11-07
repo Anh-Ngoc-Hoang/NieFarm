@@ -47,6 +47,7 @@ public static class DependencyInjection
 
         services.AddScoped(typeof(IRepositoryBase<>), typeof(Repository<>));
         services.AddTransient(typeof(IReadRepositoryBase<>), typeof(ReadOnlyRepository<>));
+        services.AddScoped<IWriteContextRefresher, WriteContextRefresher>();
 
         services.AddScoped<IIdentityService, IdentityService>();
         services.AddScoped<ICurrentUser, CurrentUser>();

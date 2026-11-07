@@ -53,7 +53,7 @@
                         <a href="@($"/admin/orders/{order.Id}")">@order.Code</a>
                         @if (!order.IsRead)
                         {
-                            <AdminBadge Text="New" Variant="danger" />
+                            <AdminBadge Text="Unread" Variant="danger" />
                         }
                     </td>
                     <td>@order.CustomerName</td>
@@ -61,7 +61,7 @@
                     <td>@order.ItemCount</td>
                     <td class="cell-primary">@Money.Vnd(order.Total)</td>
                     <td><AdminBadge Text="@order.Status.ToString()" Variant="@StatusVariant(order.Status)" /></td>
-                    <td class="cell-muted">@order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                    <td class="cell-muted">@VnTime.FromUtc(order.PlacedAt).ToString("dd/MM/yyyy HH:mm")</td>
                     <td>
                         <div class="row-actions">
                             <a class="btn-icon" title="Open" href="@($"/admin/orders/{order.Id}")">

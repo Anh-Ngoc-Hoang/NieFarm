@@ -1,0 +1,94 @@
+@using NieFarm.Domain.Enums
+
+@*
+    Confirmation dialog for an admin order status change. A note is optional, except for Cancel
+    where a reason is required (also enforced by the validator and the Order aggregate). The parent
+    runs the command and passes any validation message back through Error, which keeps the dialog
+    open; it closes the dialog itself via Hide() on success.
+*@
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="status-modal-title">
+        <div class="admin-modal__dialog" style="max-width:480px;">
+            <div class="admin-modal__body">
+                <h2 id="status-modal-title" style="font-size:16px;font-weight:600;margin:0 0 8px;">@Title</h2>
+                <p class="cell-muted" style="margin:0 0 16px;">@Description</p>
+
+                <label class="form-label-admin" for="status-note">@(IsCancel ? "Reason (required)" : "Note (optional)")</label>
+                <textarea id="status-note" class="form-control-admin" rows="3" maxlength="500"
+                          @bind="_note" @bind:event="oninput" disabled="@Busy"></textarea>
+
+                @if (!string.IsNullOrWhiteSpace(Error))
+                {
+                    <div class="form-error" role="alert">@Error</div>
+                }
+            </div>
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="Cancel" disabled="@Busy">Close</button>
+                <button class="btn-admin" type="button"
+                        style="@(IsCancel ? "background:var(--admin-danger);border-color:var(--admin-danger);" : null)"
+                        @onclick="ConfirmAsync" disabled="@Busy">
+                    @(Busy ? "Saving…" : ConfirmLabel)
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<(OrderStatus To, string? Note)> OnConfirm { get; set; }
+
+    private bool _visible;
+    private OrderStatus _to;
+    private string _code = "";
+    private string? _note;
+
+    private bool IsCancel => _to == OrderStatus.Cancelled;
+
+    private string Title => _to switch
+    {
+        OrderStatus.Confirmed => $"Confirm order {_code}",
+        OrderStatus.Delivering => $"Mark order {_code} as delivering",
+        OrderStatus.Completed => $"Mark order {_code} as completed",
+        OrderStatus.Cancelled => $"Cancel order {_code}",
+        _ => $"Update order {_code}"
+    };
+
+    private string ConfirmLabel => _to switch
+    {
+        OrderStatus.Confirmed => "Confirm order",
+        OrderStatus.Delivering => "Mark as delivering",
+        OrderStatus.Completed => "Mark as completed",
+        OrderStatus.Cancelled => "Cancel order",
+        _ => "Update status"
+    };
+
+    private string Description => IsCancel
+        ? "Cancelling is final: a cancelled order cannot be reopened."
+        : _to == OrderStatus.Completed
+            ? "Completed is final: the status can no longer change."
+            : "The change is recorded in the status history.";
+
+    public void Show(OrderStatus to, string code)
+    {
+        _to = to;
+        _code = code;
+        _note = null;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    private void Cancel() => _visible = false;
+
+    private Task ConfirmAsync() =>
+        OnConfirm.InvokeAsync((_to, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim()));
+}

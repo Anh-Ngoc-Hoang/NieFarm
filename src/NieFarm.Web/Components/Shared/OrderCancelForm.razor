@@ -1,0 +1,90 @@
+@using Microsoft.JSInterop
+
+@*
+    Inline two-step cancel confirmation (no modal: mobile-friendly, no focus trap). The parent owns
+    the actual command and passes Busy/Error back; the reason is optional plain text (max 500).
+*@
+
+<div class="nf-track__cancel">
+    <p class="nf-track__cancel-hint">Bạn có thể tự hủy đơn khi Nie Farm chưa xác nhận đơn hàng.</p>
+
+    @if (!_open)
+    {
+        <button type="button" class="btn btn--ghost btn--sm" aria-expanded="false"
+                aria-controls="@PanelId" @onclick="OpenAsync" disabled="@Busy">
+            <span>Hủy đơn hàng</span>
+        </button>
+    }
+    else
+    {
+        <div id="@PanelId" role="group" aria-labelledby="@TitleId" class="nf-track__cancel-panel">
+            <h3 id="@TitleId" class="nf-track__cancel-title">Bạn chắc chắn muốn hủy đơn @Code?</h3>
+            <p>Sau khi hủy, đơn hàng không thể khôi phục. Nếu muốn mua lại, bạn cần đặt một đơn hàng mới.</p>
+
+            <label class="nf-label" for="@ReasonId">Lý do hủy (không bắt buộc)</label>
+            <textarea id="@ReasonId" @ref="_reasonInput" class="nf-field" rows="3" maxlength="500"
+                      placeholder="Ví dụ: Tôi muốn đổi sản phẩm hoặc địa chỉ giao hàng"
+                      @bind="_reason" @bind:event="oninput" disabled="@Busy"></textarea>
+
+            @if (Error is not null)
+            {
+                <p class="nf-track__error" role="alert">@Error</p>
+            }
+
+            <div class="nf-track__cancel-actions">
+                <button type="button" class="btn btn--red btn--sm" @onclick="ConfirmAsync" disabled="@Busy">
+                    <span>@(Busy ? "Đang hủy…" : "Xác nhận hủy đơn")</span>
+                </button>
+                <button type="button" class="btn btn--ghost btn--sm" @onclick="Close" disabled="@Busy">
+                    <span>Giữ lại đơn hàng</span>
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Code { get; set; } = "";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<string?> OnConfirm { get; set; }
+
+    private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
+    private bool _open;
+    private bool _focusPending;
+    private string? _reason;
+    private ElementReference _reasonInput;
+
+    private string PanelId => $"cancel-panel-{_uid}";
+    private string TitleId => $"cancel-title-{_uid}";
+    private string ReasonId => $"cancel-reason-{_uid}";
+
+    private Task OpenAsync()
+    {
+        _open = true;
+        _focusPending = true;
+        return Task.CompletedTask;
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _reason = null;
+    }
+
+    private Task ConfirmAsync() => OnConfirm.InvokeAsync(string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim());
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending) return;
+        _focusPending = false;
+        try
+        {
+            await _reasonInput.FocusAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit gone; nothing to focus.
+        }
+    }
+}

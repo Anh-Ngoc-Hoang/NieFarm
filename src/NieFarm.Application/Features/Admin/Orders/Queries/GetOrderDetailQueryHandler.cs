@@ -32,6 +32,13 @@ public class GetOrderDetailQueryHandler(IReadRepositoryBase<Order> repository)
             order.Total,
             order.CreatedAt,
             order.Items.Select(i => new OrderLineDto(
-                i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList());
+                i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList(),
+            Order.AllowedNextStatuses(order.Status),
+            order.StatusChanges
+                .OrderBy(c => c.ChangedAt).ThenBy(c => c.Id)
+                .Select(c => new OrderStatusChangeDto(
+                    c.FromStatus, c.ToStatus, c.ChangedAt, c.ChangedBy,
+                    c.ChangedByUserId != null, c.ChangedByName, c.Note))
+                .ToList());
     }
 }

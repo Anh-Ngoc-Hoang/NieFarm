@@ -7,10 +7,36 @@ namespace NieFarm.Domain.Entities;
 /// Aggregate root for a customer order. Line items are only added through
 /// <see cref="AddItem"/>, and every money value is recomputed here rather than
 /// accepted from the caller.
+/// <para>
+/// Status moves one step forward only: New -> Confirmed -> Delivering -> Completed, and
+/// New/Confirmed/Delivering -> Cancelled. Completed and Cancelled are terminal. Customers may only
+/// cancel while New. The matrix lives here (<see cref="AllowedNextStatuses"/>) and is the single
+/// source of truth; Application handlers check it first to return friendly errors.
+/// </para>
+/// <para>
+/// History invariant: every status change after R-07 appends exactly one
+/// <see cref="OrderStatusChange"/> row. Orders that predate it may lack intermediate rows, so never
+/// assume the last history ToStatus equals <see cref="Status"/>.
+/// </para>
+/// <para>
+/// Hooks: payment guards (R-01) belong in <see cref="CanChangeStatusTo"/> /
+/// <see cref="IsCancellableByCustomer"/>; restocking (R-06) belongs in OrderStatusWorkflow.
+/// </para>
 /// </summary>
 public class Order : BaseEntity
 {
+    private static readonly IReadOnlyDictionary<OrderStatus, OrderStatus[]> Transitions =
+        new Dictionary<OrderStatus, OrderStatus[]>
+        {
+            [OrderStatus.New] = [OrderStatus.Confirmed, OrderStatus.Cancelled],
+            [OrderStatus.Confirmed] = [OrderStatus.Delivering, OrderStatus.Cancelled],
+            [OrderStatus.Delivering] = [OrderStatus.Completed, OrderStatus.Cancelled],
+            [OrderStatus.Completed] = [],
+            [OrderStatus.Cancelled] = []
+        };
+
     private readonly List<OrderItem> _items = [];
+    private readonly List<OrderStatusChange> _statusChanges = [];
 
     /// <summary>Human-facing reference used by the public order lookup, e.g. NF123456.</summary>
     public string Code { get; private set; } = string.Empty;
@@ -40,6 +66,8 @@ public class Order : BaseEntity
 
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
 
+    public IReadOnlyCollection<OrderStatusChange> StatusChanges => _statusChanges.AsReadOnly();
+
     public decimal Subtotal => _items.Sum(i => i.LineTotal);
 
     public decimal Total => Subtotal + ShippingFee - Discount;
@@ -51,7 +79,7 @@ public class Order : BaseEntity
         string shippingAddress, string? note, PaymentMethod paymentMethod,
         decimal shippingFee, decimal discount)
     {
-        return new Order
+        var order = new Order
         {
             Code = code.Trim().ToUpperInvariant(),
             CustomerId = string.IsNullOrWhiteSpace(customerId) ? null : customerId,
@@ -64,6 +92,9 @@ public class Order : BaseEntity
             ShippingFee = shippingFee,
             Discount = discount
         };
+
+        order._statusChanges.Add(OrderStatusChange.Placed(order.CreatedAt, order.CustomerId));
+        return order;
     }
 
     public void AddItem(
@@ -74,9 +105,40 @@ public class Order : BaseEntity
         SetUpdatedAt();
     }
 
-    public void ChangeStatus(OrderStatus status)
+    public static IReadOnlyList<OrderStatus> AllowedNextStatuses(OrderStatus from) =>
+        Transitions.TryGetValue(from, out var next) ? next : [];
+
+    public bool CanChangeStatusTo(OrderStatus to) => AllowedNextStatuses(Status).Contains(to);
+
+    /// <summary>Customers may cancel only before Nie Farm confirms the order.</summary>
+    public bool IsCancellableByCustomer => Status == OrderStatus.New;
+
+    public bool IsFinal => AllowedNextStatuses(Status).Count == 0;
+
+    /// <summary>Admin status change. Cancelling requires a reason.</summary>
+    public void ChangeStatus(OrderStatus to, string adminUserId, string? adminName, string? note)
     {
-        Status = status;
+        if (!CanChangeStatusTo(to))
+            throw new InvalidOperationException($"An order cannot move from {Status} to {to}.");
+        if (to == OrderStatus.Cancelled && string.IsNullOrWhiteSpace(note))
+            throw new InvalidOperationException("A reason is required to cancel an order.");
+
+        _statusChanges.Add(OrderStatusChange.Create(
+            Status, to, OrderStatusActor.Admin, adminUserId, adminName, note));
+        Status = to;
+        SetUpdatedAt();
+    }
+
+    /// <summary>Customer self-cancel (New only). Re-flags the order as unread so the admin notices.</summary>
+    public void CancelByCustomer(string? customerUserId, string? customerName, string? reason)
+    {
+        if (!IsCancellableByCustomer)
+            throw new InvalidOperationException($"A {Status} order cannot be cancelled by the customer.");
+
+        _statusChanges.Add(OrderStatusChange.Create(
+            Status, OrderStatus.Cancelled, OrderStatusActor.Customer, customerUserId, customerName, reason));
+        Status = OrderStatus.Cancelled;
+        IsRead = false;
         SetUpdatedAt();
     }
 

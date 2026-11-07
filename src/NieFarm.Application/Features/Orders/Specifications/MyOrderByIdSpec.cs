@@ -13,6 +13,8 @@ public sealed class MyOrderByIdSpec : Specification<Order>, ISingleResultSpecifi
     public MyOrderByIdSpec(int id, string customerId)
     {
         Query.Include(o => o.Items)
+             .Include(o => o.StatusChanges)
+             .AsSplitQuery()
              .Where(o => o.Id == id && o.CustomerId == customerId);
     }
 }

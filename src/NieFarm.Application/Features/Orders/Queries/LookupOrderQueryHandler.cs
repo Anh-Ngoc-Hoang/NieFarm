@@ -13,9 +13,6 @@ public class LookupOrderQueryHandler(
     IOrderLookupThrottle throttle)
     : IRequestHandler<LookupOrderQuery, Result<OrderLookupDto>>
 {
-    private const string LockedOutMessage =
-        "Bạn đã tra cứu sai quá nhiều lần. Vui lòng thử lại sau 15 phút hoặc liên hệ Nie Farm để được hỗ trợ.";
-
     public async Task<Result<OrderLookupDto>> Handle(LookupOrderQuery request, CancellationToken cancellationToken)
     {
         if (!OrderCode.TryNormalise(request.Code, out var code))
@@ -23,7 +20,7 @@ public class LookupOrderQueryHandler(
         var phone = PhoneNumberNormalizer.Normalise(request.Phone);
 
         if (throttle.IsLockedOut(code, phone))
-            return Result<OrderLookupDto>.Error(LockedOutMessage);
+            return Result<OrderLookupDto>.Error(OrderLookupMessages.LockedOut);
 
         // Unlike MyOrderByIdSpec the phone check is not in the WHERE: stored phones are free-form
         // text, so it is compared in normalised form here. Unknown code and wrong phone share one
@@ -48,6 +45,9 @@ public class LookupOrderQueryHandler(
             order.Discount,
             order.Total,
             order.Items.Select(i => new OrderLookupLineDto(
-                i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList()));
+                i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList(),
+            order.IsCancellableByCustomer && order.CustomerId is null,
+            order.IsCancellableByCustomer && order.CustomerId is not null,
+            OrderTimeline.From(order)));
     }
 }

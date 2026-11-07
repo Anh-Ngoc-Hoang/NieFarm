@@ -1,7 +1,11 @@
 @page "/tai-khoan/don-hang/{Id:int}"
 @attribute [Authorize]
+@using Ardalis.Result
+@using NieFarm.Application.Features.Orders
+@using NieFarm.Application.Features.Orders.Commands
 @using NieFarm.Application.Features.Orders.Dtos
 @using NieFarm.Application.Features.Orders.Queries
+@implements IDisposable
 @inject ISender Sender
 @inject NavigationManager Navigation
 
@@ -13,8 +17,11 @@
     enumerate other customers' order ids (security.md). Reuses the
     ".nf-track__panel"/".nf-track__meta"/".nf-track__lines"/".nf-track__totals"
     shapes from OrderLookup.razor's own section of nf-pages.css rather than
-    duplicating them. The status pill is a fixed "--ok" green, matching the
-    original markup's own (unvaried) behaviour byte-for-byte.
+    duplicating them.
+
+    Order workflow (docs/plans/order-workflow.md): the status pill now follows the status (it used
+    to be a fixed green), the header carries the OrderTrackProgress rail, and a New order can be
+    cancelled through CancelMyOrderCommand (ownership is enforced server-side by MyOrderByIdSpec).
 *@
 
 <PageTitle>@(_order is null ? "Đơn hàng" : $"Đơn hàng {_order.Code}") - Nie Farm Việt Nam</PageTitle>
@@ -42,8 +49,22 @@
                                 Ngày đặt: @VnTime.FromUtc(_order.PlacedAt).ToString("dd/MM/yyyy HH:mm")
                             </p>
                         </div>
-                        <span class="badge-status badge-status--ok">@OrderStatusText.Vi(_order.Status)</span>
+                        <span class="badge-status @OrderStatusText.PillClass(_order.Status)">@OrderStatusText.Vi(_order.Status)</span>
                     </div>
+
+                    <div style="margin-top:2rem">
+                        <OrderTrackProgress Status="_order.Status" Timeline="_order.Timeline" />
+                    </div>
+
+                    @if (_order.CanCancel)
+                    {
+                        <OrderCancelForm Code="@_order.Code" Busy="_cancelBusy" Error="@_cancelError" OnConfirm="CancelAsync" />
+                    }
+
+                    @if (_cancelNotice is not null)
+                    {
+                        <p class="nf-track__ok" role="status">@_cancelNotice</p>
+                    }
                 </div>
 
                 <div class="nf-track__cols">
@@ -144,7 +165,11 @@
 @code {
     [Parameter] public int Id { get; set; }
 
+    private readonly CancellationTokenSource _cts = new();
     private MyOrderDetailDto? _order;
+    private bool _cancelBusy;
+    private string? _cancelError;
+    private string? _cancelNotice;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -159,5 +184,56 @@
         }
 
         _order = result.Value;
+    }
+
+    private async Task CancelAsync(string? reason)
+    {
+        if (_cancelBusy) return;
+        _cancelBusy = true;
+        _cancelError = null;
+        _cancelNotice = null;
+
+        try
+        {
+            var result = await Sender.Send(new CancelMyOrderCommand(Id, reason), _cts.Token);
+
+            if (result.IsSuccess || result.Status == ResultStatus.Conflict)
+            {
+                var refreshed = await Sender.Send(new GetMyOrderDetailQuery(Id), _cts.Token);
+                if (refreshed.IsSuccess)
+                    _order = refreshed.Value;
+
+                _cancelNotice = result.IsSuccess ? "Đơn hàng đã được hủy." : OrderLookupMessages.Conflict;
+            }
+            else if (result.Status is ResultStatus.NotFound or ResultStatus.Unauthorized)
+            {
+                Navigation.NotFound();
+            }
+            else
+            {
+                _cancelError = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+                    ?? "Đã có lỗi xảy ra. Vui lòng thử lại.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Circuit disposed mid-command; nothing to show.
+        }
+        catch (Exception)
+        {
+            _cancelError = "Đã có lỗi xảy ra. Vui lòng thử lại.";
+        }
+        finally
+        {
+            _cancelBusy = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
     }
 }

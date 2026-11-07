@@ -10,4 +10,5 @@ public record MyOrderDetailDto(
     int Id, string Code, string CustomerName, string Phone, string? Email,
     string ShippingAddress, string? Note, OrderStatus Status, PaymentMethod PaymentMethod,
     decimal Subtotal, decimal ShippingFee, decimal Discount, decimal Total,
-    DateTime PlacedAt, List<MyOrderLineDto> Lines);
+    DateTime PlacedAt, List<MyOrderLineDto> Lines,
+    bool CanCancel, IReadOnlyList<OrderTimelineEntryDto> Timeline);

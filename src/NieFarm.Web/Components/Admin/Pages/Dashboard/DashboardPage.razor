@@ -55,7 +55,7 @@ else
                                 <td>@order.CustomerName</td>
                                 <td><AdminBadge Text="@order.Status" Variant="muted" /></td>
                                 <td class="cell-primary">@Money.Vnd(order.Total)</td>
-                                <td class="cell-muted">@order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="cell-muted">@VnTime.FromUtc(order.PlacedAt).ToString("dd/MM/yyyy HH:mm")</td>
                             </tr>
                         }
                     </tbody>

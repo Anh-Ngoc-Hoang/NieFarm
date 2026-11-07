@@ -1,0 +1,99 @@
+@using NieFarm.Application.Features.Orders.Dtos
+@using NieFarm.Domain.Enums
+
+@*
+    Order progress rail shared by /tra-cuu-don-hang and /tai-khoan/don-hang/{id}. Four steps are
+    derived from Status; each step's time is the latest Timeline entry for that status. A reached
+    step with no entry (an order that predates status history) shows no time — no time is ever
+    invented. A Cancelled order swaps the rail for a notice with the real cancel time and who did it.
+    The <li> carries a Razor class expression, so it must never carry data-reveal or .draw.
+*@
+
+@if (Status == OrderStatus.Cancelled)
+{
+    var cancel = LatestEntry(OrderStatus.Cancelled);
+    <p class="nf-track__notice">
+        <NfIcon Name="warning" Size="18" />
+        <span>
+            @if (cancel is not null && cancel.Actor == OrderStatusActor.Customer)
+            {
+                @($"Đơn hàng đã được hủy lúc {Stamp(cancel.AtUtc, "HH:mm, dd/MM/yyyy")} theo yêu cầu của bạn.")
+            }
+            else if (cancel is not null)
+            {
+                @($"Nie Farm đã hủy đơn hàng này lúc {Stamp(cancel.AtUtc, "HH:mm, dd/MM/yyyy")}. Nếu cần hỗ trợ, vui lòng liên hệ Nie Farm.")
+                <a href="/#lien-he">Liên hệ</a>
+            }
+            else
+            {
+                @:Đơn hàng này đã bị hủy. Nếu cần hỗ trợ, vui lòng liên hệ Nie Farm.
+                <a href="/#lien-he">Liên hệ</a>
+            }
+        </span>
+    </p>
+}
+else
+{
+    <ol class="nf-track__steps" style="--track-progress: @ProgressWidth">
+        @foreach (var step in Steps)
+        {
+            <li class="nf-track__step @(step.Reached ? "nf-track__step--reached" : null)">
+                <span class="nf-track__dot">
+                    <NfIcon Name="@step.Icon" Size="18" />
+                </span>
+                <span class="nf-track__label">@step.Label</span>
+                @if (step.Time is not null)
+                {
+                    <span class="nf-track__time">@step.Time</span>
+                }
+            </li>
+        }
+    </ol>
+}
+
+@code {
+    private sealed record TrackStep(string Label, string Icon, bool Reached, string? Time);
+
+    [Parameter, EditorRequired] public OrderStatus Status { get; set; }
+    [Parameter] public IReadOnlyList<OrderTimelineEntryDto> Timeline { get; set; } = [];
+
+    private OrderTimelineEntryDto? LatestEntry(OrderStatus status) =>
+        Timeline.Where(e => e.Status == status).OrderByDescending(e => e.AtUtc).FirstOrDefault();
+
+    private static string Stamp(DateTime utc, string format) => VnTime.FromUtc(utc).ToString(format);
+
+    private string? TimeFor(OrderStatus status) =>
+        LatestEntry(status) is { } e ? Stamp(e.AtUtc, "dd/MM, HH:mm") : null;
+
+    private IReadOnlyList<TrackStep> Steps
+    {
+        get
+        {
+            var rank = Status switch
+            {
+                OrderStatus.New => 0,
+                OrderStatus.Confirmed => 1,
+                OrderStatus.Delivering => 2,
+                OrderStatus.Completed => 3,
+                _ => 0
+            };
+            return
+            [
+                new("Đã đặt hàng", "receipt", rank >= 0, TimeFor(OrderStatus.New)),
+                new("Đã xác nhận", "shield", rank >= 1, rank >= 1 ? TimeFor(OrderStatus.Confirmed) : null),
+                new("Đang giao", "truck", rank >= 2, rank >= 2 ? TimeFor(OrderStatus.Delivering) : null),
+                new("Hoàn thành", "check", rank >= 3, rank >= 3 ? TimeFor(OrderStatus.Completed) : null)
+            ];
+        }
+    }
+
+    private string ProgressWidth
+    {
+        get
+        {
+            var steps = Steps;
+            var reached = Math.Max(0, steps.Count(s => s.Reached) - 1);
+            return $"{reached * 100 / (steps.Count - 1)}%";
+        }
+    }
+}

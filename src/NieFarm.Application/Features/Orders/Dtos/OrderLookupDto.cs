@@ -18,4 +18,7 @@ public record OrderLookupDto(
     decimal ShippingFee,
     decimal Discount,
     decimal Total,
-    IReadOnlyList<OrderLookupLineDto> Lines);
+    IReadOnlyList<OrderLookupLineDto> Lines,
+    bool CanCancel,
+    bool CancelRequiresSignIn,
+    IReadOnlyList<OrderTimelineEntryDto> Timeline);

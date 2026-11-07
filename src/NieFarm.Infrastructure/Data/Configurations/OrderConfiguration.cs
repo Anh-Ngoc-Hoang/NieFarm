@@ -52,6 +52,19 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .FindNavigation(nameof(Order.Items))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
+        builder.HasMany(o => o.StatusChanges)
+            .WithOne()
+            .HasForeignKey(h => h.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata
+            .FindNavigation(nameof(Order.StatusChanges))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        // Shadow concurrency token: keeps the Domain clean. Intent is carried by the command's
+        // FromStatus; this only stops a stale save silently overwriting a newer status.
+        builder.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();
+
         builder.HasIndex(o => o.Code).IsUnique();
         builder.HasIndex(o => o.CreatedAt);
     }

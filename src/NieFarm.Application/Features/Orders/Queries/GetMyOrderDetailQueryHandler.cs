@@ -41,6 +41,8 @@ public class GetMyOrderDetailQueryHandler(
             order.Total,
             order.CreatedAt,
             order.Items.Select(i => new MyOrderLineDto(
-                i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList()));
+                i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList(),
+            order.IsCancellableByCustomer,
+            OrderTimeline.From(order)));
     }
 }

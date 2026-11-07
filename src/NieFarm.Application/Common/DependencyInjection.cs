@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
         services.AddScoped<CartAssembler>();
+        services.AddScoped<NieFarm.Application.Features.Orders.OrderStatusWorkflow>();
 
         return services;
     }

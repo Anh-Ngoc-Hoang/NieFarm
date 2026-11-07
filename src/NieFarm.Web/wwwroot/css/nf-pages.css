@@ -768,8 +768,23 @@
 .nf-track__totals .total dt { font-weight: 700; font-size: var(--fs-h3); color: var(--ink); }
 .nf-track__totals .total dd { margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--red); font-variant-numeric: tabular-nums; }
 
+/* Customer cancel (OrderCancelForm): inline panel under the progress rail. */
+.nf-track__cancel { margin-top: 1.75rem; padding-top: 1.5rem; border-top: 1px solid var(--line); display: grid; gap: .85rem; justify-items: start; }
+.nf-track__cancel-hint { margin: 0; font-size: var(--fs-sm); color: var(--ink-55); }
+.nf-track__cancel-panel { display: grid; gap: .75rem; width: 100%; max-width: 40rem; font-size: var(--fs-sm); line-height: 1.6; }
+.nf-track__cancel-panel p { margin: 0; }
+.nf-track__cancel-title { font-size: var(--fs-h3); margin: 0; }
+.nf-track__cancel-actions { display: flex; flex-direction: column; gap: .75rem; }
+.nf-track__cancel-actions .btn { width: 100%; justify-content: center; }
+.nf-track__ok { margin-top: 1rem; color: var(--green); font-size: var(--fs-sm); }
+
 @media (min-width: 640px) {
     .nf-track__form { display: grid; grid-template-columns: 1fr 1fr auto; align-items: stretch; }
+}
+
+@media (min-width: 640px) {
+    .nf-track__cancel-actions { flex-direction: row; flex-wrap: wrap; }
+    .nf-track__cancel-actions .btn { width: auto; }
 }
 
 @media (min-width: 960px) {

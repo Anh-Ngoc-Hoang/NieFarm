@@ -8,6 +8,8 @@ public sealed class OrderByIdSpec : Specification<Order>, ISingleResultSpecifica
     public OrderByIdSpec(int id)
     {
         Query.Include(o => o.Items)
+             .Include(o => o.StatusChanges)
+             .AsSplitQuery()
              .Where(o => o.Id == id);
     }
 }

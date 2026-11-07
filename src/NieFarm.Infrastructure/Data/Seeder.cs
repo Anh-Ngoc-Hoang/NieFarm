@@ -26,6 +26,7 @@ public static class Seeder
         await SeedTestimonialsAsync(scope);
         await SeedPartnersAsync(scope);
         await SeedCoffeeRegionsAsync(scope);
+        await BackfillOrderStatusHistoryAsync(scope);   // last: a missing table must not skip the seeds above
     }
 
     /// <summary>
@@ -248,5 +249,39 @@ public static class Seeder
         await db.SaveChangesAsync();
 
         logger.LogInformation("Seeded {Count} coffee regions", missing.Count);
+    }
+
+    /// <summary>
+    /// Gives every order that has no status history one truthful "placed" row (null to New at the
+    /// order's CreatedAt). No synthetic rows for later statuses: UpdatedAt is also bumped by
+    /// MarkAsRead, so it would invent times. Idempotent. The same SQL lives in the AddOrderStatusHistory
+    /// migration; it is repeated here because migrations are gitignored and a regenerated migration
+    /// would otherwise lose it. Safe before the migration has run: a missing table is logged, not thrown.
+    /// 0 = OrderStatus.New, 1 = OrderStatusActor.Customer.
+    /// </summary>
+    private static async Task BackfillOrderStatusHistoryAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        try
+        {
+            var inserted = await db.Database.ExecuteSqlRawAsync(
+                """
+                INSERT INTO [OrderStatusChanges]
+                    ([OrderId],[FromStatus],[ToStatus],[ChangedAt],[ChangedBy],[ChangedByUserId],[ChangedByName],[Note],[CreatedAt],[UpdatedAt])
+                SELECT o.[Id], NULL, 0, o.[CreatedAt], 1, o.[CustomerId], NULL, NULL, o.[CreatedAt], o.[CreatedAt]
+                FROM [Orders] o
+                WHERE NOT EXISTS (SELECT 1 FROM [OrderStatusChanges] h WHERE h.[OrderId] = o.[Id]);
+                """);
+
+            if (inserted > 0)
+                logger.LogInformation("Backfilled {Count} order status history rows", inserted);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Order status history backfill skipped (has the AddOrderStatusHistory migration been applied?)");
+        }
     }
 }
