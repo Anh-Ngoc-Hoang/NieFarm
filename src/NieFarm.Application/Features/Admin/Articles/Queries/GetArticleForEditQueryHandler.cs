@@ -1,11 +1,12 @@
 using Ardalis.Specification;
 using MediatR;
+using NieFarm.Application.Common.Interfaces;
 using NieFarm.Application.Features.Admin.Articles.Dtos;
 using NieFarm.Domain.Entities;
 
 namespace NieFarm.Application.Features.Admin.Articles.Queries;
 
-public class GetArticleForEditQueryHandler(IReadRepositoryBase<Article> repository)
+public class GetArticleForEditQueryHandler(IReadRepositoryBase<Article> repository, IHtmlSanitizer htmlSanitizer)
     : IRequestHandler<GetArticleForEditQuery, ArticleEditDto?>
 {
     public async Task<ArticleEditDto?> Handle(
@@ -26,7 +27,8 @@ public class GetArticleForEditQueryHandler(IReadRepositoryBase<Article> reposito
             article.ImageAlt,
             article.HeroImageUrl,
             article.HeroImageAlt,
-            article.Body,
+            // Rows saved through the old raw textarea were never sanitised.
+            htmlSanitizer.Sanitize(article.Body),
             article.PublishedOn,
             article.IsPublished);
     }

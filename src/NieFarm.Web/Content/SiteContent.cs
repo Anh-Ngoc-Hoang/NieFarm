@@ -152,7 +152,8 @@ public static partial class SiteContent
     ];
 
     // -- Knowledge / blog --------------------------------------------------
-    //    Article types and the article set live in SiteContent.Articles.cs.
+    //    Articles are now a persisted aggregate; see Application/Features/Articles
+    //    and /kien-thuc, /bai-viet/{slug}. ----------------------------------
 
     // -- Activities are now a persisted Activity aggregate; see
     //    Application/Features/Activities and /hoat-dong. --------------------

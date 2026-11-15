@@ -317,6 +317,8 @@ a.btn { color: var(--btn-fg); }
     transition: background .3s var(--ease);
 }
 .iconbtn:hover { background: var(--tint); }
+/* Copy feedback: nf-copy.js sets data-copied for a short moment after a successful copy. */
+.iconbtn[data-copied] { background: var(--tint); color: var(--green); }
 /* ".ico{width:100%;height:100%}" outranks NfIcon's width/height attributes, so its Size
    parameter has no effect on its own: unsized, these icons fill the 40px button, and in the
    flex rows below they balloon against the row's width and squeeze the text beside them. */
@@ -771,7 +773,7 @@ select.nf-field:disabled { cursor: not-allowed; }
 /* ==========================================================================
    Rich text / article content — ported BY NAME, not renamed, so their many
    call sites (Activities.razor's sanitised Quill HTML, ArticleDetail.razor's
-   ArticleBlock markup) need no markup change. Rule bodies retuned to the new
+   sanitised article HTML) need no markup change. Rule bodies retuned to the new
    ink/red tokens and type scale; read from wwwroot/app.css:243-271 and
    :374-417 before editing so nothing already relied upon is lost.
    ========================================================================== */
@@ -802,6 +804,10 @@ select.nf-field:disabled { cursor: not-allowed; }
     color: var(--ink);
 }
 
+/* Sanitised article HTML (admin rich-text output): h2/h3, p, ul/ol, blockquote, links, Quill
+   alignment/indent classes. Long words and URLs wrap so a 375px screen never scrolls sideways. */
+.article-content { overflow-wrap: anywhere; }
+
 .article-content h2 {
     font-size: var(--fs-h2);
     font-weight: 700;
@@ -812,6 +818,8 @@ select.nf-field:disabled { cursor: not-allowed; }
     margin-bottom: 1.5rem;
 }
 
+.article-content h2:first-child { margin-top: 0; }
+
 .article-content h3 {
     font-size: var(--fs-h3);
     font-weight: 600;
@@ -821,6 +829,8 @@ select.nf-field:disabled { cursor: not-allowed; }
     margin-bottom: 1rem;
 }
 
+.article-content h3:first-child { margin-top: 0; }
+
 .article-content p {
     font-size: var(--fs-body);
     line-height: 1.7;
@@ -828,10 +838,19 @@ select.nf-field:disabled { cursor: not-allowed; }
     margin-bottom: 1.5rem;
 }
 
-.article-content ul {
-    list-style: disc;
+.article-content ul,
+.article-content ol {
     margin-left: 1.5rem;
     margin-bottom: 1.5rem;
+}
+
+.article-content ul { list-style: disc; }
+.article-content ol { list-style: decimal; }
+
+.article-content li > ul,
+.article-content li > ol {
+    margin-top: .5rem;
+    margin-bottom: 0;
 }
 
 .article-content li {
@@ -845,6 +864,34 @@ select.nf-field:disabled { cursor: not-allowed; }
     color: var(--ink);
     font-weight: 600;
 }
+
+.article-content em { font-style: italic; }
+.article-content u { text-decoration: underline; }
+.article-content s { text-decoration: line-through; }
+
+.article-content blockquote {
+    margin: 0 0 1.5rem;
+    padding: .25rem 0 .25rem 1.25rem;
+    border-left: 2px solid var(--gold);
+    font-style: italic;
+    color: var(--ink-70);
+}
+
+.article-content blockquote p:last-child { margin-bottom: 0; }
+
+.article-content a {
+    color: var(--red);
+    text-decoration: underline;
+    text-underline-offset: .2em;
+}
+
+.article-content .ql-align-center { text-align: center; }
+.article-content .ql-align-right { text-align: right; }
+.article-content .ql-align-justify { text-align: justify; }
+
+.article-content .ql-indent-1 { margin-left: 1.5rem; }
+.article-content .ql-indent-2 { margin-left: 3rem; }
+.article-content .ql-indent-3 { margin-left: 4.5rem; }
 
 /* ==========================================================================
    Breakpoints — filtered to only the selectors already ported above.

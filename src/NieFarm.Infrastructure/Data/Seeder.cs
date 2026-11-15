@@ -26,9 +26,10 @@ public static class Seeder
         await SeedTestimonialsAsync(scope);
         await SeedPartnersAsync(scope);
         await SeedCoffeeRegionsAsync(scope);
+        await SeedArticlesAsync(scope);
         await BackfillOrderStatusHistoryAsync(scope);   // last: a missing table must not skip the seeds above
-    }
         await BackfillOrderPaymentStatusAsync(scope);   // after the status backfill, own try/catch
+    }
 
     /// <summary>
     /// Creates the admin roles and, if absent, the first SuperAdmin. The bootstrap password is
@@ -225,6 +226,62 @@ public static class Seeder
     }
 
     /// <summary>
+    /// Seeds the knowledge section, only when the Articles table is completely empty (checked first,
+    /// so a site with content never touches categories either). Table-empty rather than per-slug, like
+    /// Activities and Testimonials: deleting every article re-seeds the six on the next restart
+    /// (accepted at plan review, R-08). Each seed category is created if missing, matched by name OR
+    /// slug (case-insensitive) so an admin's own category is reused and the unique Slug index is never
+    /// violated. Wrapped in its own try/catch: a content-seed failure is logged and must never stop
+    /// the order backfills that run after it.
+    /// </summary>
+    private static async Task SeedArticlesAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        try
+        {
+            if (await db.Articles.AnyAsync())
+                return;
+
+            var existing = await db.ArticleCategories.ToListAsync();
+            var missing = ArticleSeedData.BuildCategories()
+                .Where(c => !existing.Any(e =>
+                    string.Equals(e.Name, c.Name, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(e.Slug, c.Slug, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            if (missing.Count > 0)
+            {
+                db.ArticleCategories.AddRange(missing);
+                await db.SaveChangesAsync();
+                existing.AddRange(missing);
+                logger.LogInformation("Seeded {Count} article categories", missing.Count);
+            }
+
+            // Resolve each seed category by name first, then by slug (the reused row may differ in name).
+            var idByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var seed in ArticleSeedData.BuildCategories())
+            {
+                var row = existing.FirstOrDefault(e => string.Equals(e.Name, seed.Name, StringComparison.OrdinalIgnoreCase))
+                    ?? existing.FirstOrDefault(e => string.Equals(e.Slug, seed.Slug, StringComparison.OrdinalIgnoreCase));
+                if (row is not null)
+                    idByName[seed.Name] = row.Id;
+            }
+
+            var articles = ArticleSeedData.Build(idByName);
+            db.Articles.AddRange(articles);
+            await db.SaveChangesAsync();
+
+            logger.LogInformation("Seeded {Count} articles", articles.Count);
+        }
+        catch (Exception ex)
+        {
+            db.ChangeTracker.Clear();
+            logger.LogError(ex, "Seeding articles failed; continuing start-up");
+        }
+    }
+
+    /// <summary>
     /// Ensures one CoffeeRegions row exists per CoffeeRegionKey. On an empty table this inserts
     /// all three, exactly like a table-empty guard; it also inserts any single key that is
     /// missing, and it never overwrites an existing row, so admin edits are safe.
@@ -285,7 +342,6 @@ public static class Seeder
                 "Order status history backfill skipped (has the AddOrderStatusHistory migration been applied?)");
         }
     }
-}
 
     /// <summary>
     /// A bank-transfer order can never legitimately be NotApplicable, so move any such row (created
@@ -312,3 +368,4 @@ public static class Seeder
                 "Order payment status backfill skipped (has the AddOrderPayment migration been applied?)");
         }
     }
+}

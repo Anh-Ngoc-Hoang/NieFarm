@@ -69,8 +69,8 @@
 
         // Safe as MarkupString: every value returned by Glyph() below is a compile-time
         // constant selected from a fixed table by Name — nothing here is built from
-        // request/user input (the same reasoning app.css/ArticleBlock rendering relies
-        // on; see CLAUDE.md's MarkupString safety note).
+        // request/user input (a different case from article and activity bodies, which
+        // are sanitised server-side before rendering; see CLAUDE.md's MarkupString safety note).
         _content = new MarkupString(sb.ToString());
     }
 

@@ -373,6 +373,7 @@
     overflow: hidden;
     background: var(--tint-warm);
 }
+.acard__placeholder { position: absolute; inset: 0; background: var(--tint-warm); }
 .acard__media img { width: 100%; height: 100%; object-fit: cover; transition: transform .9s var(--ease); }
 .acard:hover .acard__media img { transform: scale(1.05); }
 .acard__body { padding-top: 1.1rem; display: flex; flex-direction: column; gap: .55rem; }
@@ -400,7 +401,7 @@
 /* ==========================================================================
    /bai-viet/{slug} — Article detail (Phase 3, step 3.3). ".article-content"
    itself lives in nf.css, ported by name. This is just the page's wrapper
-   grid, comment list and sidebar — new because no prototype page covers this
+   grid and sidebar — new because no prototype page covers this
    route (plan §7 Phase 3 intro).
    ========================================================================== */
 .apage { padding-block: clamp(6.5rem, 12vh, 8.5rem) clamp(4rem, 8vw, 6rem); }
@@ -408,19 +409,6 @@
 .apage__meta { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.25rem; font-size: var(--fs-xs); color: var(--ink-38); margin-bottom: 1.5rem; }
 .apage__hero { aspect-ratio: 16 / 9; border-radius: var(--r-lg); overflow: hidden; background: var(--tint-warm); }
 .apage__hero img { width: 100%; height: 100%; object-fit: cover; }
-
-.apage__comments { display: grid; }
-.apage__comment { display: flex; gap: 1rem; padding-block: 1.5rem; border-top: 1px solid var(--line); }
-.apage__comment-avatar {
-    width: 2.75rem; height: 2.75rem;
-    border-radius: 50%;
-    background: var(--tint-warm);
-    color: var(--red);
-    display: grid;
-    place-items: center;
-    font-weight: 700;
-    flex: none;
-}
 
 .apage__sidebar { display: grid; gap: 1.75rem; align-self: start; }
 .apage__side-card h2 { font-size: var(--fs-h3); margin-bottom: 1.25rem; }

@@ -93,12 +93,17 @@
                 </div>
 
                 <div style="margin-top:16px;">
-                    <label class="form-label-admin" for="a-body">Body (HTML)</label>
-                    <textarea id="a-body" class="form-control-admin" style="min-height:220px;font-family:ui-monospace,monospace;font-size:13px;"
-                              @bind="_model.Body"></textarea>
+                    <label class="form-label-admin">Body</label>
+                    @* Keyed so reopening the modal on another article remounts the editor -
+                       Quill never re-reads Value after it initialises. *@
+                    <RichTextEditor @key="@($"body-{_editorKey}")"
+                                    Value="@_model.Body"
+                                    ValueChanged="value => _model.Body = value"
+                                    Toolbar="RichTextEditor.ToolbarKind.Full"
+                                    MinHeight="320"
+                                    Placeholder="Article body…" />
                     <div class="cell-muted" style="font-size:12px;margin-top:4px;">
-                        Paragraphs, headings and lists as HTML. This is rendered as markup on the public
-                        page, so only paste content you trust until sanitisation is added.
+                        Headings, lists, links and quotes. Unsupported markup is removed when saving.
                     </div>
                 </div>
 
@@ -148,6 +153,7 @@
     private string _persistedHeroImageUrl = string.Empty;
     private List<string> _errors = [];
 
+    private Guid _editorKey = Guid.NewGuid();
     private bool _visible;
     private bool _saving;
     private bool _cardUploading;
@@ -163,6 +169,7 @@
         _persistedImageUrl = string.Empty;
         _persistedHeroImageUrl = string.Empty;
         _errors = [];
+        _editorKey = Guid.NewGuid();
         _visible = true;
         StateHasChanged();
     }
@@ -193,6 +200,7 @@
         _persistedImageUrl = article.ImageUrl;
         _persistedHeroImageUrl = article.HeroImageUrl;
         _errors = [];
+        _editorKey = Guid.NewGuid();
         _visible = true;
         StateHasChanged();
     }

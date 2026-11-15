@@ -36,6 +36,9 @@ public class SaveArticleCommandValidator : AbstractValidator<SaveArticleCommand>
         RuleFor(x => x.HeroImageAlt)
             .MaximumLength(300);
 
+        RuleFor(x => x.Body)
+            .MaximumLength(200_000).WithMessage("Body is too long (200,000 characters maximum).");
+
         RuleFor(x => x.PublishedOn)
             .NotEqual(default(DateOnly)).WithMessage("Publish date is required.");
     }

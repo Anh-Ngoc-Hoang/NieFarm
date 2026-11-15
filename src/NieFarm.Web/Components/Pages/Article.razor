@@ -1,13 +1,19 @@
 @page "/kien-thuc"
+@using NieFarm.Application.Features.Articles.Dtos
+@using NieFarm.Application.Features.Articles.Queries
+@inject ISender Sender
+@inject NavigationManager Navigation
+@implements IDisposable
 
 @*
-    Full markup rewrite onto the NieFarm 2.0 design language (docs/plans/public-site-redesign-nf2.md
-    §7, step 3.2). @code is unchanged (_query/_category client-side filtering over SiteContent.Articles).
-    Header reuses the ".shophead" vocabulary from Shop.razor; search input -> ".nf-field"; category
-    <select> -> ".sortwrap select" (same pattern as Shop's sort control). Cards -> the new ".acard"
-    (nf-pages.css) — 16:9 media, category eyebrow, date, ".linkline". The grid container reuses
-    ".grid-products" (already shared by Shop and PDP's related-products band; extended here to a
-    third listing grid rather than duplicating the same responsive column rules under a new name).
+    NieFarm 2.0 design language (docs/plans/public-site-redesign-nf2.md). Data comes from
+    GetArticlesQuery / GetArticleCategoriesQuery (docs/plans/R-08-articles-real-data.md): only
+    published articles in visible categories, filtered on the server by category Id and search term.
+    The category lives in the URL as ?danh-muc={slug} (mapped to an Id against the loaded categories;
+    unknown slug = "Tất cả"). Header reuses the ".shophead" vocabulary from Shop.razor; search input ->
+    ".nf-field"; category <select> -> ".sortwrap select". Cards -> ".acard" (nf-pages.css) inside the
+    shared ".grid-products" grid. "data-reveal" sits on a card whose class is static — never add a
+    Razor class expression to it.
 *@
 
 <PageTitle>Kiến thức cà phê - Nie Farm Việt Nam</PageTitle>
@@ -37,15 +43,16 @@
                 <NfIcon Name="search" Size="17" />
             </span>
             <input id="article-search" type="search" class="nf-field" style="padding-left:2.75rem"
-                   placeholder="Tìm kiếm bài viết..." @bind="_query" @bind:event="oninput" />
+                   placeholder="Tìm kiếm bài viết..." maxlength="100"
+                   @bind="_query" @bind:event="oninput" @bind:after="OnSearchChangedAsync" />
         </div>
         <label class="sortwrap">
             Danh mục
-            <select @bind="_category">
+            <select @bind="_selectedSlug" @bind:after="OnCategoryChanged">
                 <option value="">Tất cả danh mục</option>
-                @foreach (var category in SiteContent.ArticleCategories)
+                @foreach (var category in _categories)
                 {
-                    <option value="@category">@category</option>
+                    <option value="@category.Slug">@category.Name</option>
                 }
             </select>
         </label>
@@ -54,29 +61,42 @@
 
 <section style="padding-bottom:clamp(3rem,7vw,6rem)">
     <div class="shell">
-        @if (FilteredArticles.Any())
+        @if (_articles.Count > 0)
         {
             <div class="grid-products">
-                @foreach (var article in FilteredArticles)
+                @foreach (var article in _articles)
                 {
                     <article class="acard" data-reveal="fade">
-                        <a class="acard__media" href="@article.Url">
-                            <img src="@article.ImageUrl" alt="@article.ImageAlt" />
+                        <a class="acard__media" href="/bai-viet/@article.Slug">
+                            @if (article.ImageUrl is not null)
+                            {
+                                <img src="@article.ImageUrl" alt="@article.ImageAlt" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span class="acard__placeholder" aria-hidden="true"></span>
+                            }
                         </a>
                         <div class="acard__body">
                             <div class="acard__meta">
-                                <span class="acard__cat">@article.Category</span>
+                                <span class="acard__cat">@article.CategoryName</span>
                                 <span>@article.PublishedOn.ToString("dd/MM/yyyy")</span>
                             </div>
-                            <h2 class="acard__title"><a href="@article.Url">@article.Title</a></h2>
+                            <h2 class="acard__title"><a href="/bai-viet/@article.Slug">@article.Title</a></h2>
                             <p class="acard__summary">@article.Summary</p>
-                            <a class="linkline" href="@article.Url">
+                            <a class="linkline" href="/bai-viet/@article.Slug">
                                 Đọc tiếp <NfIcon Name="arrow-right" Size="15" />
                             </a>
                         </div>
                     </article>
                 }
             </div>
+        }
+        else if (_categoryId is null && string.IsNullOrWhiteSpace(_query))
+        {
+            <p class="muted" style="text-align:center;padding-block:4rem">
+                Chưa có bài viết nào. Hãy quay lại sau nhé.
+            </p>
         }
         else
         {
@@ -88,14 +108,141 @@
 </section>
 
 @code {
-    private string _query = string.Empty;
-    private string _category = string.Empty;
+    private const int SearchDebounceMs = 300;
 
-    // Client-side filtering over fixture data; the real listing becomes a paged query.
-    private IEnumerable<SiteContent.Article> FilteredArticles =>
-        SiteContent.Articles.Where(a =>
-            (string.IsNullOrWhiteSpace(_category) || a.Category == _category)
-            && (string.IsNullOrWhiteSpace(_query)
-                || a.Title.Contains(_query, StringComparison.OrdinalIgnoreCase)
-                || a.Summary.Contains(_query, StringComparison.OrdinalIgnoreCase)));
+    /// <summary>
+    /// Initial categories + articles for the category in the URL (no search term), carried across the
+    /// prerender -> interactive hop so the grid does not flash empty. A failed deserialisation just
+    /// falls back to re-querying.
+    /// </summary>
+    public record ListingData(
+        IReadOnlyList<ArticleCategoryFilterDto> Categories,
+        IReadOnlyList<ArticleCardDto> Articles,
+        string? CategorySlug);
+
+    [SupplyParameterFromQuery(Name = "danh-muc")]
+    public string? CategorySlug { get; set; }
+
+    [PersistentState]
+    public ListingData? Data { get; set; }
+
+    private IReadOnlyList<ArticleCategoryFilterDto> _categories = [];
+    private IReadOnlyList<ArticleCardDto> _articles = [];
+    private string _query = string.Empty;
+    private string _selectedSlug = string.Empty;
+    private int? _categoryId;
+    private string? _loadedSlug;
+    private string? _desiredSlug;
+    private bool _loaded;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var slug = string.IsNullOrWhiteSpace(CategorySlug) ? null : CategorySlug.Trim().ToLowerInvariant();
+        _desiredSlug = slug;
+
+        if (_loaded && slug == _loadedSlug)
+            return;
+
+        if (!_loaded && Data is not null && Data.CategorySlug == slug)
+        {
+            _categories = Data.Categories;
+            _articles = Data.Articles;
+            ResolveCategory(slug);
+            _loadedSlug = slug;
+            _loaded = true;
+            return;
+        }
+
+        await ApplyAsync(slug, CancelPrevious().Token);
+    }
+
+    /// <summary>
+    /// Loads the listing for <paramref name="slug"/> and publishes it only if this is still the latest
+    /// request. The "loaded" state (_loadedSlug/_loaded) is written together with the grid and only on
+    /// success, so a cancelled load leaves the next OnParametersSet to reload instead of showing a
+    /// select for one category over a grid of another.
+    /// </summary>
+    private async Task ApplyAsync(string? slug, CancellationToken token)
+    {
+        try
+        {
+            var categories = _categories.Count == 0
+                ? await Sender.Send(new GetArticleCategoriesQuery(), token)
+                : _categories;
+            var match = slug is null
+                ? null
+                : categories.FirstOrDefault(c => string.Equals(c.Slug, slug, StringComparison.OrdinalIgnoreCase));
+            var articles = await Sender.Send(new GetArticlesQuery(match?.Id, _query), token);
+
+            if (token.IsCancellationRequested)
+                return;
+
+            _categories = categories;
+            _categoryId = match?.Id;
+            _selectedSlug = match?.Slug ?? string.Empty;
+            _articles = articles;
+            _loadedSlug = slug;
+            _loaded = true;
+            if (string.IsNullOrWhiteSpace(_query))
+                Data = new ListingData(_categories, _articles, slug);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer request or the component was disposed.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Same, if the component was disposed mid-flight.
+        }
+    }
+
+    private void ResolveCategory(string? slug)
+    {
+        var match = slug is null
+            ? null
+            : _categories.FirstOrDefault(c => string.Equals(c.Slug, slug, StringComparison.OrdinalIgnoreCase));
+        _categoryId = match?.Id;
+        _selectedSlug = match?.Slug ?? string.Empty;
+    }
+
+    private CancellationTokenSource CancelPrevious()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        return _cts;
+    }
+
+    private void OnCategoryChanged()
+    {
+        // The URL is the source of truth: changing it re-runs OnParametersSetAsync, which reloads.
+        var slug = string.IsNullOrEmpty(_selectedSlug) ? null : _selectedSlug;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("danh-muc", slug), replace: true);
+    }
+
+    private async Task OnSearchChangedAsync()
+    {
+        // Capture the token before any await: a newer keystroke disposes this CTS.
+        var token = CancelPrevious().Token;
+        try
+        {
+            await Task.Delay(SearchDebounceMs, token);
+            // Always reload for the category in the URL, so a category change whose load was cancelled
+            // by typing cannot leave the grid on the previous category.
+            await ApplyAsync(_desiredSlug, token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
 }

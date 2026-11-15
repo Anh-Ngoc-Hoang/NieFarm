@@ -1,22 +1,26 @@
 @page "/bai-viet/{Slug}"
+@using NieFarm.Application.Features.Articles.Dtos
+@using NieFarm.Application.Features.Articles.Queries
+@using NieFarm.Application.Features.Products.Dtos
+@using NieFarm.Application.Features.Products.Queries
+@inject ISender Sender
 @inject NavigationManager Navigation
 
 @*
-    Full markup rewrite onto the NieFarm 2.0 design language (docs/plans/public-site-redesign-nf2.md
-    §7, step 3.3). The ArticleBlock switch and MarkupString rendering are kept exactly as they are —
-    the compile-time-constant safety note in CLAUDE.md still applies, this is presentation only.
-    ".premium-divider" -> ".hairline"; the ".dotted-overlay" CTA banner -> the ".cupout" ink panel
-    (already in nf-pages.css from /quy-trinh); comments -> a hairline list; sidebar -> a sticky
-    column (".apage__sidebar", nf-pages.css). ".article-content" itself is retuned in nf.css
-    (ported by name, unchanged here).
+    NieFarm 2.0 design language. Data comes from GetArticleDetailQuery (docs/plans/R-08-articles-real-data.md):
+    an unknown / unpublished / hidden-category slug is a real 404. The body is admin-authored HTML,
+    rendered through MarkupString; that is safe only because GetArticleDetailQueryHandler sanitises
+    it server-side on every read (as well as on write). Never render a body that did not come
+    through that query. ".premium-divider" -> ".hairline"; CTA banner -> ".cupout"; sidebar -> a
+    sticky column (".apage__sidebar"). No Tags row and no comments: there is no data behind them.
 *@
 
-@if (_article is not null)
+@if (Data is { } data)
 {
-    <PageTitle>@_article.Title - Nie Farm Việt Nam</PageTitle>
+    <PageTitle>@data.Article.Title - Nie Farm Việt Nam</PageTitle>
 
     <HeadContent>
-        <meta name="description" content="@_article.Summary" />
+        <meta name="description" content="@data.Article.Summary" />
     </HeadContent>
 
     <section class="apage">
@@ -25,136 +29,71 @@
             @* Article body *@
             <article style="min-width:0">
                 <div class="apage__meta">
-                    <a class="chip" href="/kien-thuc">@_article.Category</a>
+                    <a class="chip" href="/kien-thuc?danh-muc=@Uri.EscapeDataString(data.Article.CategorySlug)">@data.Article.CategoryName</a>
                     <span style="display:inline-flex;align-items:center;gap:.4rem">
-                        <NfIcon Name="calendar" Size="15" /> @_article.PublishedOn.ToString("dd/MM/yyyy")
+                        <NfIcon Name="calendar" Size="15" /> @data.Article.PublishedOn.ToString("dd/MM/yyyy")
                     </span>
                     <span style="display:inline-flex;align-items:center;gap:.4rem">
-                        <NfIcon Name="user" Size="15" /> @_article.Author
+                        <NfIcon Name="user" Size="15" /> @data.Article.Author
                     </span>
                 </div>
 
-                <h1 style="margin-bottom:0">@_article.Title</h1>
+                <h1 style="margin-bottom:0">@data.Article.Title</h1>
 
-                <figure class="apage__hero" style="margin:2rem 0 clamp(2.5rem,5vw,3.5rem)">
-                    <img src="@_article.HeroImageUrl" alt="@_article.HeroImageAlt" />
-                </figure>
+                @if (data.Article.HeroImageUrl is not null)
+                {
+                    <figure class="apage__hero" style="margin:2rem 0 clamp(2.5rem,5vw,3.5rem)">
+                        <img src="@data.Article.HeroImageUrl" alt="@data.Article.HeroImageAlt" />
+                    </figure>
+                }
+                else
+                {
+                    <div style="margin-bottom:clamp(2.5rem,5vw,3.5rem)"></div>
+                }
 
                 <div class="article-content">
-                    @if (_article.Blocks.Length == 0)
+                    @if (string.IsNullOrWhiteSpace(data.Article.BodyHtml))
                     {
-                        <p>@_article.Summary</p>
+                        <p>@data.Article.Summary</p>
                         <p>Nội dung đầy đủ của bài viết đang được cập nhật.</p>
                     }
                     else
                     {
-                        @foreach (var block in _article.Blocks)
-                        {
-                            switch (block.Kind)
-                            {
-                                case SiteContent.ArticleBlockKind.Heading2:
-                                    <h2>@block.Html</h2>
-                                    break;
-
-                                case SiteContent.ArticleBlockKind.Heading3:
-                                    <h3>@block.Html</h3>
-                                    break;
-
-                                case SiteContent.ArticleBlockKind.Paragraph:
-                                    <p>@((MarkupString)block.Html!)</p>
-                                    break;
-
-                                case SiteContent.ArticleBlockKind.BulletList:
-                                    <ul>
-                                        @foreach (var item in block.Items!)
-                                        {
-                                            <li>@((MarkupString)item)</li>
-                                        }
-                                    </ul>
-                                    break;
-
-                                case SiteContent.ArticleBlockKind.Image:
-                                    <figure class="apage__hero" style="margin:2rem 0">
-                                        <img src="@block.ImageUrl" alt="@block.ImageAlt" />
-                                    </figure>
-                                    break;
-                            }
-                        }
+                        @* Safe: BodyHtml is sanitised server-side in GetArticleDetailQueryHandler. *@
+                        @((MarkupString)data.Article.BodyHtml)
                     }
                 </div>
 
-                @* Tags and share *@
+                @* Share *@
                 <hr class="hairline" style="margin-top:3rem" />
-                <div style="padding-top:1.75rem;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:1.25rem">
-                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:.5rem">
-                        <span class="muted" style="font-size:var(--fs-xs)">Tags:</span>
-                        @foreach (var tag in _article.Tags)
-                        {
-                            <span class="chip">@tag</span>
-                        }
-                    </div>
+                <div style="padding-top:1.75rem;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:1.25rem">
                     <div style="display:flex;align-items:center;gap:.75rem">
                         <span class="muted" style="font-size:var(--fs-xs)">Chia sẻ:</span>
-                        <button type="button" class="iconbtn" style="box-shadow:inset 0 0 0 1px var(--line)" aria-label="Chia sẻ bài viết">
+                        <button type="button" class="iconbtn" style="box-shadow:inset 0 0 0 1px var(--line)"
+                                data-copy="@Navigation.Uri" aria-label="Sao chép liên kết bài viết" title="Sao chép liên kết">
                             <NfIcon Name="share" Size="17" />
                         </button>
                     </div>
                 </div>
-
-                @* Comments *@
-                <section style="margin-top:clamp(3rem,6vw,4.5rem)">
-                    <h2>Bình luận (@_article.Comments.Length)</h2>
-
-                    <div class="reviews__form" style="margin-top:1.75rem">
-                        <label class="sr-only" for="comment">Bình luận của bạn</label>
-                        <textarea id="comment" rows="4" class="nf-field"
-                                  placeholder="Chia sẻ suy nghĩ của bạn về bài viết này..."></textarea>
-                        <div style="display:flex;justify-content:flex-end;margin-top:1rem">
-                            <button type="button" class="btn"><span>Gửi bình luận</span></button>
-                        </div>
-                    </div>
-
-                    @if (_article.Comments.Length == 0)
-                    {
-                        <p class="muted" style="margin-top:1.75rem">
-                            Chưa có bình luận nào. Hãy là người đầu tiên chia sẻ cảm nhận.
-                        </p>
-                    }
-                    else
-                    {
-                        <div class="apage__comments" style="margin-top:1.75rem">
-                            @foreach (var comment in _article.Comments)
-                            {
-                                <div class="apage__comment">
-                                    <span class="apage__comment-avatar" aria-hidden="true">@comment.Initials</span>
-                                    <div>
-                                        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:.6rem;margin-bottom:.3rem">
-                                            <span style="font-weight:600">@comment.Name</span>
-                                            <span class="muted" style="font-size:var(--fs-xs)">@comment.Ago</span>
-                                        </div>
-                                        <p class="muted" style="font-size:var(--fs-sm)">@comment.Text</p>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    }
-                </section>
             </article>
 
             @* Sidebar *@
             <aside class="apage__sidebar">
 
-                @if (_related.Count > 0)
+                @if (data.Article.Related.Count > 0)
                 {
                     <div class="apage__side-card">
                         <h2>Bài viết liên quan</h2>
                         <ul class="apage__side-list">
-                            @foreach (var related in _related)
+                            @foreach (var related in data.Article.Related)
                             {
                                 <li class="apage__side-item">
-                                    <a href="@related.Url" style="display:contents">
+                                    <a href="/bai-viet/@related.Slug" style="display:contents">
                                         <span class="apage__side-thumb">
-                                            <img src="@related.ImageUrl" alt="@related.ImageAlt" />
+                                            @if (related.ImageUrl is not null)
+                                            {
+                                                <img src="@related.ImageUrl" alt="@related.ImageAlt" loading="lazy" />
+                                            }
                                         </span>
                                         <span>
                                             <span style="display:block;font-weight:600;line-height:1.35;margin-bottom:.35rem">
@@ -172,10 +111,12 @@
                     <hr class="hairline" />
                 }
 
+                @if (data.SidebarProducts.Count > 0)
+                {
                 <div class="apage__side-card">
                     <h2>Sản phẩm nổi bật</h2>
                     <ul class="apage__side-list">
-                        @foreach (var product in SiteContent.ArticleSidebarProducts)
+                        @foreach (var product in data.SidebarProducts)
                         {
                             <li class="apage__side-item">
                                 <a href="@($"/san-pham/{product.Slug}")" style="display:contents">
@@ -195,6 +136,7 @@
                     </ul>
                 </div>
                 <hr class="hairline" />
+                }
 
                 <div class="cupout" style="padding:clamp(1.75rem,4vw,2.5rem);text-align:left">
                     <div class="cupout__glow" aria-hidden="true"></div>
@@ -210,24 +152,44 @@
 }
 
 @code {
+    /// <summary>
+    /// The article plus the sidebar products, kept as one [PersistentState] blob so the interactive
+    /// render after prerendering does not re-query and flash an empty shell. The slug check in
+    /// OnParametersSetAsync also covers in-circuit /bai-viet/a -> /bai-viet/b navigation.
+    /// </summary>
+    public record DetailData(ArticleDetailDto Article, IReadOnlyList<ProductCardDto> SidebarProducts);
+
     [Parameter]
     public string? Slug { get; set; }
 
-    private SiteContent.Article? _article;
-    private List<SiteContent.Article> _related = [];
+    [PersistentState]
+    public DetailData? Data { get; set; }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        _article = SiteContent.Articles.FirstOrDefault(a =>
-            string.Equals(a.Slug, Slug, StringComparison.OrdinalIgnoreCase));
+        var slug = (Slug ?? string.Empty).Trim().ToLowerInvariant();
 
-        if (_article is null)
+        if (Data is not null && string.Equals(Data.Article.Slug, slug, StringComparison.Ordinal))
+            return;
+
+        // Both are read-only queries on their own contexts, so they can run in parallel.
+        var articleTask = Sender.Send(new GetArticleDetailQuery(slug));
+        var productsTask = Sender.Send(new GetHomeFeaturedProductsQuery(2));
+        await Task.WhenAll(articleTask, productsTask);
+
+        var article = await articleTask;
+        // A newer navigation (a -> b -> c) may have changed Slug while this one was in flight.
+        if (!string.Equals((Slug ?? string.Empty).Trim().ToLowerInvariant(), slug, StringComparison.Ordinal))
+            return;
+
+        if (article is null)
         {
+            Data = null;
             // Render the 404 page with a real 404 status rather than an empty article shell.
             Navigation.NotFound();
             return;
         }
 
-        _related = SiteContent.RelatedArticles(_article).ToList();
+        Data = new DetailData(article, await productsTask);
     }
 }

@@ -12,7 +12,8 @@ public class SaveArticleCommandHandler(
     IRepositoryBase<Article> repository,
     IReadRepositoryBase<ArticleCategory> categories,
     IImageStorage imageStorage,
-    ISlugGenerator slugGenerator)
+    ISlugGenerator slugGenerator,
+    IHtmlSanitizer htmlSanitizer)
     : IRequestHandler<SaveArticleCommand, Result<int>>
 {
     public async Task<Result<int>> Handle(SaveArticleCommand request, CancellationToken cancellationToken)
@@ -21,6 +22,8 @@ public class SaveArticleCommandHandler(
         var category = await categories.GetByIdAsync(request.CategoryId, cancellationToken);
         if (category is null)
             return Result<int>.Error("Select an existing category.");
+
+        var body = htmlSanitizer.Sanitize(request.Body);
 
         var slug = slugGenerator.Generate(
             string.IsNullOrWhiteSpace(request.Slug) ? request.Title : request.Slug);
@@ -41,7 +44,7 @@ public class SaveArticleCommandHandler(
             existing.Update(
                 request.Title, slug, request.CategoryId, request.Author, request.Summary,
                 request.ImageUrl, request.ImageAlt, request.HeroImageUrl, request.HeroImageAlt,
-                request.Body, request.PublishedOn, request.IsPublished);
+                body, request.PublishedOn, request.IsPublished);
 
             await repository.UpdateAsync(existing, cancellationToken);
 
@@ -58,7 +61,7 @@ public class SaveArticleCommandHandler(
         var article = Article.Create(
             request.Title, slug, request.CategoryId, request.Author, request.Summary,
             request.ImageUrl, request.ImageAlt, request.HeroImageUrl, request.HeroImageAlt,
-            request.Body, request.PublishedOn, request.IsPublished);
+            body, request.PublishedOn, request.IsPublished);
 
         await repository.AddAsync(article, cancellationToken);
         return Result<int>.Success(article.Id);
