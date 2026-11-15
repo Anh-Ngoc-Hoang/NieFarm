@@ -7,10 +7,12 @@ namespace NieFarm.Application.Features.Carts.Commands;
 /// <summary>
 /// Adds the given product/variant selection to the shopper's cart (or increments an existing
 /// matching line). No price, name or image ever crosses this boundary — they are always
-/// re-derived from the Products table inside the handler (security.md).
+/// re-derived from the Products table inside the handler (security.md). Province is a pricing
+/// input only (shipping zone) for the returned cart; it is never stored.
 /// </summary>
 public record AddToCartCommand(
     int ProductId,
     IReadOnlyList<string> SelectedOptionValues,
     int Quantity,
-    string? AnonymousId) : IRequest<Result<CartDto>>;
+    string? AnonymousId,
+    string? Province = null) : IRequest<Result<CartDto>>;

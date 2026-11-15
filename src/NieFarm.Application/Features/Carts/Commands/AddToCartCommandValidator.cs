@@ -18,6 +18,8 @@ public class AddToCartCommandValidator : AbstractValidator<AddToCartCommand>
             .NotNull().WithMessage("Vui lòng chọn phiên bản sản phẩm hợp lệ.")
             .Must(v => v.Count <= 10).WithMessage("Vui lòng chọn phiên bản sản phẩm hợp lệ.");
 
+        RuleFor(x => x.Province).MaximumLength(120);
+
         RuleForEach(x => x.SelectedOptionValues)
             .NotEmpty().WithMessage("Vui lòng chọn phiên bản sản phẩm hợp lệ.")
             .MaximumLength(100).WithMessage("Vui lòng chọn phiên bản sản phẩm hợp lệ.");

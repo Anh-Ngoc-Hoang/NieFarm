@@ -35,6 +35,8 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
 
         builder.Property(o => o.ShippingFee).HasPrecision(18, 2);
         builder.Property(o => o.Discount).HasPrecision(18, 2);
+        builder.Property(o => o.ShippingProvince).HasMaxLength(120);
+        builder.Property(o => o.ShippingZoneName).HasMaxLength(100);
 
         // Subtotal and Total are computed from the lines, never stored.
         builder.Ignore(o => o.Subtotal);

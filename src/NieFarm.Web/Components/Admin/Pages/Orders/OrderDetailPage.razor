@@ -263,11 +263,14 @@ else
                     <dt class="cell-muted">Subtotal</dt>
                     <dd style="margin:0;text-align:right;">@Money.Vnd(_order.Subtotal)</dd>
 
-                    <dt class="cell-muted">Shipping</dt>
-                    <dd style="margin:0;text-align:right;">@Money.Vnd(_order.ShippingFee)</dd>
+                    <dt class="cell-muted">Shipping@(ShippingBasis is { } basis ? $" ({basis})" : null)</dt>
+                    <dd style="margin:0;text-align:right;">@(_order.ShippingFee == 0m ? "Free" : Money.Vnd(_order.ShippingFee))</dd>
 
-                    <dt class="cell-muted">Discount</dt>
-                    <dd style="margin:0;text-align:right;">-@Money.Vnd(_order.Discount)</dd>
+                    @if (_order.Discount > 0m)
+                    {
+                        <dt class="cell-muted">Discount</dt>
+                        <dd style="margin:0;text-align:right;">-@Money.Vnd(_order.Discount)</dd>
+                    }
 
                     <dt class="cell-primary">Total</dt>
                     <dd class="cell-primary" style="margin:0;text-align:right;">@Money.Vnd(_order.Total)</dd>
@@ -285,6 +288,12 @@ else
     [Parameter] public int Id { get; set; }
 
     private OrderDetailDto? _order;
+
+    // "Zone Tây Nguyên, Đắk Lắk" or "Base fee, Hà Nội"; null for orders placed before zones existed.
+    private string? ShippingBasis =>
+        _order is null || string.IsNullOrWhiteSpace(_order.ShippingProvince)
+            ? null
+            : $"{(string.IsNullOrWhiteSpace(_order.ShippingZoneName) ? "Base fee" : $"Zone {_order.ShippingZoneName}")}, {_order.ShippingProvince}";
     private OrderStatusChangeModal? _modal;
     private OrderPaymentModal? _paymentModal;
     private string? _modalError;

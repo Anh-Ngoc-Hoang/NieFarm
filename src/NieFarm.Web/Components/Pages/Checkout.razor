@@ -10,6 +10,7 @@
 @using NieFarm.Application.Features.Orders.Commands
 @using NieFarm.Application.Features.Payments.Dtos
 @using NieFarm.Application.Features.Payments.Queries
+@using NieFarm.Application.Features.Shipping
 @using NieFarm.Domain.Entities
 @using NieFarm.Domain.Enums
 @using NieFarm.Web.Services.Cart
@@ -106,7 +107,7 @@
                     {
                         <div class="alert" style="background:var(--tint-warm);color:var(--ink-70);display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.25rem">
                             <span>Đã xóa @_lastRemoved.Value.Name.</span>
-                            <button type="button" class="linkbtn" @onclick="UndoRemoveAsync">Hoàn tác</button>
+                            <button type="button" class="linkbtn" disabled="@(_updating || _submitting)" @onclick="UndoRemoveAsync">Hoàn tác</button>
                         </div>
                     }
 
@@ -162,14 +163,14 @@
 
                                     <div class="checkout__cart-item-actions">
                                         <div class="qty">
-                                            <button type="button" disabled="@(_updating || line.Quantity <= 1)"
+                                            <button type="button" disabled="@(_updating || _submitting || line.Quantity <= 1)"
                                                     @onclick="() => DecrementAsync(line)" aria-label="Giảm số lượng @line.Name">
                                                 <NfIcon Name="minus" Size="15" />
                                             </button>
-                                            <input type="number" min="1" max="99" value="@line.Quantity" disabled="@_updating"
+                                            <input type="number" min="1" max="99" value="@line.Quantity" disabled="@(_updating || _submitting)"
                                                    aria-label="Số lượng @line.Name"
                                                    @onchange="e => OnQuantityInputAsync(line, e)" />
-                                            <button type="button" disabled="@_updating"
+                                            <button type="button" disabled="@(_updating || _submitting)"
                                                     @onclick="() => IncrementAsync(line)" aria-label="Tăng số lượng @line.Name">
                                                 <NfIcon Name="plus" Size="15" />
                                             </button>
@@ -180,7 +181,7 @@
                                             <span class="muted" style="font-size:var(--fs-xs)">@Money.Vnd(line.UnitPrice)/sp</span>
                                         </div>
 
-                                        <button type="button" class="iconbtn checkout__remove" disabled="@_updating"
+                                        <button type="button" class="iconbtn checkout__remove" disabled="@(_updating || _submitting)"
                                                 @onclick="() => RemoveAsync(line)" aria-label="Xóa @line.Name khỏi giỏ hàng">
                                             <NfIcon Name="close" Size="17" />
                                         </button>
@@ -227,7 +228,7 @@
                             <div class="nf-row nf-row--2">
                                 <div>
                                     <label class="nf-label" for="province">Tỉnh / Thành phố *</label>
-                                    <input id="province" type="text" placeholder="Nhập tỉnh/thành phố" @bind="_provinceName" class="nf-field" />
+                                    <input id="province" type="text" placeholder="Nhập tỉnh/thành phố" @bind="_provinceName" @bind:after="RefreshCartAsync" class="nf-field" />
                                 </div>
                                 <div>
                                     <label class="nf-label" for="ward">Phường / Xã *</label>
@@ -316,10 +317,15 @@
                         <dd>@Money.Vnd(_cart?.Subtotal ?? 0m)</dd>
                     </div>
                     <div class="row">
-                        <dt>Phí vận chuyển</dt>
-                        <dd>@Money.Vnd(_cart?.ShippingFee ?? 0m)</dd>
+                        <dt>@ShippingLabel</dt>
+                        <dd>@(IsFreeShipping ? "Miễn phí" : Money.Vnd(_cart?.ShippingFee ?? 0m))</dd>
                     </div>
                 </dl>
+
+                @if (ShippingNote is { } shippingNote)
+                {
+                    <p class="checkout__ship-hint" role="status">@shippingNote</p>
+                }
 
                 <div class="checkout__promo">
                     <label class="sr-only" for="promo">Mã giảm giá</label>
@@ -407,6 +413,7 @@
     [CascadingParameter(Name = "CartAnonymousId")] public string? CartAnonymousId { get; set; }
     private CartDto? _cart;
     private bool _updating;
+    private string? _pricedProvince;   // the province the current _cart was priced for
     private bool _cartUnavailable;   // no user and no cookie — cookies blocked
     private (int ProductId, string VariantKey, string Name, int Quantity)? _lastRemoved;
 
@@ -430,6 +437,43 @@
     private List<string> _errors = [];
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // The province name that prices the shipping and is printed on the address: the picked entry,
+    // or the typed text when the address lookup is unavailable. Null until one is chosen.
+    private string? CurrentProvince
+    {
+        get
+        {
+            var name = _addressLookupFailed
+                ? _provinceName
+                : _provinces.FirstOrDefault(p => p.Code.ToString() == _provinceCode)?.Name;
+            return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        }
+    }
+
+    private bool IsFreeShipping => _cart is { ItemCount: > 0, ShippingFee: 0m };
+
+    private string ShippingLabel =>
+        CurrentProvince is null ? "Phí vận chuyển (dự kiến)"
+        : !string.IsNullOrWhiteSpace(_cart?.ShippingZoneName) ? $"Phí vận chuyển ({_cart!.ShippingZoneName})"
+        : "Phí vận chuyển";
+
+    // One line under the totals: why a province did not match, or how close free shipping is.
+    private string? ShippingNote
+    {
+        get
+        {
+            if (_cart is not { ItemCount: > 0 })
+                return null;
+            if (CurrentProvince is not null && !_cart.ShippingProvinceResolved)
+                return ShippingMessages.ProvinceNotRecognised;
+            if (_cart.FreeShippingRemaining is { } remaining and > 0)
+                return ShippingMessages.FreeShippingHint(remaining);
+            if (_cart.FreeShippingThreshold is not null && _cart.ShippingFee == 0m)
+                return ShippingMessages.FreeShippingReached;
+            return null;
+        }
+    }
 
     private string WardPlaceholder =>
         _wardsLoading ? "Đang tải..." : string.IsNullOrEmpty(_provinceCode) ? "Chọn Tỉnh/Thành trước" : "Chọn Phường/Xã";
@@ -466,7 +510,8 @@
             try
             {
                 await CartState.EnsureInitializedAsync(userId, CartAnonymousId);
-                _cart = await Sender.Send(new GetCartQuery(CartAnonymousId), _cts.Token);
+                _pricedProvince = CurrentProvince;
+                _cart = await Sender.Send(new GetCartQuery(CartAnonymousId, _pricedProvince), _cts.Token);
             }
             catch (OperationCanceledException) { /* circuit tore down */ }
         }
@@ -509,17 +554,19 @@
     {
         // Every mutation is a write on the shared scoped AppDbContext — parallel sends would
         // throw "A second operation was started on this context instance…" (data-access.md).
-        if (_updating) return;
+        if (_updating || _submitting) return;
         _updating = true;
 
         try
         {
             var clamped = Math.Clamp(quantity, 1, Cart.MaxQuantityPerItem);
-            var result = await Sender.Send(new SetCartLineQuantityCommand(productId, variantKey, clamped, CartAnonymousId), _cts.Token);
+            var province = CurrentProvince;
+            var result = await Sender.Send(new SetCartLineQuantityCommand(productId, variantKey, clamped, CartAnonymousId, province), _cts.Token);
 
             if (result.IsSuccess)
             {
                 _cart = result.Value;
+                _pricedProvince = province;
                 CartState.Set(_cart.ItemCount);
                 _errors = [];
                 _lastRemoved = null;
@@ -534,20 +581,26 @@
         }
         catch (OperationCanceledException) { /* circuit tore down */ }
         finally { _updating = false; }
+
+        // A province change that arrived while this write was in flight was skipped; catch up.
+        if (CurrentProvince != _pricedProvince)
+            await RefreshCartAsync();
     }
 
     private async Task RemoveAsync(CartLineDto line)
     {
-        if (_updating) return;
+        if (_updating || _submitting) return;
         _updating = true;
 
         try
         {
-            var result = await Sender.Send(new RemoveCartLineCommand(line.ProductId, line.VariantKey, CartAnonymousId), _cts.Token);
+            var province = CurrentProvince;
+            var result = await Sender.Send(new RemoveCartLineCommand(line.ProductId, line.VariantKey, CartAnonymousId, province), _cts.Token);
 
             if (result.IsSuccess)
             {
                 _cart = result.Value;
+                _pricedProvince = province;
                 CartState.Set(_cart.ItemCount);
                 _errors = [];
                 _lastRemoved = (line.ProductId, line.VariantKey, line.Name, line.Quantity);
@@ -562,6 +615,9 @@
         }
         catch (OperationCanceledException) { /* circuit tore down */ }
         finally { _updating = false; }
+
+        if (CurrentProvince != _pricedProvince)
+            await RefreshCartAsync();
     }
 
     private async Task UndoRemoveAsync()
@@ -573,7 +629,9 @@
 
     private async Task PlaceOrderAsync()
     {
-        if (_submitting) return;          // guards against a double-click creating two orders
+        // Guards against a double-click creating two orders, and against submitting while a cart
+        // write or re-price is still in flight (the total on screen would not be the final one).
+        if (_submitting || _updating) return;
         _submitting = true;
         _errors = [];
 
@@ -581,9 +639,7 @@
         {
             // Resolve the display names for the selected codes; fall back to the manual-entry
             // text inputs shown when the address lookup is unavailable.
-            var province = _addressLookupFailed
-                ? _provinceName
-                : _provinces.FirstOrDefault(p => p.Code.ToString() == _provinceCode)?.Name;
+            var province = CurrentProvince;
             var ward = _addressLookupFailed
                 ? _wardName
                 : _wards.FirstOrDefault(w => w.Code.ToString() == _wardCode)?.Name;
@@ -594,7 +650,7 @@
             var result = await Sender.Send(new CreateOrderCommand(
                 _fullName, phone, _email, _street,
                 ward ?? string.Empty, province ?? string.Empty,
-                _note, _payment, CartAnonymousId), _cts.Token);
+                _note, _payment, CartAnonymousId, _cart?.Total ?? 0m), _cts.Token);
 
             if (result.IsSuccess)
             {
@@ -611,18 +667,66 @@
                 .Concat(result.Errors)
                 .DefaultIfEmpty("Không thể đặt hàng. Vui lòng thử lại.")
                 .ToList();
+
+            // The total moved since the shopper last saw it (price, fee, zone, availability):
+            // show the new numbers so the next click confirms what they actually see.
+            if (result.Status == Ardalis.Result.ResultStatus.Conflict)
+            {
+                _submitting = false;      // RefreshCartAsync skips while a submit is running
+                await RefreshCartAsync();
+            }
         }
         catch (OperationCanceledException) { /* circuit tore down */ }
+        catch (InvalidOperationException)
+        {
+            // Overlapping operations on the shared context; the guards above should prevent it, but
+            // never let it take the circuit down.
+            _errors = ["Không thể đặt hàng. Vui lòng thử lại."];
+        }
         finally
         {
-            if (_errors.Count > 0) _submitting = false;
+            if (_errors.Count > 0)
+            {
+                _submitting = false;
+                // Submit failed without navigating: re-price if the province moved meanwhile.
+                if (CurrentProvince != _pricedProvince)
+                    await RefreshCartAsync();
+            }
         }
+    }
+
+    // Re-prices the cart for the chosen province. Runs inside the same _updating guard as every
+    // other cart write, so "Xác nhận đặt hàng" stays disabled until the new total is in.
+    private async Task RefreshCartAsync()
+    {
+        // While another cart write is in flight, that write's own tail re-runs this if the province
+        // moved on (compare with _pricedProvince), so nothing is dropped. While submitting, never.
+        if (_cart is null || _updating || _submitting)
+            return;
+        _updating = true;
+        StateHasChanged();
+        try
+        {
+            // Loop: the shopper may change the province again while this query is awaited.
+            do
+            {
+                var province = CurrentProvince;
+                _cart = await Sender.Send(new GetCartQuery(CartAnonymousId, province), _cts.Token);
+                _pricedProvince = province;
+                CartState.Set(_cart.ItemCount);
+            }
+            while (CurrentProvince != _pricedProvince);
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        finally { _updating = false; }
     }
 
     private async Task OnProvinceChangedAsync()
     {
         _wardCode = null;
         _wards = [];
+
+        await RefreshCartAsync();
 
         if (!int.TryParse(_provinceCode, out var code) || code <= 0)
             return;

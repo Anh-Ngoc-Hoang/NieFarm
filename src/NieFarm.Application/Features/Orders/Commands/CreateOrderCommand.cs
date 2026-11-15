@@ -12,6 +12,9 @@ namespace NieFarm.Application.Features.Orders.Commands;
 /// customer id is resolved from ICurrentUser, never submitted. AnonymousId is the one addition
 /// (D2) — the opaque nf_cart cookie token identifying which guest cart to read and then delete,
 /// because a Blazor circuit has no HttpContext from which to read the cookie itself.
+/// ExpectedTotal is an intent field, compared with the server-computed total and never used as a
+/// price (security.md): a mismatch returns Conflict so the shopper re-confirms the new total.
+/// The Province string prices the shipping and is also what is printed on the address.
 /// </summary>
 public record CreateOrderCommand(
     string CustomerName,
@@ -22,4 +25,5 @@ public record CreateOrderCommand(
     string Province,
     string? Note,
     PaymentMethod PaymentMethod,
-    string? AnonymousId) : IRequest<Result<OrderPlacedDto>>;
+    string? AnonymousId,
+    decimal ExpectedTotal) : IRequest<Result<OrderPlacedDto>>;

@@ -8,4 +8,4 @@ namespace NieFarm.Application.Features.Carts.Queries;
 /// unresolvable owner both simply yield CartDto.Empty (mirrors GetUnreadOrderCountQuery).
 /// The user id is never accepted here; it is resolved server-side from ICurrentUser.
 /// </summary>
-public record GetCartQuery(string? AnonymousId) : IRequest<CartDto>;
+public record GetCartQuery(string? AnonymousId, string? Province = null) : IRequest<CartDto>;

@@ -37,6 +37,9 @@ public class CreateOrderCommandValidator : AbstractValidator<CreateOrderCommand>
         RuleFor(x => x.Note)
             .MaximumLength(1000).WithMessage("Ghi chú quá dài (tối đa 1000 ký tự).");
 
+        RuleFor(x => x.ExpectedTotal)
+            .GreaterThanOrEqualTo(0m).WithMessage(PricingMessages.TotalChanged);
+
         RuleFor(x => x.PaymentMethod)
             .IsInEnum().WithMessage("Phương thức thanh toán không hợp lệ.");
     }

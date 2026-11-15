@@ -1,0 +1,272 @@
+@page "/admin/shipping"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Shipping.Commands
+@using NieFarm.Application.Features.Admin.Shipping.Dtos
+@using NieFarm.Application.Features.Admin.Shipping.Queries
+@inject ISender Sender
+
+<AdminPageTitle Title="Shipping" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Shipping</h1>
+        <p>
+            The base fee, the free-shipping threshold and the zones that charge less. Changes apply to
+            the next cart a customer opens; orders already placed keep the fee they were charged.
+        </p>
+    </div>
+    <button class="btn-admin" type="button" disabled="@(_data is null)" @onclick="() => _formModal.OpenForCreate(_data!)">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Zone
+    </button>
+</div>
+
+@if (_data is null)
+{
+    <div class="cell-muted" style="padding:20px;">Loading…</div>
+}
+else
+{
+    @if (_data.SettingsMissing)
+    {
+        <div class="form-alert form-alert--error" style="margin-bottom:16px;">
+            The shipping settings row is missing, so checkout is using a fallback fee of @Money.Vnd(_data.BaseFee)
+            with no free-shipping threshold. Save the rates below to recreate it.
+        </div>
+    }
+
+    @if (_unmatched is { Count: > 0 })
+    {
+        <div class="form-alert form-alert--error" style="margin-bottom:16px;" role="alert">
+            These province names from the address service do not match the shipping list:
+            <strong>@string.Join(", ", _unmatched)</strong>. Orders from them pay the base fee. Ask a developer to
+            update the province list.
+        </div>
+    }
+
+    <AdminCard Title="Rates" CssClass="mb-16">
+        <div class="admin-card__body">
+            @if (_rateErrors.Count > 0)
+            {
+                <div class="form-alert form-alert--error">
+                    @foreach (var error in _rateErrors)
+                    {
+                        <div>@error</div>
+                    }
+                </div>
+            }
+            @if (_rateSaved)
+            {
+                <div class="form-alert form-alert--success">Rates saved.</div>
+            }
+
+            <div class="form-grid form-grid--2">
+                <div>
+                    <label class="form-label-admin" for="sh-base">Base fee (₫) *</label>
+                    <input id="sh-base" class="form-control-admin" type="number" min="0" step="1000" @bind="_baseFee" />
+                    <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                        Applies to every province not in an active zone, and to addresses that cannot be matched.
+                        Set it to your highest "rest of country" fee and use zones for cheaper areas, so a mistyped
+                        province never pays less.
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label-admin" for="sh-threshold">Free shipping from (₫)</label>
+                    <input id="sh-threshold" class="form-control-admin" type="number" min="0" step="1000" @bind="_threshold" />
+                    <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                        One threshold for the whole country, compared with the subtotal after discounts.
+                        Leave empty to never offer free shipping.
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top:16px;">
+                <button class="btn-admin" type="button" @onclick="SaveRatesAsync" disabled="@_savingRates">
+                    @(_savingRates ? "Saving…" : "Save rates")
+                </button>
+            </div>
+        </div>
+    </AdminCard>
+
+    <h2 style="font-size:16px;margin:24px 0 12px;">Zones</h2>
+
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th style="width:120px;">Fee</th>
+                    <th>Provinces</th>
+                    <th style="width:80px;">Order</th>
+                    <th style="width:100px;">Status</th>
+                    <th style="width:120px;text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var zone in _data.Zones)
+                {
+                    <tr>
+                        <td class="cell-primary" style="cursor:pointer;" @onclick="() => _formModal.OpenForEdit(_data, zone)">@zone.Name</td>
+                        <td>@Money.Vnd(zone.Fee)</td>
+                        <td>
+                            <span title="@string.Join(", ", zone.ProvinceNames)">
+                                @zone.ProvinceNames.Count · @Summarise(zone.ProvinceNames)
+                            </span>
+                        </td>
+                        <td class="cell-muted">@zone.SortOrder</td>
+                        <td>
+                            @if (zone.IsActive)
+                            {
+                                <AdminBadge Text="Active" Variant="success" />
+                            }
+                            else
+                            {
+                                <AdminBadge Text="Inactive" Variant="muted" />
+                            }
+                        </td>
+                        <td>
+                            <div class="row-actions">
+                                <button class="btn-icon" type="button" title="Edit"
+                                        @onclick="() => _formModal.OpenForEdit(_data, zone)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                                </button>
+                                <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                        @onclick="() => AskDelete(zone)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (_data.Zones.Count == 0)
+        {
+            <div style="padding:20px;text-align:center;" class="cell-muted">
+                No zones yet. Every province pays the base fee.
+            </div>
+        }
+    </div>
+
+    @if (_deleteError is not null)
+    {
+        <div class="form-alert form-alert--error" style="margin-top:16px;">@_deleteError</div>
+    }
+
+    var unassigned = _data.Provinces.Where(p => p.ZoneId is null).ToList();
+    var inactive = _data.Provinces.Where(p => p.ZoneId is not null
+        && _data.Zones.Any(z => z.Id == p.ZoneId && !z.IsActive)).ToList();
+
+    <h2 style="font-size:16px;margin:24px 0 8px;">Unassigned provinces (base fee)</h2>
+    <p class="cell-muted" style="margin:0 0 24px;">
+        @if (unassigned.Count == 0)
+        {
+            <text>Every province belongs to a zone.</text>
+        }
+        else
+        {
+            @string.Join(", ", unassigned.Select(p => p.Name))
+        }
+        @if (inactive.Count > 0)
+        {
+            <br />
+            <text>Also paying the base fee because their zone is inactive: @string.Join(", ", inactive.Select(p => p.Name)).</text>
+        }
+    </p>
+}
+
+<ShippingZoneFormModal @ref="_formModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete zone?"
+              Message="@($"Delete the zone \"{_deleteTarget?.Name}\"? Its provinces will pay the base fee. Past orders keep their fee.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private ShippingAdminDto? _data;
+    private IReadOnlyList<string>? _unmatched;
+
+    private decimal _baseFee;
+    private decimal? _threshold;
+    private bool _savingRates;
+    private bool _rateSaved;
+    private List<string> _rateErrors = [];
+
+    private string? _deleteError;
+    private ShippingZoneAdminDto? _deleteTarget;
+
+    private ShippingZoneFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+
+        // Drift check against the live address service. A failure just hides the alert.
+        var check = await Sender.Send(new CheckProvinceCatalogQuery());
+        _unmatched = check.IsSuccess ? check.Value : null;
+    }
+
+    private async Task ReloadAsync()
+    {
+        _data = await Sender.Send(new GetShippingAdminQuery());
+        _baseFee = _data.BaseFee;
+        _threshold = _data.FreeShippingThreshold;
+    }
+
+    private async Task SaveRatesAsync()
+    {
+        _savingRates = true;
+        _rateSaved = false;
+        _rateErrors = [];
+
+        try
+        {
+            var result = await Sender.Send(new SaveShippingSettingsCommand(_baseFee, _threshold));
+            if (!result.IsSuccess)
+            {
+                _rateErrors = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .DefaultIfEmpty("Could not save the rates.")
+                    .ToList();
+                return;
+            }
+
+            await ReloadAsync();
+            _rateSaved = true;
+        }
+        finally
+        {
+            _savingRates = false;
+        }
+    }
+
+    private static string Summarise(IReadOnlyList<string> names) =>
+        names.Count <= 4 ? string.Join(", ", names) : string.Join(", ", names.Take(4)) + ", …";
+
+    private void AskDelete(ShippingZoneAdminDto zone)
+    {
+        _deleteError = null;
+        _deleteTarget = zone;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteShippingZoneCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _deleteError = result.Errors.FirstOrDefault() ?? "Could not delete the zone.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

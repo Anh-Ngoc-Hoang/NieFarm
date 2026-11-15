@@ -215,13 +215,16 @@
                                     <dd>@SiteContent.Vnd(_order.Subtotal)</dd>
                                 </div>
                                 <div class="row">
-                                    <dt>Phí vận chuyển</dt>
-                                    <dd>@SiteContent.Vnd(_order.ShippingFee)</dd>
+                                    <dt>Phí vận chuyển@(string.IsNullOrWhiteSpace(_order.ShippingZoneName) ? null : $" ({_order.ShippingZoneName})")</dt>
+                                    <dd>@(_order.ShippingFee == 0m ? "Miễn phí" : SiteContent.Vnd(_order.ShippingFee))</dd>
                                 </div>
-                                <div class="row">
-                                    <dt>Giảm giá</dt>
-                                    <dd class="nf-track__discount">-@SiteContent.Vnd(_order.Discount)</dd>
-                                </div>
+                                @if (_order.Discount > 0m)
+                                {
+                                    <div class="row">
+                                        <dt>Giảm giá</dt>
+                                        <dd class="nf-track__discount">-@SiteContent.Vnd(_order.Discount)</dd>
+                                    </div>
+                                }
                                 <div class="total">
                                     <dt>Tổng cộng</dt>
                                     <dd>@SiteContent.Vnd(_order.Total)</dd>

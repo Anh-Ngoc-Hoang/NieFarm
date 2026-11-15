@@ -4,5 +4,5 @@ using NieFarm.Application.Features.Carts.Dtos;
 
 namespace NieFarm.Application.Features.Carts.Commands;
 
-public record SetCartLineQuantityCommand(int ProductId, string VariantKey, int Quantity, string? AnonymousId)
+public record SetCartLineQuantityCommand(int ProductId, string VariantKey, int Quantity, string? AnonymousId, string? Province = null)
     : IRequest<Result<CartDto>>;

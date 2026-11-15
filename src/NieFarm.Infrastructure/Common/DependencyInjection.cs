@@ -11,6 +11,7 @@ using NieFarm.Infrastructure.Identity;
 using NieFarm.Infrastructure.Services;
 using NieFarm.Infrastructure.Services.Addresses;
 using NieFarm.Infrastructure.Services.Payments;
+using NieFarm.Infrastructure.Services.Shipping;
 
 namespace NieFarm.Infrastructure.Common;
 
@@ -56,6 +57,7 @@ public static class DependencyInjection
         services.AddSingleton<ISlugGenerator, SlugGenerator>();
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSingleton<IOrderLookupThrottle, OrderLookupThrottle>();
+        services.AddScoped<IShippingRateProvider, DbShippingRateProvider>();
 
         services.Configure<BankTransferOptions>(configuration.GetSection(BankTransferOptions.SectionName));
         services.Configure<SePayOptions>(configuration.GetSection(SePayOptions.SectionName));

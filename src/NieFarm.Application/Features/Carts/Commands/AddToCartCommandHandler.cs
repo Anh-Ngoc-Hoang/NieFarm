@@ -71,6 +71,6 @@ public class AddToCartCommandHandler(
             await cartRepository.UpdateAsync(cart, cancellationToken);
         }
 
-        return Result<CartDto>.Success(await assembler.BuildAsync(cart, cancellationToken));
+        return Result<CartDto>.Success(await assembler.BuildAsync(cart, new CartPricingContext(request.Province), cancellationToken));
     }
 }

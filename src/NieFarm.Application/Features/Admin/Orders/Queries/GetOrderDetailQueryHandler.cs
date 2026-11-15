@@ -52,6 +52,8 @@ public class GetOrderDetailQueryHandler(IReadRepositoryBase<Order> repository)
                 .Select(c => new OrderPaymentChangeDto(
                     c.FromStatus, c.ToStatus, c.ChangedAt, c.ChangedBy,
                     c.ChangedByName, c.Amount, c.Reference, c.Note))
-                .ToList());
+                .ToList(),
+            order.ShippingProvince,
+            order.ShippingZoneName);
     }
 }

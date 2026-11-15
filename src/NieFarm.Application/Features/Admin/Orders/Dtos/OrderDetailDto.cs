@@ -54,4 +54,6 @@ public record OrderDetailDto(
     bool CanConfirmPayment,
     bool CanRevertPayment,
     bool CanMarkRefunded,
-    List<OrderPaymentChangeDto> PaymentHistory);
+    List<OrderPaymentChangeDto> PaymentHistory,
+    string? ShippingProvince = null,
+    string? ShippingZoneName = null);

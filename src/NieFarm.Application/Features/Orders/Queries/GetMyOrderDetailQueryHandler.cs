@@ -48,6 +48,7 @@ public class GetMyOrderDetailQueryHandler(
             OrderTimeline.From(order),
             order.PaymentStatus,
             order.PaidAt,
-            BankTransferInstructions.Build(order, bankAccountProvider.GetAccount())));
+            BankTransferInstructions.Build(order, bankAccountProvider.GetAccount()),
+            order.ShippingZoneName));
     }
 }

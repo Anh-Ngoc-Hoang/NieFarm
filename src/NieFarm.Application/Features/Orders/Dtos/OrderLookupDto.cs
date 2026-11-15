@@ -25,4 +25,5 @@ public record OrderLookupDto(
     IReadOnlyList<OrderTimelineEntryDto> Timeline,
     PaymentStatus PaymentStatus,
     DateTime? PaidAtUtc,
-    BankTransferInstructionsDto? BankTransfer);
+    BankTransferInstructionsDto? BankTransfer,
+    string? ShippingZoneName = null);

@@ -1,7 +1,9 @@
 using Ardalis.Specification;
+using NieFarm.Application.Common.Interfaces;
 using NieFarm.Application.Features.Carts.Dtos;
 using NieFarm.Application.Features.Products;
 using NieFarm.Application.Features.Products.Specifications;
+using NieFarm.Application.Features.Shipping;
 using NieFarm.Domain.Entities;
 using DomainCart = NieFarm.Domain.Entities.Cart;
 
@@ -25,9 +27,10 @@ namespace NieFarm.Application.Features.Carts;
 /// AddToCartCommandHandler, SetCartLineQuantityCommandHandler, RemoveCartLineCommandHandler,
 /// CreateOrderCommandHandler) — an internal type there would fail to compile (CS0053).
 /// </summary>
-public sealed class CartAssembler(IReadRepositoryBase<Product> products)
+public sealed class CartAssembler(IReadRepositoryBase<Product> products, IShippingRateProvider shippingRates)
 {
-    public async Task<CartDto> BuildAsync(DomainCart? cart, CancellationToken cancellationToken)
+    public async Task<CartDto> BuildAsync(
+        DomainCart? cart, CartPricingContext context, CancellationToken cancellationToken)
     {
         if (cart is null || cart.Items.Count == 0)
             return CartDto.Empty;
@@ -68,10 +71,14 @@ public sealed class CartAssembler(IReadRepositoryBase<Product> products)
         var availableLines = lines.Where(l => l.IsAvailable).ToList();
         var subtotal = availableLines.Sum(l => l.LineTotal);
         var itemCount = availableLines.Sum(l => l.Quantity);
-        var shippingFee = availableLines.Count == 0 ? 0m : CartPricing.ShippingFee;
-        var discount = CartPricing.Discount;
 
-        return new CartDto(lines, itemCount, subtotal, shippingFee, discount,
-            subtotal + shippingFee - discount);
+        // The only place money is combined: shipping comes from the admin-managed rates for the
+        // province the shopper chose (never from the browser as an amount).
+        var rates = await shippingRates.GetRatesAsync(cancellationToken);
+        var quote = ShippingZoneResolver.Resolve(rates, context.Province);
+        var totals = CartPricing.Calculate(subtotal, availableLines.Count > 0, quote, rates.FreeShippingThreshold);
+
+        return new CartDto(lines, itemCount, totals.Subtotal, totals.ShippingFee, totals.Discount, totals.Total,
+            quote.ZoneName, quote.ProvinceResolved, rates.FreeShippingThreshold, totals.FreeShippingRemaining);
     }
 }

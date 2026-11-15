@@ -27,6 +27,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<CoffeeRegion> CoffeeRegions => Set<CoffeeRegion>();
     public DbSet<CoffeeRegionArea> CoffeeRegionAreas => Set<CoffeeRegionArea>();
     public DbSet<Partner> Partners => Set<Partner>();
+    public DbSet<ShippingSettings> ShippingSettings => Set<ShippingSettings>();
+    public DbSet<ShippingZone> ShippingZones => Set<ShippingZone>();
+    public DbSet<ShippingZoneProvince> ShippingZoneProvinces => Set<ShippingZoneProvince>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

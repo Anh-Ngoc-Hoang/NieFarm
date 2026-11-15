@@ -1,6 +1,8 @@
 using Ardalis.Result;
 using Ardalis.Specification;
 using MediatR;
+using Microsoft.Extensions.Logging;
+using NieFarm.Application.Common.Exceptions;
 using NieFarm.Application.Common.Interfaces;
 using NieFarm.Application.Features.Carts;
 using NieFarm.Application.Features.Carts.Specifications;
@@ -17,13 +19,19 @@ public class CreateOrderCommandHandler(
     IRepositoryBase<Order> repository,
     IRepositoryBase<DomainCart> cartRepository,
     CartAssembler assembler,
+    IWriteContextRefresher contextRefresher,
     ICurrentUser currentUser,
-    IBankTransferAccountProvider bankAccountProvider)
+    IBankTransferAccountProvider bankAccountProvider,
+    ILogger<CreateOrderCommandHandler> logger)
     : IRequestHandler<CreateOrderCommand, Result<OrderPlacedDto>>
 {
     public async Task<Result<OrderPlacedDto>> Handle(
         CreateOrderCommand request, CancellationToken cancellationToken)
     {
+        // The shared write context lives for the whole circuit, so an earlier-tracked cart could be
+        // stale; decide against the database (same reason as the R-07 order handlers).
+        contextRefresher.DiscardTrackedEntities();
+
         // Null is a normal, supported outcome — guest checkout.
         var customerId = await currentUser.GetUserIdAsync(cancellationToken);
 
@@ -31,7 +39,7 @@ public class CreateOrderCommandHandler(
         var cartEntity = await cartRepository.FirstOrDefaultAsync(
             new CartByOwnerSpec(customerId, request.AnonymousId), cancellationToken);
 
-        var cart = await assembler.BuildAsync(cartEntity, cancellationToken);
+        var cart = await assembler.BuildAsync(cartEntity, new CartPricingContext(request.Province), cancellationToken);
         if (cart.IsEmpty)
             return Result<OrderPlacedDto>.Error("Giỏ hàng đang trống.");
 
@@ -40,6 +48,14 @@ public class CreateOrderCommandHandler(
         // rather than silently being charged at a stale price or dropped.
         if (cart.HasUnavailableLines)
             return Result<OrderPlacedDto>.Error("Một số sản phẩm trong giỏ hàng đã hết hàng. Vui lòng cập nhật giỏ hàng.");
+
+        // Intent check: the shopper confirmed ExpectedTotal; if a price, fee, zone, threshold or line
+        // availability changed since, make them look again. Never used as a price.
+        if (request.ExpectedTotal != cart.Total)
+            return Result<OrderPlacedDto>.Conflict(PricingMessages.TotalChanged);
+
+        if (request.PaymentMethod == PaymentMethod.BankTransfer && cart.Total <= 0m)
+            return Result<OrderPlacedDto>.Error(PricingMessages.ZeroTotalBankTransfer);
 
         // The UI is not trusted, and the account can be switched off between page load and submit.
         // Checked before a code is generated so a rejected order consumes nothing.
@@ -67,7 +83,7 @@ public class CreateOrderCommandHandler(
         var order = Order.Create(
             code, customerId, request.CustomerName, request.Phone, request.Email,
             address, request.Note, request.PaymentMethod,
-            cart.ShippingFee, cart.Discount);
+            cart.ShippingFee, request.Province, cart.ShippingZoneName);
 
         // No stock decrement: the catalog has no stock quantity at all, only
         // ProductVariant.IsAvailable, so there is nothing to decrement. Availability was
@@ -84,7 +100,19 @@ public class CreateOrderCommandHandler(
         // cleaned up ("my cart is still full"), never an order that silently vanished. See
         // docs/plans/cart-quantity-removal.md §10.
         if (cartEntity is not null)
-            await cartRepository.DeleteAsync(cartEntity, cancellationToken);
+        {
+            try
+            {
+                await cartRepository.DeleteAsync(cartEntity, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // The order is already saved, so a failed cart clean-up (a concurrency conflict because
+                // the row is gone or changed, a timeout, ...) must never turn into a failure. The
+                // worst outcome is a cart that is still full.
+                logger.LogWarning(ex, "Order {Code} was placed but its cart could not be deleted", order.Code);
+            }
+        }
 
         return Result<OrderPlacedDto>.Success(new OrderPlacedDto(
             order.Id, order.Code, order.PaymentMethod, order.Total,

@@ -26,6 +26,7 @@ public static class Seeder
         await SeedTestimonialsAsync(scope);
         await SeedPartnersAsync(scope);
         await SeedCoffeeRegionsAsync(scope);
+        await SeedShippingSettingsAsync(scope);
         await SeedArticlesAsync(scope);
         await BackfillOrderStatusHistoryAsync(scope);   // last: a missing table must not skip the seeds above
         await BackfillOrderPaymentStatusAsync(scope);   // after the status backfill, own try/catch
@@ -307,6 +308,33 @@ public static class Seeder
         await db.SaveChangesAsync();
 
         logger.LogInformation("Seeded {Count} coffee regions", missing.Count);
+    }
+
+    /// <summary>
+    /// Inserts the singleton ShippingSettings row (base fee 30.000, free from 500.000) when it is
+    /// missing, and never overwrites an existing row, so admin edits are safe. Own try/catch: a
+    /// database without the AddShippingRatesAndZones migration must not stop the remaining steps.
+    /// </summary>
+    private static async Task SeedShippingSettingsAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        try
+        {
+            if (await db.ShippingSettings.AnyAsync())
+                return;
+
+            db.ShippingSettings.Add(Domain.Entities.ShippingSettings.Create(30_000m, 500_000m));
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded the shipping settings row");
+        }
+        catch (Exception ex)
+        {
+            db.ChangeTracker.Clear();
+            logger.LogError(ex,
+                "Seeding shipping settings failed (has the AddShippingRatesAndZones migration been applied?); continuing start-up");
+        }
     }
 
     /// <summary>

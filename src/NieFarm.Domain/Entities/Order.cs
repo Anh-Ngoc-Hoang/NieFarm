@@ -78,6 +78,12 @@ public class Order : BaseEntity
     public decimal ShippingFee { get; private set; }
     public decimal Discount { get; private set; }
 
+    /// <summary>The province name as submitted at checkout (the same text printed in <see cref="ShippingAddress"/>). Null on legacy orders.</summary>
+    public string? ShippingProvince { get; private set; }
+
+    /// <summary>The shipping zone whose fee was charged; null = the base fee (or a legacy order).</summary>
+    public string? ShippingZoneName { get; private set; }
+
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
 
     public IReadOnlyCollection<OrderStatusChange> StatusChanges => _statusChanges.AsReadOnly();
@@ -93,7 +99,7 @@ public class Order : BaseEntity
     public static Order Create(
         string code, string? customerId, string customerName, string phone, string? email,
         string shippingAddress, string? note, PaymentMethod paymentMethod,
-        decimal shippingFee, decimal discount)
+        decimal shippingFee, string? shippingProvince, string? shippingZoneName)
     {
         var order = new Order
         {
@@ -112,7 +118,9 @@ public class Order : BaseEntity
                 _ => throw new ArgumentOutOfRangeException(nameof(paymentMethod), paymentMethod, "Unknown payment method.")
             },
             ShippingFee = shippingFee,
-            Discount = discount
+            Discount = 0m,
+            ShippingProvince = string.IsNullOrWhiteSpace(shippingProvince) ? null : shippingProvince.Trim(),
+            ShippingZoneName = string.IsNullOrWhiteSpace(shippingZoneName) ? null : shippingZoneName.Trim()
         };
 
         order._statusChanges.Add(OrderStatusChange.Placed(order.CreatedAt, order.CustomerId));

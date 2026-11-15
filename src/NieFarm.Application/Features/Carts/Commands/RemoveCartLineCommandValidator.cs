@@ -11,5 +11,7 @@ public class RemoveCartLineCommandValidator : AbstractValidator<RemoveCartLineCo
 
         RuleFor(x => x.VariantKey)
             .MaximumLength(CartLineKey.MaxLength);
+
+        RuleFor(x => x.Province).MaximumLength(120);
     }
 }

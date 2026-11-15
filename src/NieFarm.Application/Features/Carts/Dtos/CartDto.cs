@@ -19,7 +19,11 @@ public record CartDto(
     decimal Subtotal,
     decimal ShippingFee,
     decimal Discount,
-    decimal Total)
+    decimal Total,
+    string? ShippingZoneName = null,
+    bool ShippingProvinceResolved = false,
+    decimal? FreeShippingThreshold = null,
+    decimal? FreeShippingRemaining = null)
 {
     public bool IsEmpty => Lines.Count == 0;
     public bool HasUnavailableLines => Lines.Any(l => !l.IsAvailable);

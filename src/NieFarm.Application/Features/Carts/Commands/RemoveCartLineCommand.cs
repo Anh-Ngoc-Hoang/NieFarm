@@ -4,4 +4,4 @@ using NieFarm.Application.Features.Carts.Dtos;
 
 namespace NieFarm.Application.Features.Carts.Commands;
 
-public record RemoveCartLineCommand(int ProductId, string VariantKey, string? AnonymousId) : IRequest<Result<CartDto>>;
+public record RemoveCartLineCommand(int ProductId, string VariantKey, string? AnonymousId, string? Province = null) : IRequest<Result<CartDto>>;

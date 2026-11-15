@@ -1,11 +1,13 @@
 @page "/chinh-sach-van-chuyen"
-@using NieFarm.Application.Features.Carts
+@using NieFarm.Application.Features.Shipping.Dtos
+@using NieFarm.Application.Features.Shipping.Queries
+@inject ISender Sender
 
 @* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
    Replace every [ ... ] value ([số ngày làm việc], [thời gian giao dự kiến theo khu vực],
    [đơn vị vận chuyển], [có/không cho đồng kiểm], [số lần giao lại]), then set UpdatedOn and remove IsDraft.
-   Dependent requirements: R-11 (shipping tiers: the flat fee wording "mỗi đơn" becomes wrong when
-   shipping is no longer a flat fee). The fee is quoted from CartPricing, never typed. *@
+   The fees, zones and free-shipping threshold are quoted from the admin-managed shipping rates
+   (GetShippingPolicyQuery, R-11), never typed. *@
 
 <InfoPage Href="@InfoPages.Shipping" IsDraft="true"
           Description="Chính sách vận chuyển của Nie Farm Việt Nam: phạm vi giao hàng, phí vận chuyển, thời gian giao và theo dõi đơn hàng."
@@ -14,7 +16,28 @@
     <p>Nie Farm giao hàng toàn quốc.</p>
 
     <h2 id="phi">Phí vận chuyển</h2>
-    <p>Phí vận chuyển là @Money.Vnd(CartPricing.ShippingFee) mỗi đơn hàng và được tính tự động khi thanh toán.</p>
+    @if (_policy is null)
+    {
+        <p>Phí vận chuyển được tính tự động theo tỉnh/thành nhận hàng khi thanh toán.</p>
+    }
+    else
+    {
+        <p>Phí vận chuyển mặc định là @Money.Vnd(_policy.BaseFee) cho mỗi đơn hàng.@(_policy.Zones.Count > 0 ? " Một số khu vực có mức phí riêng:" : null)</p>
+        @if (_policy.Zones.Count > 0)
+        {
+            <ul>
+                @foreach (var zone in _policy.Zones)
+                {
+                    <li>@zone.Name (@string.Join(", ", zone.Provinces)): @Money.Vnd(zone.Fee)</li>
+                }
+            </ul>
+        }
+        @if (_policy.FreeShippingThreshold is { } threshold)
+        {
+            <p>Đơn hàng có tạm tính từ @Money.Vnd(threshold) (sau khi trừ mã giảm giá) được miễn phí vận chuyển.</p>
+        }
+        <p>Phí được tính tự động theo tỉnh/thành nhận hàng khi thanh toán.</p>
+    }
 
     <h2 id="thoi-gian">Thời gian xử lý và giao hàng</h2>
     <p>Thời gian chuẩn bị hàng: <strong>[số ngày làm việc]</strong>. Thời gian giao hàng dự kiến: <strong>[thời gian giao dự kiến theo khu vực]</strong>. Đây chỉ là thời gian ước tính và có thể thay đổi.</p>
@@ -35,3 +58,10 @@
     <p>Cà phê được đóng trong túi kín. Bảo quản nơi khô ráo, tránh ánh nắng trực tiếp.</p>
     <p>Nếu cần đổi hoặc trả hàng, vui lòng xem <a href="@InfoPages.Returns">Chính sách đổi trả</a>.</p>
 </InfoPage>
+
+@code {
+    private ShippingPolicyDto? _policy;
+
+    protected override async Task OnInitializedAsync() =>
+        _policy = await Sender.Send(new GetShippingPolicyQuery());
+}

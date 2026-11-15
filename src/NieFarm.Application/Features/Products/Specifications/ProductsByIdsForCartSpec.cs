@@ -15,6 +15,12 @@ public sealed class ProductsByIdsForCartSpec : Specification<Product>
         Query.Where(p => ids.Contains(p.Id) && p.IsVisible)
             .Include(p => p.Options).ThenInclude(o => o.Values)
             .Include(p => p.Variants).ThenInclude(v => v.Values).ThenInclude(vv => vv.OptionValue)
-            .AsSplitQuery();
+            .AsSplitQuery()
+            // CartAssembler is scoped, so its read repository (one context) lives as long as the
+            // circuit. A tracked query would keep returning the first-loaded Product, and a price or
+            // availability edit would never reach the cart or the ExpectedTotal check. No tracking
+            // means every build reads the database; identity resolution keeps shared option values
+            // as one instance.
+            .AsNoTrackingWithIdentityResolution();
     }
 }

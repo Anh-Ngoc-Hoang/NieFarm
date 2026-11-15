@@ -13,4 +13,5 @@ public record MyOrderDetailDto(
     decimal Subtotal, decimal ShippingFee, decimal Discount, decimal Total,
     DateTime PlacedAt, List<MyOrderLineDto> Lines,
     bool CanCancel, IReadOnlyList<OrderTimelineEntryDto> Timeline,
-    PaymentStatus PaymentStatus, DateTime? PaidAtUtc, BankTransferInstructionsDto? BankTransfer);
+    PaymentStatus PaymentStatus, DateTime? PaidAtUtc, BankTransferInstructionsDto? BankTransfer,
+    string? ShippingZoneName = null);

@@ -8,6 +8,9 @@
 @using NieFarm.Application.Features.Reviews.Commands
 @using NieFarm.Application.Features.Reviews.Dtos
 @using NieFarm.Application.Features.Reviews.Queries
+@using NieFarm.Application.Features.Shipping
+@using NieFarm.Application.Features.Shipping.Dtos
+@using NieFarm.Application.Features.Shipping.Queries
 @using NieFarm.Domain.Entities
 @using NieFarm.Web.Services.Cart
 @inject ISender Sender
@@ -248,10 +251,11 @@
                                     }
                                     else
                                     {
-                                        @* Quoted from CartPricing so the page can never promise a
-                                           shipping term that /thanh-toan then contradicts. *@
+                                        @* Quoted from the admin-managed shipping rates (GetShippingPolicyQuery)
+                                           so the page can never promise a shipping term that /thanh-toan
+                                           then contradicts. *@
                                         <p>
-                                            Phí giao hàng @Money.Vnd(CartPricing.ShippingFee) cho mọi đơn hàng, giao toàn quốc.
+                                            @(_shipping is null ? "Giao hàng toàn quốc." : ShippingMessages.FeeSummary(_shipping))
                                             Bảo quản nơi khô ráo, tránh ánh nắng trực tiếp; sau khi mở túi nên dùng hết trong
                                             3–4 tuần và luôn đóng kín van một chiều.
                                         </p>
@@ -441,6 +445,7 @@
     private int? _productId;
     private ProductReviewsDto _reviews = EmptyReviews;
     private IReadOnlyList<ProductCardDto>? _relatedProducts;
+    private ShippingPolicyDto? _shipping;
 
     private int? _editingReviewId;
     private int _rating;
@@ -479,8 +484,10 @@
         // Independent reads — safe to run in parallel (data-access.md).
         var reviewsTask = LoadReviewsAsync(_productId.Value);
         var relatedTask = Sender.Send(new GetRelatedProductsQuery(_productId.Value));
-        await Task.WhenAll(reviewsTask, relatedTask);
+        var shippingTask = Sender.Send(new GetShippingPolicyQuery());
+        await Task.WhenAll(reviewsTask, relatedTask, shippingTask);
         _relatedProducts = relatedTask.Result;
+        _shipping = shippingTask.Result;
 
         // Reset per-product interactive state — Blazor reuses the component instance across
         // /san-pham/a -> /san-pham/b navigations, and stale state (e.g. _selectedImage) can

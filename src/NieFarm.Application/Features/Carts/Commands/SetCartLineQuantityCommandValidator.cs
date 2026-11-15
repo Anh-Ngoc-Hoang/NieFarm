@@ -13,6 +13,8 @@ public class SetCartLineQuantityCommandValidator : AbstractValidator<SetCartLine
         RuleFor(x => x.VariantKey)
             .MaximumLength(CartLineKey.MaxLength);
 
+        RuleFor(x => x.Province).MaximumLength(120);
+
         RuleFor(x => x.Quantity)
             .InclusiveBetween(1, Cart.MaxQuantityPerItem)
             .WithMessage("Số lượng phải từ 1 đến 99.");
