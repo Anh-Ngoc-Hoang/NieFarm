@@ -8,12 +8,16 @@
 @using NieFarm.Application.Features.Carts.Dtos
 @using NieFarm.Application.Features.Carts.Queries
 @using NieFarm.Application.Features.Orders.Commands
+@using NieFarm.Application.Features.Payments.Dtos
+@using NieFarm.Application.Features.Payments.Queries
 @using NieFarm.Domain.Entities
 @using NieFarm.Domain.Enums
 @using NieFarm.Web.Services.Cart
+@using NieFarm.Web.Services.Orders
 @inject ISender Sender
 @inject NavigationManager Navigation
 @inject CartState CartState
+@inject PlacedOrderState PlacedOrders
 @implements IDisposable
 
 @*
@@ -26,6 +30,10 @@
     PaymentOption.Icon strings move from Material Symbol names to NfIcon glyph
     names, the same swap SiteHeader/ProductDetail already made — nothing reads
     that string except this page's own markup.
+
+    R-01 (bank transfer): the bank radio is offered only when GetBankTransferAccountQuery returns an
+    account, and a successful order is handed to PlacedOrderState before navigating so the success
+    page can show the QR without querying by code.
 
     The stepper (CurrentStep, the Steps <ol>) is preserved exactly — it is the
     shopper's only "where am I" signal. Its Tailwind state classes become
@@ -273,7 +281,7 @@
                     <h2><NfIcon Name="receipt" Size="20" /> Phương thức thanh toán</h2>
 
                     <div style="display:grid;gap:1rem">
-                        @foreach (var method in PaymentMethods)
+                        @foreach (var method in AvailablePaymentMethods)
                         {
                             var current = method;
 
@@ -286,6 +294,13 @@
                                 </span>
                                 <NfIcon Name="@current.Icon" Size="20" />
                             </label>
+                        }
+
+                        @if (_payment == PaymentMethod.BankTransfer)
+                        {
+                            <p class="nf-pay-hint">
+                                Mã QR và thông tin chuyển khoản sẽ hiển thị ngay sau khi bạn đặt hàng. Nie Farm giao hàng sau khi nhận được tiền.
+                            </p>
                         }
                     </div>
                 </section>
@@ -372,11 +387,20 @@
 
     private static readonly PaymentOption[] PaymentMethods =
     [
-        new(PaymentMethod.CashOnDelivery, "Thanh toán khi nhận hàng (COD)", "Nhận hàng và thanh toán trực tiếp.", "truck"),
-        new(PaymentMethod.BankTransfer,   "Chuyển khoản ngân hàng", "Chuyển khoản qua mã QR an toàn và nhanh chóng.", "receipt")
+        new(PaymentMethod.BankTransfer,   "Chuyển khoản ngân hàng", "Chuyển khoản qua mã QR an toàn và nhanh chóng.", "receipt"),
+        new(PaymentMethod.CashOnDelivery, "Thanh toán khi nhận hàng (COD)", "Nhận hàng và thanh toán trực tiếp.", "truck")
     ];
 
-    private PaymentMethod _payment = PaymentMethod.CashOnDelivery;
+    // Bank transfer is the default; OnInitializedAsync falls back to COD when no account is configured.
+    private PaymentMethod _payment = PaymentMethod.BankTransfer;
+
+    // R-01: the bank option is offered only while the configured account is usable. Loaded before the
+    // interactive guard below because it is an in-memory config read (no outbound call), so the option
+    // never pops in after prerender. CreateOrderCommand re-checks it server-side.
+    private BankTransferAccountDto? _bankAccount;
+
+    private IEnumerable<PaymentOption> AvailablePaymentMethods =>
+        PaymentMethods.Where(m => m.Id != PaymentMethod.BankTransfer || _bankAccount is not null);
 
     // Real totals are computed server-side (CartAssembler, re-derived from the Products table)
     // — see .claude/rules/security.md.
@@ -412,6 +436,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _bankAccount = await Sender.Send(new GetBankTransferAccountQuery(), _cts.Token);
+        if (_bankAccount is null && _payment == PaymentMethod.BankTransfer)
+            _payment = PaymentMethod.CashOnDelivery;
+
         // Prerender pass: skip the outbound calls so the first paint is never blocked by a
         // third party, and so the requests are not made twice (prerender + circuit). The
         // guest-cart merge and demo seed inside CartState are writes and must not run during
@@ -560,14 +588,21 @@
                 ? _wardName
                 : _wards.FirstOrDefault(w => w.Code.ToString() == _wardCode)?.Name;
 
+            // Snapshot: the input stays editable while the command runs, and the phone kept for
+            // the auto-lookup must be exactly the one the order was stored with.
+            var phone = _phone;
             var result = await Sender.Send(new CreateOrderCommand(
-                _fullName, _phone, _email, _street,
+                _fullName, phone, _email, _street,
                 ward ?? string.Empty, province ?? string.Empty,
                 _note, _payment, CartAnonymousId), _cts.Token);
 
             if (result.IsSuccess)
             {
                 CartState.Set(0);
+                // In-circuit hand-off: the success page never queries by code (guessable codes).
+                // The phone typed here is kept in circuit memory only, so "Tra cứu đơn hàng" can
+                // pre-run the code + phone lookup for the customer's own just-placed order.
+                PlacedOrders.Set(result.Value, phone);
                 Navigation.NavigateTo($"/dat-hang-thanh-cong/{result.Value.Code}");
                 return;                   // leave _submitting true; we are navigating away
             }

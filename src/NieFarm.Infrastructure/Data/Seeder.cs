@@ -28,6 +28,7 @@ public static class Seeder
         await SeedCoffeeRegionsAsync(scope);
         await BackfillOrderStatusHistoryAsync(scope);   // last: a missing table must not skip the seeds above
     }
+        await BackfillOrderPaymentStatusAsync(scope);   // after the status backfill, own try/catch
 
     /// <summary>
     /// Creates the admin roles and, if absent, the first SuperAdmin. The bootstrap password is
@@ -285,3 +286,29 @@ public static class Seeder
         }
     }
 }
+
+    /// <summary>
+    /// A bank-transfer order can never legitimately be NotApplicable, so move any such row (created
+    /// before the AddOrderPayment migration) to AwaitingPayment. Idempotent; mirrors the migration SQL
+    /// because Migrations/ is gitignored. No synthetic payment rows and no invented PaidAt.
+    /// </summary>
+    private static async Task BackfillOrderPaymentStatusAsync(IServiceScope scope)
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(Seeder));
+
+        try
+        {
+            // 1 = PaymentMethod.BankTransfer / PaymentStatus.AwaitingPayment, 0 = NotApplicable.
+            var updated = await db.Database.ExecuteSqlRawAsync(
+                "UPDATE [Orders] SET [PaymentStatus] = 1 WHERE [PaymentMethod] = 1 AND [PaymentStatus] = 0;");
+
+            if (updated > 0)
+                logger.LogInformation("Backfilled payment status on {Count} bank-transfer orders", updated);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Order payment status backfill skipped (has the AddOrderPayment migration been applied?)");
+        }
+    }

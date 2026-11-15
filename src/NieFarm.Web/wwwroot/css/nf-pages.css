@@ -776,7 +776,7 @@
 .nf-track__cancel-title { font-size: var(--fs-h3); margin: 0; }
 .nf-track__cancel-actions { display: flex; flex-direction: column; gap: .75rem; }
 .nf-track__cancel-actions .btn { width: 100%; justify-content: center; }
-.nf-track__ok { margin-top: 1rem; color: var(--green); font-size: var(--fs-sm); }
+.nf-track__ok { margin-top: 1rem; color: var(--ok); font-size: var(--fs-sm); }
 
 @media (min-width: 640px) {
     .nf-track__form { display: grid; grid-template-columns: 1fr 1fr auto; align-items: stretch; }
@@ -818,8 +818,18 @@
 
 /* Order-confirmation page (/dat-hang-thanh-cong/{Code}) */
 .acct-confirm { padding-block: clamp(7rem, 14vh, 9rem) clamp(5rem, 10vw, 7rem); text-align: center; }
-.acct-confirm__icon { display: inline-grid; place-items: center; width: 4.5rem; height: 4.5rem; border-radius: 50%; background: rgba(44, 74, 52, .1); color: var(--green); }
-.acct-confirm__icon .ico { width: 1.75rem; height: 1.75rem; }
+.acct-confirm__icon { display: inline-grid; place-items: center; width: 4.5rem; height: 4.5rem; border-radius: 50%; background: var(--ok); color: #fff; }
+.acct-confirm__icon .ico { width: 1.75rem; height: 1.75rem; stroke-width: 2.6; }
+/* Success tick: the circle pops in, then the check draws itself. The check path is about 25.1 units
+   long (7.1 + 18.0), so a 26-unit dash covers it. The resting state is the fully drawn tick: the keyframes alone
+   hide it at the start, so reduced motion (animation none) and any browser without animation show it. */
+.acct-confirm__icon { animation: acct-pop .5s var(--ease-soft) both; }
+.acct-confirm__icon .ico path { stroke-dasharray: 26; animation: acct-tick 1.8s var(--ease-soft) .5s both; }
+@keyframes acct-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes acct-tick { from { stroke-dashoffset: 26; } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .acct-confirm__icon, .acct-confirm__icon .ico path { animation: none; }
+}
 .acct-confirm__code { font-size: var(--fs-h1); font-weight: 700; color: var(--red); margin: .75rem 0 2rem; }
 
 @media (min-width: 768px) {

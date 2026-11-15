@@ -15,6 +15,11 @@
                 <h2 id="status-modal-title" style="font-size:16px;font-weight:600;margin:0 0 8px;">@Title</h2>
                 <p class="cell-muted" style="margin:0 0 16px;">@Description</p>
 
+                @if (IsCancel && !string.IsNullOrWhiteSpace(Warning))
+                {
+                    <div class="form-alert form-alert--error" role="alert" style="margin:0 0 16px;">@Warning</div>
+                }
+
                 <label class="form-label-admin" for="status-note">@(IsCancel ? "Reason (required)" : "Note (optional)")</label>
                 <textarea id="status-note" class="form-control-admin" rows="3" maxlength="500"
                           @bind="_note" @bind:event="oninput" disabled="@Busy"></textarea>
@@ -39,6 +44,9 @@
 @code {
     [Parameter] public bool Busy { get; set; }
     [Parameter] public string? Error { get; set; }
+
+    /// <summary>Extra notice shown only when cancelling, e.g. the refund-due warning for a paid order.</summary>
+    [Parameter] public string? Warning { get; set; }
     [Parameter] public EventCallback<(OrderStatus To, string? Note)> OnConfirm { get; set; }
 
     private bool _visible;

@@ -3,6 +3,7 @@ using Ardalis.Specification;
 using MediatR;
 using NieFarm.Application.Common.Interfaces;
 using NieFarm.Application.Features.Orders.Dtos;
+using NieFarm.Application.Features.Payments;
 using NieFarm.Application.Features.Orders.Specifications;
 using NieFarm.Domain.Entities;
 
@@ -10,7 +11,8 @@ namespace NieFarm.Application.Features.Orders.Queries;
 
 public class LookupOrderQueryHandler(
     IReadRepositoryBase<Order> repository,
-    IOrderLookupThrottle throttle)
+    IOrderLookupThrottle throttle,
+    IBankTransferAccountProvider bankAccountProvider)
     : IRequestHandler<LookupOrderQuery, Result<OrderLookupDto>>
 {
     public async Task<Result<OrderLookupDto>> Handle(LookupOrderQuery request, CancellationToken cancellationToken)
@@ -48,6 +50,9 @@ public class LookupOrderQueryHandler(
                 i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList(),
             order.IsCancellableByCustomer && order.CustomerId is null,
             order.IsCancellableByCustomer && order.CustomerId is not null,
-            OrderTimeline.From(order)));
+            OrderTimeline.From(order),
+            order.PaymentStatus,
+            order.PaidAt,
+            BankTransferInstructions.Build(order, bankAccountProvider.GetAccount())));
     }
 }

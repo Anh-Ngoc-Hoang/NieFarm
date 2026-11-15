@@ -22,6 +22,7 @@ public static class DependencyInjection
 
         services.AddScoped<CartAssembler>();
         services.AddScoped<NieFarm.Application.Features.Orders.OrderStatusWorkflow>();
+        services.AddScoped<NieFarm.Application.Features.Orders.OrderPaymentWorkflow>();
 
         return services;
     }

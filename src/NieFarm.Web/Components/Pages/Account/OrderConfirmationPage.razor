@@ -1,11 +1,27 @@
 @page "/dat-hang-thanh-cong/{Code}"
 @using Microsoft.AspNetCore.Components.Authorization
+@using NieFarm.Domain.Enums
+@using NieFarm.Web.Services.Orders
+@implements IDisposable
+@inject PlacedOrderState PlacedOrders
+@inject PaymentStatusNotifier PaymentNotifier
+@inject IJSRuntime Js
 
 @*
     Markup-only rewrite onto NieFarm 2.0 (docs/plans/public-site-redesign-nf2.md
-    §7, step 4.3). No @code logic at all beyond the [Parameter] — the
-    AuthorizeView gate that shows "Xem đơn hàng của tôi" only to a signed-in
+    §7, step 4.3). The AuthorizeView gate that shows "Xem đơn hàng của tôi" only to a signed-in
     customer is unchanged.
+
+    R-01: no data query by code, on purpose. Order codes are guessable (NF + 6 digits), so this page
+    must never load the amount, the payment panel or even the existence of an order from the URL
+    alone. It reads only PlacedOrderState, which Checkout fills in the same circuit just before
+    navigating here. After a hard reload or in a new tab that state is gone and the page falls back to
+    the generic text plus a pointer to the code + phone lookup.
+
+    D18 live status: the page subscribes to PaymentStatusNotifier only when the code matched
+    PlacedOrderState (the right to see this order is already proven), in OnAfterRender so a prerender
+    never subscribes. The panel flips to the paid message from the event itself (no query by code).
+    The aria-live region is always rendered so its later text change is announced.
 *@
 
 <PageTitle>Đặt hàng thành công - Nie Farm Việt Nam</PageTitle>
@@ -13,19 +29,59 @@
     <meta name="robots" content="noindex" />
 </HeadContent>
 
+<p class="sr-only" aria-live="polite">@(_paid ? PaidMessage : "")</p>
+
 <div class="acct-confirm">
-    <div class="shell" style="max-width:34rem">
-        <span class="acct-confirm__icon"><NfIcon Name="check" Size="28" /></span>
+    <div class="shell" style="max-width:@(_bankTransfer is null || _paid ? "34rem" : "46rem")">
+        @* Hand-drawn tick, not NfIcon "check": its right stroke is 1.3x taller than the shared icon's.
+           If the path length changes, update the dash length in nf-pages.css (.acct-confirm__icon). *@
+        <span class="acct-confirm__icon">
+            <svg class="ico" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 14.1 5 5 11-14.3" /></svg>
+        </span>
 
         <h1 style="margin-top:1.5rem">Đặt hàng thành công!</h1>
         <p class="lede" style="margin:.75rem auto 0">
-            Cảm ơn bạn đã đặt hàng tại Nie Farm. Mã đơn hàng của bạn là:
+            @if (_paid)
+            {
+                <text>Cảm ơn bạn đã đặt hàng tại Nie Farm. Mã đơn hàng của bạn là:</text>
+            }
+            else if (_bankTransfer is not null)
+            {
+                <text>Vui lòng chuyển khoản để hoàn tất đơn hàng. Mã đơn hàng của bạn là:</text>
+            }
+            else
+            {
+                <text>Cảm ơn bạn đã đặt hàng tại Nie Farm. Mã đơn hàng của bạn là:</text>
+            }
         </p>
 
         <p class="acct-confirm__code">@Code</p>
         <p class="muted" style="font-size:var(--fs-sm);margin:0 auto 1.5rem">
             Hãy lưu lại mã đơn hàng. Bạn có thể tra cứu đơn bằng mã này cùng số điện thoại đã dùng khi đặt hàng.
         </p>
+
+        @if (_paid)
+        {
+            <p class="nf-track__ok" style="margin:0 auto 1.5rem">@PaidMessage</p>
+        }
+        else if (_bankTransfer is not null)
+        {
+            <div style="text-align:left;margin-bottom:1.5rem">
+                <BankTransferPanel Instructions="_bankTransfer" />
+            </div>
+        }
+        else if (_placed is { PaymentMethod: PaymentMethod.BankTransfer })
+        {
+            <p class="muted" style="font-size:var(--fs-sm);margin:0 auto 1.5rem">
+                Thông tin chuyển khoản đang được cập nhật. Vui lòng liên hệ Nie Farm để được hỗ trợ.
+            </p>
+        }
+        else if (_placed is null)
+        {
+            <p class="muted" style="font-size:var(--fs-sm);margin:0 auto 1.5rem">
+                Nếu bạn chọn chuyển khoản, hãy tra cứu đơn hàng bằng mã đơn và số điện thoại để xem lại mã QR.
+            </p>
+        }
 
         <div style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:center">
             <a href="/tra-cuu-don-hang?ma=@Uri.EscapeDataString(Code)" class="btn btn--ghost"><span>Tra cứu đơn hàng</span></a>
@@ -39,5 +95,80 @@
 </div>
 
 @code {
+    private const string PaidMessage = "Nie Farm đã nhận được thanh toán của bạn.";
+
     [Parameter] public string Code { get; set; } = string.Empty;
+
+    private NieFarm.Application.Features.Orders.Dtos.OrderPlacedDto? _placed;
+    private NieFarm.Application.Features.Payments.Dtos.BankTransferInstructionsDto? _bankTransfer;
+    private IDisposable? _subscription;
+    private string? _subscribedCode;
+    private string? _paidForCode;
+    private bool _scrollToTop;
+
+    // Paid applies to the code it was received for, so changing the URL code never shows a stale message.
+    private bool _paid => string.Equals(_paidForCode, Code, StringComparison.OrdinalIgnoreCase);
+
+    protected override void OnParametersSet()
+    {
+        _placed = PlacedOrders.Get(Code);
+        _bankTransfer = _placed?.BankTransfer;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Subscribe only once the code is proven (it matched PlacedOrderState) and there is a transfer
+        // to wait for; re-subscribe when the code changes.
+        var wanted = _bankTransfer is not null && !_paid ? Code : null;
+        if (string.Equals(_subscribedCode, wanted, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _subscription?.Dispose();
+        _subscription = null;
+        _subscribedCode = wanted;
+
+        if (wanted is not null)
+            _subscription = PaymentNotifier.Subscribe(wanted, status => OnPaymentStatusAsync(wanted, status));
+    }
+
+    private Task OnPaymentStatusAsync(string code, NieFarm.Domain.Enums.PaymentStatus status)
+    {
+        if (status != NieFarm.Domain.Enums.PaymentStatus.Paid)
+            return Task.CompletedTask;
+
+        return InvokeAsync(() =>
+        {
+            _paidForCode = code;
+            _scrollToTop = true;
+            StateHasChanged();
+        });
+    }
+
+    // The QR panel is taller than the paid message, so the customer may be scrolled down the panel when
+    // the webhook lands. Bring the tick and the "received" message back into view once, after the render.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollToTop)
+            return;
+
+        _scrollToTop = false;
+        try
+        {
+            await Js.InvokeVoidAsync("window.scrollTo", new { top = 0, behavior = "smooth" });
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit gone: nothing to scroll.
+        }
+        catch (InvalidOperationException)
+        {
+            // JS interop unavailable (prerender): nothing to scroll.
+        }
+    }
+
+    public void Dispose()
+    {
+        _subscription?.Dispose();
+        _subscription = null;
+    }
 }

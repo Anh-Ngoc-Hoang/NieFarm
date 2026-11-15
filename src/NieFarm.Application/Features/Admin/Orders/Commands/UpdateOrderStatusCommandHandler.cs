@@ -36,6 +36,15 @@ public class UpdateOrderStatusCommandHandler(
             return Result.Conflict(
                 $"This order was updated by someone else — it is now {order.Status}. The page has been refreshed.");
 
+        if (order.PaymentStatus != request.FromPaymentStatus)
+            return Result.Conflict(
+                "The payment on this order was updated by someone else. The page has been refreshed.");
+
+        // The matrix allows it but the payment rules do not: say why instead of the generic error.
+        if (Order.AllowedNextStatuses(order.Status).Contains(request.ToStatus)
+            && order.IsBlockedByPayment(request.ToStatus))
+            return Result.Error($"Record the bank transfer before marking this order as {request.ToStatus}.");
+
         if (!order.CanChangeStatusTo(request.ToStatus))
             return Result.Error($"An order cannot move from {order.Status} to {request.ToStatus}.");
 

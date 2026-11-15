@@ -43,7 +43,9 @@ public class CancelLookedUpOrderCommandHandler(
             return Result.Success();
 
         if (!order.IsCancellableByCustomer)
-            return Result.Error(OrderLookupMessages.NotCancellable);
+            return Result.Error(order.PaymentStatus == PaymentStatus.Paid
+                ? OrderLookupMessages.PaidNotCancellable
+                : OrderLookupMessages.NotCancellable);
 
         var result = await workflow.CancelByCustomerAsync(order, null, null, request.Reason, cancellationToken);
 

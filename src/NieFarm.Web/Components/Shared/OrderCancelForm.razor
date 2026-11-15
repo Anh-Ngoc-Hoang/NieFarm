@@ -20,6 +20,10 @@
         <div id="@PanelId" role="group" aria-labelledby="@TitleId" class="nf-track__cancel-panel">
             <h3 id="@TitleId" class="nf-track__cancel-title">Bạn chắc chắn muốn hủy đơn @Code?</h3>
             <p>Sau khi hủy, đơn hàng không thể khôi phục. Nếu muốn mua lại, bạn cần đặt một đơn hàng mới.</p>
+            @if (!string.IsNullOrWhiteSpace(Warning))
+            {
+                <p class="nf-pay__note">@Warning</p>
+            }
 
             <label class="nf-label" for="@ReasonId">Lý do hủy (không bắt buộc)</label>
             <textarea id="@ReasonId" @ref="_reasonInput" class="nf-field" rows="3" maxlength="500"
@@ -47,6 +51,9 @@
     [Parameter, EditorRequired] public string Code { get; set; } = "";
     [Parameter] public bool Busy { get; set; }
     [Parameter] public string? Error { get; set; }
+
+    /// <summary>Optional extra notice inside the confirmation panel, e.g. the "already transferred?" warning.</summary>
+    [Parameter] public string? Warning { get; set; }
     [Parameter] public EventCallback<string?> OnConfirm { get; set; }
 
     private readonly string _uid = Guid.NewGuid().ToString("N")[..8];

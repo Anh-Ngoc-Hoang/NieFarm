@@ -23,6 +23,8 @@ public class GetOrdersAdminQueryHandler(IReadRepositoryBase<Order> repository)
             o.IsRead,
             o.Items.Sum(i => i.Quantity),
             o.Total,
-            o.CreatedAt)).ToList();
+            o.CreatedAt,
+            o.PaymentMethod,
+            o.PaymentStatus)).ToList();
     }
 }

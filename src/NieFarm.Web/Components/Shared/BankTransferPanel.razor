@@ -1,0 +1,110 @@
+@using System.Globalization
+@using NieFarm.Application.Features.Payments.Dtos
+
+@*
+    Bank transfer instructions: the VietQR code (rendered locally from the payload, never by a third
+    party), the five details a customer needs, and copy buttons. Shared by the order confirmation,
+    order lookup and My Order pages. Transactional content: no data-reveal / .draw anywhere inside.
+
+    The QR is never the only channel: every value is also plain text in the <dl>. The copy buttons are
+    driven by wwwroot/js/nf-copy.js (delegated [data-copy] handler), not IJSRuntime.
+
+    There is deliberately no "open banking app" deeplink (R-01 D17 was dropped).
+*@
+
+<section class="nf-pay" aria-labelledby="@_titleId">
+    <div class="nf-pay__head">
+        <h2 id="@_titleId" class="nf-pay__title">@(Heading ?? "Thông tin chuyển khoản")</h2>
+        <p class="nf-pay__lede">
+            Quét mã QR bằng ứng dụng ngân hàng hoặc chuyển khoản theo thông tin bên dưới.
+            Nie Farm sẽ xử lý đơn hàng sau khi nhận được tiền.
+        </p>
+    </div>
+
+    <div class="nf-pay__body">
+        <figure class="nf-pay__qr">
+            <img src="@_qrSrc" width="240" height="240" loading="eager"
+                 alt="Mã QR chuyển khoản @Money.Vnd(Instructions.Amount) cho đơn hàng @Instructions.TransferContent" />
+            <figcaption class="nf-pay__hint">
+                Đang dùng điện thoại? Nhấn giữ mã QR để lưu ảnh, rồi chọn ảnh này trong mục quét QR của ứng dụng ngân hàng.
+            </figcaption>
+        </figure>
+
+        <div>
+            <dl class="nf-pay__list">
+                <div class="nf-pay__row">
+                    <dt>Ngân hàng</dt>
+                    <dd>@Instructions.BankName</dd>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Instructions.Branch))
+                {
+                    <div class="nf-pay__row">
+                        <dt>Chi nhánh</dt>
+                        <dd>@Instructions.Branch</dd>
+                    </div>
+                }
+                <div class="nf-pay__row">
+                    <dt>Số tài khoản</dt>
+                    <dd>
+                        <span class="nf-pay__num">@Instructions.AccountNumber</span>
+                        <button type="button" class="nf-copy" data-copy="@Instructions.AccountNumber"
+                                aria-label="Sao chép số tài khoản">
+                            <span class="nf-copy__idle">Sao chép</span><span class="nf-copy__done">Đã sao chép</span>
+                        </button>
+                    </dd>
+                </div>
+                <div class="nf-pay__row">
+                    <dt>Chủ tài khoản</dt>
+                    <dd>@Instructions.AccountName</dd>
+                </div>
+                <div class="nf-pay__row">
+                    <dt>Số tiền</dt>
+                    <dd>
+                        <span class="nf-pay__num">@Money.Vnd(Instructions.Amount)</span>
+                        <button type="button" class="nf-copy" data-copy="@_amountDigits"
+                                aria-label="Sao chép số tiền">
+                            <span class="nf-copy__idle">Sao chép</span><span class="nf-copy__done">Đã sao chép</span>
+                        </button>
+                    </dd>
+                </div>
+                <div class="nf-pay__row">
+                    <dt>Nội dung chuyển khoản</dt>
+                    <dd>
+                        <span class="nf-pay__num">@Instructions.TransferContent</span>
+                        <button type="button" class="nf-copy" data-copy="@Instructions.TransferContent"
+                                aria-label="Sao chép nội dung chuyển khoản">
+                            <span class="nf-copy__idle">Sao chép</span><span class="nf-copy__done">Đã sao chép</span>
+                        </button>
+                    </dd>
+                </div>
+            </dl>
+
+            <p class="nf-pay__note">
+                Vui lòng ghi đúng nội dung chuyển khoản là <strong>@Instructions.TransferContent</strong> để Nie Farm đối chiếu nhanh.
+            </p>
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public BankTransferInstructionsDto Instructions { get; set; } = default!;
+    [Parameter] public string? Heading { get; set; }
+
+    private readonly string _titleId = $"nf-pay-{Guid.NewGuid():N}"[..14];
+    private string _qrSrc = "";
+    private string _amountDigits = "";
+    private string? _renderedPayload;
+
+    protected override void OnParametersSet()
+    {
+        // The data URI is built only when the payload changes, not on every re-render.
+        if (_renderedPayload != Instructions.QrPayload)
+        {
+            _qrSrc = QrCodeImage.ToPngDataUri(Instructions.QrPayload);
+            _renderedPayload = Instructions.QrPayload;
+        }
+
+        // Whole đồng, no separators: this is what the bank app field expects.
+        _amountDigits = decimal.Ceiling(Instructions.Amount).ToString("0", CultureInfo.InvariantCulture);
+    }
+}

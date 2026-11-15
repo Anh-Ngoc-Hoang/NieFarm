@@ -7,20 +7,29 @@
 @using NieFarm.Domain.Enums
 @implements IDisposable
 @inject ISender Sender
+@inject NieFarm.Web.Services.Orders.PaymentStatusNotifier PaymentNotifier
+@inject NieFarm.Web.Services.Orders.PlacedOrderState PlacedOrders
 
 @*
-    Real order lookup by code + phone (docs/plans/order-lookup-real.md). The page opens
-    empty; ?ma= pre-fills only the code. LookupOrderQuery returns a minimal, masked DTO.
+    Real order lookup by code + phone (docs/plans/R-02-order-lookup-real.md). The page opens
+    empty; ?ma= pre-fills only the code. Deliberate exception: when this circuit just placed
+    that order (PlacedOrderState match) the phone is filled from circuit memory and the normal
+    throttled LookupOrderQuery runs once; after a reload, in a new tab or for any other order
+    nothing is filled or run. LookupOrderQuery returns a minimal, masked DTO.
     An unknown code and a wrong phone both come back as NotFound and show the same constant
     sentence (NotFoundText, never echoing the input), so the page cannot be used to discover
     which codes exist. Repeated failures are throttled in Application/Infrastructure
     (IOrderLookupThrottle) and surface here as a plain error message.
 
-    Order workflow (docs/plans/order-workflow.md): the progress rail is OrderTrackProgress with
+    Order workflow (docs/plans/R-07-order-workflow.md): the progress rail is OrderTrackProgress with
     real step times, and a guest New order can be cancelled here. The cancel command re-verifies
     code + phone server-side, so the page sends the values captured at the successful lookup
     (_verifiedCode/_verifiedPhone), not whatever is typed in the inputs now. Account orders show a
     sign-in hint instead.
+
+    D18 live status: after a successful lookup the page subscribes to PaymentStatusNotifier for that
+    order code (the right to see it is proven by code + phone) and, on an event, re-runs the same
+    authorised LookupOrderQuery with the verified values. The event itself carries no order data.
 *@
 
 <PageTitle>Tra cứu đơn hàng - Nie Farm Việt Nam</PageTitle>
@@ -71,6 +80,7 @@
         @if (_order is not null)
         {
             <div class="nf-track__result" data-reveal="fade" @key="_order.Code">
+                <p class="sr-only" aria-live="polite">@(_justPaid ? PaidText : "")</p>
 
                 @* Progress *@
                 <div class="nf-track__panel">
@@ -84,9 +94,35 @@
 
                     <OrderTrackProgress Status="_order.Status" Timeline="_order.Timeline" />
 
+                    @* Payment (R-01): the panel shows only while the transfer is still awaited and the order is open. *@
+                    @if (_order.BankTransfer is not null)
+                    {
+                        <BankTransferPanel Instructions="_order.BankTransfer" />
+                        <p class="nf-pay__note">Nie Farm sẽ giao hàng sau khi nhận được chuyển khoản của bạn.</p>
+                    }
+                    else if (_order.PaymentMethod == PaymentMethod.BankTransfer
+                             && _order.PaymentStatus == PaymentStatus.AwaitingPayment
+                             && _order.Status != OrderStatus.Cancelled)
+                    {
+                        <p class="nf-pay__unavailable" role="status">Thông tin chuyển khoản đang được cập nhật. Vui lòng liên hệ Nie Farm để được hỗ trợ.</p>
+                    }
+                    else if (_order.PaymentStatus == PaymentStatus.Paid)
+                    {
+                        <p class="nf-track__ok">@PaidText</p>
+                    }
+                    else if (_order.PaymentStatus == PaymentStatus.RefundDue)
+                    {
+                        <p class="nf-track__ok" role="status">Đơn hàng đã hủy. Nie Farm sẽ liên hệ để hoàn tiền cho bạn.</p>
+                    }
+                    else if (_order.PaymentStatus == PaymentStatus.Refunded)
+                    {
+                        <p class="nf-track__ok" role="status">Nie Farm đã hoàn tiền cho đơn hàng này.</p>
+                    }
+
                     @if (_order.CanCancel)
                     {
-                        <OrderCancelForm Code="@_order.Code" Busy="_cancelBusy" Error="@_cancelError" OnConfirm="CancelAsync" />
+                        <OrderCancelForm Code="@_order.Code" Busy="_cancelBusy" Error="@_cancelError" OnConfirm="CancelAsync"
+                                         Warning="@(_order.PaymentMethod == PaymentMethod.BankTransfer && _order.PaymentStatus == PaymentStatus.AwaitingPayment ? OrderLookupMessages.CancelAfterTransferWarning : null)" />
                     }
                     else if (_order.CancelRequiresSignIn)
                     {
@@ -126,6 +162,13 @@
                                 <dt>Phương thức thanh toán</dt>
                                 <dd>@OrderStatusText.Vi(_order.PaymentMethod)</dd>
                             </div>
+                            @if (_order.PaymentMethod == PaymentMethod.BankTransfer)
+                            {
+                                <div>
+                                    <dt>Thanh toán</dt>
+                                    <dd><span class="badge-status @OrderStatusText.PaymentPillClass(_order.PaymentStatus)">@OrderStatusText.Vi(_order.PaymentStatus)</span></dd>
+                                </div>
+                            }
                         </dl>
                     </div>
 
@@ -202,6 +245,12 @@
         public string Phone { get; set; } = "";
     }
 
+    // One visible sentence; the sr-only aria-live region above is the only announcer.
+    private string PaidText =>
+        _order?.PaidAtUtc is { } paidAt
+            ? $"Nie Farm đã nhận được thanh toán của bạn lúc {VnTime.FromUtc(paidAt):dd/MM/yyyy HH:mm}"
+            : "Nie Farm đã nhận được thanh toán của bạn.";
+
     private readonly CancellationTokenSource _cts = new();
     private readonly LookupModel _model = new();
     private OrderLookupDto? _order;
@@ -213,8 +262,13 @@
     private string? _cancelNotice;
     private string _verifiedCode = "";
     private string _verifiedPhone = "";
+    private IDisposable? _subscription;
+    private bool _justPaid;
+    private int _lookupGeneration;
+    private bool _autoLookupTried;
 
-    // Pre-fills the code only; never the phone, and never submits on its own.
+    // Pre-fills the code only from the URL; the phone is never in the URL. The only automatic
+    // submit is the circuit-local one in OnAfterRenderAsync below.
     [SupplyParameterFromQuery(Name = "ma")] public string? PrefillCode { get; set; }
 
     protected override void OnInitialized()
@@ -223,11 +277,36 @@
             _model.Code = PrefillCode.Trim();
     }
 
+    // Auto-run from the success page: OnAfterRenderAsync never runs during prerender, and a hard
+    // reload starts a new circuit whose PlacedOrderState is empty, so both just show the prefilled
+    // code form. firstRender makes this at most once per page instance. The phone comes only from
+    // this circuit's PlacedOrderState (the customer's own just-placed order) and is never put in a
+    // URL, log or other storage; SearchAsync is the normal lookup, verified server-side by code +
+    // phone and subject to IOrderLookupThrottle.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _autoLookupTried) return;
+        _autoLookupTried = true;
+
+        if (string.IsNullOrWhiteSpace(_model.Code)
+            || !PlacedOrders.TryGetLookupCredentials(_model.Code, out var phone))
+            return;
+
+        _model.Phone = phone;
+        var search = SearchAsync();   // sets _busy synchronously before its first await
+        StateHasChanged();            // show the busy state while the query runs
+        await search;
+        StateHasChanged();
+    }
+
     private async Task SearchAsync()
     {
         if (_busy) return;
         _busy = true;
+        _lookupGeneration++;
         _order = null;
+        _justPaid = false;
+        UnsubscribeFromPayment();
         _message = null;
         _errors = [];
         _cancelError = null;
@@ -235,13 +314,18 @@
 
         try
         {
-            var result = await Sender.Send(new LookupOrderQuery(_model.Code, _model.Phone), _cts.Token);
+            // Snapshot: both inputs stay editable while the query runs, so the verified
+            // credentials must be the ones that were actually sent.
+            var code = _model.Code;
+            var phone = _model.Phone;
+            var result = await Sender.Send(new LookupOrderQuery(code, phone), _cts.Token);
 
             if (result.IsSuccess)
             {
                 _order = result.Value;
-                _verifiedCode = _model.Code;
-                _verifiedPhone = _model.Phone;
+                _verifiedCode = code;
+                _verifiedPhone = phone;
+                SubscribeToPayment(_order.Code);
             }
             else if (result.Status == ResultStatus.NotFound)
             {
@@ -316,8 +400,48 @@
         }
     }
 
+    // Called only after a successful, phone-verified lookup, with the server's own order code.
+    private void SubscribeToPayment(string code)
+    {
+        UnsubscribeFromPayment();
+        if (_order is { PaymentMethod: PaymentMethod.BankTransfer, PaymentStatus: PaymentStatus.AwaitingPayment })
+        {
+            var generation = _lookupGeneration;
+            var verifiedCode = _verifiedCode;
+            var verifiedPhone = _verifiedPhone;
+            _subscription = PaymentNotifier.Subscribe(code, status => OnPaymentStatusAsync(status, generation, verifiedCode, verifiedPhone));
+        }
+    }
+
+    private void UnsubscribeFromPayment()
+    {
+        _subscription?.Dispose();
+        _subscription = null;
+    }
+
+    private Task OnPaymentStatusAsync(PaymentStatus status, int generation, string code, string phone) =>
+        InvokeAsync(async () =>
+        {
+            if (_order is null || _cts.IsCancellationRequested || generation != _lookupGeneration) return;
+
+            // Re-run the page's own authorised lookup with the values captured at the verified lookup.
+            var refreshed = await Sender.Send(new LookupOrderQuery(code, phone), _cts.Token);
+
+            // A newer lookup may have replaced the order while this one was in flight; drop stale results.
+            if (!refreshed.IsSuccess || _order is null || _cts.IsCancellationRequested
+                || generation != _lookupGeneration || refreshed.Value.Code != _order.Code) return;
+
+            _order = refreshed.Value;
+            if (status == PaymentStatus.Paid && _order.PaymentStatus == PaymentStatus.Paid)
+                _justPaid = true;
+            if (_order.PaymentStatus != PaymentStatus.AwaitingPayment)
+                UnsubscribeFromPayment();
+            StateHasChanged();
+        });
+
     public void Dispose()
     {
+        UnsubscribeFromPayment();
         _cts.Cancel();
         _cts.Dispose();
     }

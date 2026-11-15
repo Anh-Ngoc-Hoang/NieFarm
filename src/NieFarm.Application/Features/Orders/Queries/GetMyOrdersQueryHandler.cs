@@ -22,6 +22,7 @@ public class GetMyOrdersQueryHandler(
 
         var orders = await repository.ListAsync(new MyOrdersSpec(customerId), cancellationToken);
         return Result<List<MyOrderListDto>>.Success(orders.Select(o => new MyOrderListDto(
-            o.Id, o.Code, o.Status, o.Items.Sum(i => i.Quantity), o.Total, o.CreatedAt)).ToList());
+            o.Id, o.Code, o.Status, o.Items.Sum(i => i.Quantity), o.Total, o.CreatedAt,
+            o.PaymentMethod, o.PaymentStatus)).ToList());
     }
 }

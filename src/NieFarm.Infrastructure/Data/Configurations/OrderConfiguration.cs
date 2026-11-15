@@ -61,6 +61,19 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .FindNavigation(nameof(Order.StatusChanges))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
+        // Default 0 = NotApplicable, which is correct for COD rows (R-01).
+        builder.Property(o => o.PaymentStatus).HasConversion<int>();
+        builder.Property(o => o.PaidAmount).HasPrecision(18, 2);
+
+        builder.HasMany(o => o.PaymentChanges)
+            .WithOne()
+            .HasForeignKey(p => p.OrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata
+            .FindNavigation(nameof(Order.PaymentChanges))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
         // Shadow concurrency token: keeps the Domain clean. Intent is carried by the command's
         // FromStatus; this only stops a stale save silently overwriting a newer status.
         builder.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();

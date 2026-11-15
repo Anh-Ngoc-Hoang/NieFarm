@@ -1,3 +1,4 @@
+using NieFarm.Application.Features.Payments.Dtos;
 using NieFarm.Domain.Enums;
 
 namespace NieFarm.Application.Features.Orders.Dtos;
@@ -21,4 +22,7 @@ public record OrderLookupDto(
     IReadOnlyList<OrderLookupLineDto> Lines,
     bool CanCancel,
     bool CancelRequiresSignIn,
-    IReadOnlyList<OrderTimelineEntryDto> Timeline);
+    IReadOnlyList<OrderTimelineEntryDto> Timeline,
+    PaymentStatus PaymentStatus,
+    DateTime? PaidAtUtc,
+    BankTransferInstructionsDto? BankTransfer);

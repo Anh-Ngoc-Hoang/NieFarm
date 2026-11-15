@@ -5,9 +5,11 @@
 @using NieFarm.Application.Features.Orders.Commands
 @using NieFarm.Application.Features.Orders.Dtos
 @using NieFarm.Application.Features.Orders.Queries
+@using NieFarm.Domain.Enums
 @implements IDisposable
 @inject ISender Sender
 @inject NavigationManager Navigation
+@inject NieFarm.Web.Services.Orders.PaymentStatusNotifier PaymentNotifier
 
 @*
     Markup-only rewrite onto NieFarm 2.0 (docs/plans/public-site-redesign-nf2.md
@@ -19,9 +21,13 @@
     shapes from OrderLookup.razor's own section of nf-pages.css rather than
     duplicating them.
 
-    Order workflow (docs/plans/order-workflow.md): the status pill now follows the status (it used
+    Order workflow (docs/plans/R-07-order-workflow.md): the status pill now follows the status (it used
     to be a fixed green), the header carries the OrderTrackProgress rail, and a New order can be
     cancelled through CancelMyOrderCommand (ownership is enforced server-side by MyOrderByIdSpec).
+
+    D18 live status: once the query has succeeded (the caller owns the order) the page subscribes to
+    PaymentStatusNotifier in OnAfterRender and, on an event, re-runs GetMyOrderDetailQuery. Disposed
+    with the component and re-subscribed when the order code changes.
 *@
 
 <PageTitle>@(_order is null ? "Đơn hàng" : $"Đơn hàng {_order.Code}") - Nie Farm Việt Nam</PageTitle>
@@ -42,6 +48,7 @@
 
                 @* Header *@
                 <div class="nf-track__panel">
+                    <p class="sr-only" aria-live="polite">@(_justPaid ? PaidText : "")</p>
                     <div class="nf-track__head" style="margin-bottom:0">
                         <div>
                             <h1 style="font-size:var(--fs-h3)">Mã đơn: <span class="nf-track__code">@_order.Code</span></h1>
@@ -56,9 +63,35 @@
                         <OrderTrackProgress Status="_order.Status" Timeline="_order.Timeline" />
                     </div>
 
+                    @* Payment (R-01): same states as the order lookup. *@
+                    @if (_order.BankTransfer is not null)
+                    {
+                        <BankTransferPanel Instructions="_order.BankTransfer" />
+                        <p class="nf-pay__note">Nie Farm sẽ giao hàng sau khi nhận được chuyển khoản của bạn.</p>
+                    }
+                    else if (_order.PaymentMethod == PaymentMethod.BankTransfer
+                             && _order.PaymentStatus == PaymentStatus.AwaitingPayment
+                             && _order.Status != OrderStatus.Cancelled)
+                    {
+                        <p class="nf-pay__unavailable" role="status">Thông tin chuyển khoản đang được cập nhật. Vui lòng liên hệ Nie Farm để được hỗ trợ.</p>
+                    }
+                    else if (_order.PaymentStatus == PaymentStatus.Paid)
+                    {
+                        <p class="nf-track__ok">@PaidText</p>
+                    }
+                    else if (_order.PaymentStatus == PaymentStatus.RefundDue)
+                    {
+                        <p class="nf-track__ok" role="status">Đơn hàng đã hủy. Nie Farm sẽ liên hệ để hoàn tiền cho bạn.</p>
+                    }
+                    else if (_order.PaymentStatus == PaymentStatus.Refunded)
+                    {
+                        <p class="nf-track__ok" role="status">Nie Farm đã hoàn tiền cho đơn hàng này.</p>
+                    }
+
                     @if (_order.CanCancel)
                     {
-                        <OrderCancelForm Code="@_order.Code" Busy="_cancelBusy" Error="@_cancelError" OnConfirm="CancelAsync" />
+                        <OrderCancelForm Code="@_order.Code" Busy="_cancelBusy" Error="@_cancelError" OnConfirm="CancelAsync"
+                                         Warning="@(_order.PaymentMethod == PaymentMethod.BankTransfer && _order.PaymentStatus == PaymentStatus.AwaitingPayment ? OrderLookupMessages.CancelAfterTransferWarning : null)" />
                     }
 
                     @if (_cancelNotice is not null)
@@ -96,6 +129,13 @@
                                 <dt>Phương thức thanh toán</dt>
                                 <dd>@OrderStatusText.Vi(_order.PaymentMethod)</dd>
                             </div>
+                            @if (_order.PaymentMethod == PaymentMethod.BankTransfer)
+                            {
+                                <div>
+                                    <dt>Thanh toán</dt>
+                                    <dd><span class="badge-status @OrderStatusText.PaymentPillClass(_order.PaymentStatus)">@OrderStatusText.Vi(_order.PaymentStatus)</span></dd>
+                                </div>
+                            }
                             @if (!string.IsNullOrWhiteSpace(_order.Note))
                             {
                                 <div>
@@ -163,7 +203,17 @@
 }
 
 @code {
+    // One visible sentence; the sr-only aria-live region above is the only announcer.
+    private string PaidText =>
+        _order?.PaidAtUtc is { } paidAt
+            ? $"Nie Farm đã nhận được thanh toán của bạn lúc {VnTime.FromUtc(paidAt):dd/MM/yyyy HH:mm}"
+            : "Nie Farm đã nhận được thanh toán của bạn.";
+
     [Parameter] public int Id { get; set; }
+
+    private IDisposable? _subscription;
+    private string? _subscribedCode;
+    private bool _justPaid;
 
     private readonly CancellationTokenSource _cts = new();
     private MyOrderDetailDto? _order;
@@ -183,8 +233,54 @@
             return;
         }
 
+        if (_order is not null && _order.Code != result.Value.Code)
+            _justPaid = false;
         _order = result.Value;
     }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // The query succeeded, so the caller owns this order. Only an unpaid bank transfer can still
+        // change; re-subscribe when the order (code) changes. OnAfterRender never runs in a prerender.
+        var wanted = _order is { PaymentMethod: PaymentMethod.BankTransfer, PaymentStatus: PaymentStatus.AwaitingPayment }
+            ? _order.Code
+            : null;
+        if (string.Equals(_subscribedCode, wanted, StringComparison.Ordinal))
+            return;
+
+        UnsubscribeFromPayment();
+        _subscribedCode = wanted;
+        if (wanted is not null)
+        {
+            var id = Id;
+            _subscription = PaymentNotifier.Subscribe(wanted, status => OnPaymentStatusAsync(status, id, wanted));
+        }
+    }
+
+    private void UnsubscribeFromPayment()
+    {
+        _subscription?.Dispose();
+        _subscription = null;
+        _subscribedCode = null;
+    }
+
+    private Task OnPaymentStatusAsync(PaymentStatus status, int id, string code) =>
+        InvokeAsync(async () =>
+        {
+            if (_cts.IsCancellationRequested || id != Id || _order?.Code != code) return;
+
+            // Re-run the page's own owner-scoped query; the event carries no order data.
+            var refreshed = await Sender.Send(new GetMyOrderDetailQuery(id), _cts.Token);
+
+            // Id or order may have changed while the query was in flight; drop stale results.
+            if (!refreshed.IsSuccess || _cts.IsCancellationRequested
+                || id != Id || _order?.Code != code || refreshed.Value.Code != code) return;
+
+            _order = refreshed.Value;
+            if (status == PaymentStatus.Paid && _order.PaymentStatus == PaymentStatus.Paid)
+                _justPaid = true;
+            StateHasChanged();
+        });
 
     private async Task CancelAsync(string? reason)
     {
@@ -233,6 +329,7 @@
 
     public void Dispose()
     {
+        UnsubscribeFromPayment();
         _cts.Cancel();
         _cts.Dispose();
     }

@@ -19,6 +19,16 @@ public record OrderStatusChangeDto(
     string? ChangedByName,
     string? Note);
 
+public record OrderPaymentChangeDto(
+    PaymentStatus? FromStatus,
+    PaymentStatus ToStatus,
+    DateTime ChangedAtUtc,
+    OrderStatusActor ChangedBy,
+    string? ChangedByName,
+    decimal? Amount,
+    string? Reference,
+    string? Note);
+
 public record OrderDetailDto(
     int Id,
     string Code,
@@ -36,4 +46,12 @@ public record OrderDetailDto(
     DateTime PlacedAt,
     List<OrderLineDto> Lines,
     IReadOnlyList<OrderStatus> AllowedNextStatuses,
-    List<OrderStatusChangeDto> History);
+    List<OrderStatusChangeDto> History,
+    PaymentStatus PaymentStatus,
+    DateTime? PaidAtUtc,
+    decimal? PaidAmount,
+    IReadOnlyList<OrderStatus> PaymentBlockedStatuses,
+    bool CanConfirmPayment,
+    bool CanRevertPayment,
+    bool CanMarkRefunded,
+    List<OrderPaymentChangeDto> PaymentHistory);

@@ -1,0 +1,128 @@
+@using NieFarm.Domain.Enums
+
+@*
+    Dialog for the three admin payment actions (record, undo, mark refunded). Same markup as
+    OrderStatusChangeModal. The parent runs the command and passes any validation message back
+    through Error, which keeps the dialog open; it closes the dialog itself via Hide() on success.
+    The amount is display-only: the server records the order total, never a value from here.
+    For Revert the reason is returned in the Note slot.
+*@
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title">
+        <div class="admin-modal__dialog" style="max-width:480px;">
+            <div class="admin-modal__body">
+                <h2 id="payment-modal-title" style="font-size:16px;font-weight:600;margin:0 0 8px;">@Title</h2>
+
+                @if (_mode == PaymentModalMode.Confirm)
+                {
+                    <p class="cell-muted" style="margin:0 0 16px;">
+                        Only confirm after your banking app shows @Money.Vnd(_amount) received with transfer content @_code.
+                    </p>
+                    @if (_orderCancelled)
+                    {
+                        <div class="form-alert form-alert--error" role="alert" style="margin:0 0 16px;">
+                            This order is cancelled. The payment will be recorded as Refund due.
+                        </div>
+                    }
+                }
+                else if (_mode == PaymentModalMode.Revert)
+                {
+                    <p class="cell-muted" style="margin:0 0 16px;">
+                        The order goes back to Awaiting payment. The reason is kept in the payment history.
+                    </p>
+                }
+                else
+                {
+                    <p class="cell-muted" style="margin:0 0 16px;">
+                        Confirm only after you have sent @Money.Vnd(_amount) back to the customer from your bank.
+                    </p>
+                }
+
+                @if (_mode == PaymentModalMode.Revert)
+                {
+                    <label class="form-label-admin" for="payment-note">Reason (required)</label>
+                    <textarea id="payment-note" class="form-control-admin" rows="3" maxlength="500"
+                              @bind="_note" @bind:event="oninput" disabled="@Busy"></textarea>
+                }
+                else
+                {
+                    <label class="form-label-admin" for="payment-reference">Bank transaction reference (optional)</label>
+                    <input id="payment-reference" class="form-control-admin" type="text" maxlength="100"
+                           @bind="_reference" @bind:event="oninput" disabled="@Busy" />
+
+                    <label class="form-label-admin" for="payment-note" style="margin-top:12px;">Note (optional)</label>
+                    <textarea id="payment-note" class="form-control-admin" rows="3" maxlength="500"
+                              @bind="_note" @bind:event="oninput" disabled="@Busy"></textarea>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Error))
+                {
+                    <div class="form-error" role="alert">@Error</div>
+                }
+            </div>
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="Cancel" disabled="@Busy">Close</button>
+                <button class="btn-admin" type="button"
+                        style="@(_mode == PaymentModalMode.Revert ? "background:var(--admin-danger);border-color:var(--admin-danger);" : null)"
+                        @onclick="ConfirmAsync" disabled="@Busy">
+                    @(Busy ? "Saving…" : ConfirmLabel)
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<(PaymentModalMode Mode, string? Reference, string? Note)> OnConfirm { get; set; }
+
+    private bool _visible;
+    private PaymentModalMode _mode;
+    private string _code = "";
+    private decimal _amount;
+    private bool _orderCancelled;
+    private string? _reference;
+    private string? _note;
+
+    private string Title => _mode switch
+    {
+        PaymentModalMode.Confirm => $"Record payment for {_code}",
+        PaymentModalMode.Revert => $"Undo payment for {_code}",
+        _ => $"Mark {_code} as refunded"
+    };
+
+    private string ConfirmLabel => _mode switch
+    {
+        PaymentModalMode.Confirm => "Record payment received",
+        PaymentModalMode.Revert => "Undo payment",
+        _ => "Mark as refunded"
+    };
+
+    public void Show(PaymentModalMode mode, string code, decimal amount, bool orderCancelled)
+    {
+        _mode = mode;
+        _code = code;
+        _amount = amount;
+        _orderCancelled = orderCancelled;
+        _reference = null;
+        _note = null;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public void Hide()
+    {
+        _visible = false;
+        StateHasChanged();
+    }
+
+    private void Cancel() => _visible = false;
+
+    private Task ConfirmAsync() => OnConfirm.InvokeAsync((
+        _mode,
+        _mode == PaymentModalMode.Revert || string.IsNullOrWhiteSpace(_reference) ? null : _reference.Trim(),
+        string.IsNullOrWhiteSpace(_note) ? null : _note.Trim()));
+}

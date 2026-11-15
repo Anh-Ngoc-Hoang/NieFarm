@@ -16,6 +16,9 @@ public class UpdateOrderStatusCommandValidator : AbstractValidator<UpdateOrderSt
         RuleFor(x => x.ToStatus)
             .IsInEnum().WithMessage("Select a valid order status.");
 
+        RuleFor(x => x.FromPaymentStatus)
+            .IsInEnum().WithMessage("Select a valid payment status.");
+
         RuleFor(x => x.Note)
             .MaximumLength(OrderStatusChange.NoteMaxLength)
             .WithMessage($"The note cannot exceed {OrderStatusChange.NoteMaxLength} characters.");

@@ -6,10 +6,13 @@ using NieFarm.Application.Common.Interfaces;
 using NieFarm.Infrastructure.Common;
 using NieFarm.Infrastructure.Data;
 using NieFarm.Infrastructure.Identity;
+using System.Threading.RateLimiting;
 using NieFarm.Web.Components;
+using NieFarm.Web.Endpoints;
 using NieFarm.Web.Middleware;
 using NieFarm.Web.Services.Admin;
 using NieFarm.Web.Services.Cart;
+using NieFarm.Web.Services.Orders;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -85,6 +88,44 @@ try
     // item count for the header badge.
     builder.Services.AddScoped<CartState>();
 
+    // Circuit-scoped hand-off of the just-placed order to the success page (never queried by code).
+    builder.Services.AddScoped<PlacedOrderState>();
+
+    // Live payment status: one in-memory notifier is both the publisher the Application layer calls
+    // and the subscribe-side the pages use (singleton, shared across circuits).
+    builder.Services.AddSingleton<PaymentStatusNotifier>();
+    builder.Services.AddSingleton<NieFarm.Application.Common.Interfaces.IPaymentStatusPublisher>(
+        sp => sp.GetRequiredService<PaymentStatusNotifier>());
+
+    // The SePay webhook is retried by SePay on any non-2xx, including 429, so the limit is generous.
+    // There is no ForwardedHeaders setup, so behind a reverse proxy every caller shares one IP
+    // partition and this behaves as one global bucket.
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        // Runs before the endpoint can opt out of the status-code-pages re-execute, so do it here and
+        // give the 429 a body (SePay-style JSON), otherwise it would be re-executed through /not-found.
+        options.OnRejected = async (context, token) =>
+        {
+            var http = context.HttpContext;
+            var feature = http.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>();
+            if (feature is not null)
+                feature.Enabled = false;
+            http.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+            http.Response.ContentType = "application/json";
+            await http.Response.WriteAsync("{\"success\":false}", token);
+        };
+        options.AddPolicy(SePayWebhookEndpoint.RateLimitPolicy, httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 120,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0
+                }));
+    });
+
     var app = builder.Build();
 
     if (!app.Environment.IsDevelopment())
@@ -97,6 +138,8 @@ try
     app.UseHttpsRedirection();
 
     app.UseMiddleware<CartCookieMiddleware>();
+
+    app.UseRateLimiter();
 
     app.UseAuthentication();
     app.UseAuthorization();
@@ -132,6 +175,8 @@ try
         })
         .RequireAuthorization(new AuthorizeAttribute { Roles = $"{AdminRoles.Admin},{AdminRoles.SuperAdmin}" })
         .DisableAntiforgery();
+
+    app.MapSePayWebhook();
 
     app.MapStaticAssets();
     app.MapRazorPages();

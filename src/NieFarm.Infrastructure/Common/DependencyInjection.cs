@@ -10,6 +10,7 @@ using NieFarm.Infrastructure.Data.Repositories;
 using NieFarm.Infrastructure.Identity;
 using NieFarm.Infrastructure.Services;
 using NieFarm.Infrastructure.Services.Addresses;
+using NieFarm.Infrastructure.Services.Payments;
 
 namespace NieFarm.Infrastructure.Common;
 
@@ -55,6 +56,11 @@ public static class DependencyInjection
         services.AddSingleton<ISlugGenerator, SlugGenerator>();
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSingleton<IOrderLookupThrottle, OrderLookupThrottle>();
+
+        services.Configure<BankTransferOptions>(configuration.GetSection(BankTransferOptions.SectionName));
+        services.Configure<SePayOptions>(configuration.GetSection(SePayOptions.SectionName));
+        services.AddSingleton<IBankTransferAccountProvider, ConfiguredBankTransferAccountProvider>();
+        services.AddSingleton<IPaymentWebhookAuthenticator, SePayWebhookAuthenticator>();
 
         services.AddMemoryCache();   // TryAdd-based; safe even if something else already registered it
 

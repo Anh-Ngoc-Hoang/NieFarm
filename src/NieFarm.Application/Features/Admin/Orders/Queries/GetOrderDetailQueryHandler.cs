@@ -33,12 +33,25 @@ public class GetOrderDetailQueryHandler(IReadRepositoryBase<Order> repository)
             order.CreatedAt,
             order.Items.Select(i => new OrderLineDto(
                 i.ProductName, i.Variant, i.ImageUrl, i.UnitPrice, i.Quantity, i.LineTotal)).ToList(),
-            Order.AllowedNextStatuses(order.Status),
+            order.AvailableNextStatuses(),
             order.StatusChanges
                 .OrderBy(c => c.ChangedAt).ThenBy(c => c.Id)
                 .Select(c => new OrderStatusChangeDto(
                     c.FromStatus, c.ToStatus, c.ChangedAt, c.ChangedBy,
                     c.ChangedByUserId != null, c.ChangedByName, c.Note))
+                .ToList(),
+            order.PaymentStatus,
+            order.PaidAt,
+            order.PaidAmount,
+            Order.AllowedNextStatuses(order.Status).Where(order.IsBlockedByPayment).ToList(),
+            order.CanConfirmPayment,
+            order.CanRevertPayment,
+            order.CanMarkRefunded,
+            order.PaymentChanges
+                .OrderBy(c => c.ChangedAt).ThenBy(c => c.Id)
+                .Select(c => new OrderPaymentChangeDto(
+                    c.FromStatus, c.ToStatus, c.ChangedAt, c.ChangedBy,
+                    c.ChangedByName, c.Amount, c.Reference, c.Note))
                 .ToList());
     }
 }

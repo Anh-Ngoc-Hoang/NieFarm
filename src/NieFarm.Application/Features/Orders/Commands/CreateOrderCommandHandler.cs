@@ -5,6 +5,8 @@ using NieFarm.Application.Common.Interfaces;
 using NieFarm.Application.Features.Carts;
 using NieFarm.Application.Features.Carts.Specifications;
 using NieFarm.Application.Features.Orders.Dtos;
+using NieFarm.Application.Features.Payments;
+using NieFarm.Domain.Enums;
 using NieFarm.Application.Features.Orders.Specifications;
 using DomainCart = NieFarm.Domain.Entities.Cart;
 using Order = NieFarm.Domain.Entities.Order;
@@ -15,7 +17,8 @@ public class CreateOrderCommandHandler(
     IRepositoryBase<Order> repository,
     IRepositoryBase<DomainCart> cartRepository,
     CartAssembler assembler,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IBankTransferAccountProvider bankAccountProvider)
     : IRequestHandler<CreateOrderCommand, Result<OrderPlacedDto>>
 {
     public async Task<Result<OrderPlacedDto>> Handle(
@@ -37,6 +40,13 @@ public class CreateOrderCommandHandler(
         // rather than silently being charged at a stale price or dropped.
         if (cart.HasUnavailableLines)
             return Result<OrderPlacedDto>.Error("Một số sản phẩm trong giỏ hàng đã hết hàng. Vui lòng cập nhật giỏ hàng.");
+
+        // The UI is not trusted, and the account can be switched off between page load and submit.
+        // Checked before a code is generated so a rejected order consumes nothing.
+        var bankAccount = bankAccountProvider.GetAccount();
+        if (request.PaymentMethod == PaymentMethod.BankTransfer && bankAccount is null)
+            return Result<OrderPlacedDto>.Error(
+                "Chuyển khoản ngân hàng tạm thời chưa khả dụng. Vui lòng chọn phương thức thanh toán khác.");
 
         var address = string.Join(", ", new[] { request.Street, request.Ward, request.Province }
             .Select(p => p.Trim())
@@ -76,7 +86,9 @@ public class CreateOrderCommandHandler(
         if (cartEntity is not null)
             await cartRepository.DeleteAsync(cartEntity, cancellationToken);
 
-        return Result<OrderPlacedDto>.Success(new OrderPlacedDto(order.Id, order.Code));
+        return Result<OrderPlacedDto>.Success(new OrderPlacedDto(
+            order.Id, order.Code, order.PaymentMethod, order.Total,
+            BankTransferInstructions.Build(order, bankAccount)));
     }
 
     /// <summary>Guards against a multi-axis variant display overflowing OrderItem.Variant's nvarchar(150).</summary>

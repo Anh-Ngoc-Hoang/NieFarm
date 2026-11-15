@@ -9,6 +9,7 @@ public sealed class OrderByIdSpec : Specification<Order>, ISingleResultSpecifica
     {
         Query.Include(o => o.Items)
              .Include(o => o.StatusChanges)
+             .Include(o => o.PaymentChanges)
              .AsSplitQuery()
              .Where(o => o.Id == id);
     }

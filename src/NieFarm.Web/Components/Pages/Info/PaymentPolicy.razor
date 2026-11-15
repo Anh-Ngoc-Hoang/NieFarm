@@ -1,10 +1,15 @@
 @page "/chinh-sach-thanh-toan"
+@using NieFarm.Application.Features.Payments.Dtos
+@using NieFarm.Application.Features.Payments.Queries
+@implements IDisposable
+@inject ISender Sender
 
 @* TODO(R-05): placeholder copy, pending legal review (docs/requirements.md R-05).
-   Replace every [ ... ] value ([tên ngân hàng], [số tài khoản], [chủ tài khoản], [thời gian xác nhận],
-   [đã/chưa], [cách yêu cầu hóa đơn]), then set UpdatedOn and remove IsDraft.
-   Dependent requirements: R-01 (QR/bank-transfer flow: do not promise a QR code until it ships),
-   R-18 (online payment: the "no card data" statement must be revisited if card payments are added). *@
+   Replace every [ ... ] value ([thời gian xác nhận], [đã/chưa], [cách yêu cầu hóa đơn]), then set
+   UpdatedOn and remove IsDraft. The bank account below is rendered from configuration (R-01), so this
+   page and checkout can never disagree.
+   Dependent requirements: R-18 (online payment: the "no card data" statement must be revisited if
+   card payments are added). *@
 
 <InfoPage Href="@InfoPages.Payment" IsDraft="true"
           Description="Chính sách thanh toán của Nie Farm Việt Nam: thanh toán khi nhận hàng và chuyển khoản ngân hàng."
@@ -19,13 +24,24 @@
     <p>Bạn thanh toán cho nhân viên giao hàng khi nhận được đơn hàng.</p>
 
     <h2 id="chuyen-khoan">Chuyển khoản ngân hàng</h2>
-    <p>Bạn chuyển khoản đến tài khoản sau:</p>
-    <ul>
-        <li>Ngân hàng: <strong>[tên ngân hàng]</strong></li>
-        <li>Số tài khoản: <strong>[số tài khoản]</strong></li>
-        <li>Chủ tài khoản: <strong>[chủ tài khoản]</strong></li>
-    </ul>
-    <p>Vui lòng ghi mã đơn hàng vào nội dung chuyển khoản để chúng tôi đối chiếu nhanh hơn.</p>
+    @if (_account is not null)
+    {
+        <p>Bạn chuyển khoản đến tài khoản sau:</p>
+        <ul>
+            <li>Ngân hàng: <strong>@_account.BankName</strong></li>
+            <li>Số tài khoản: <strong>@_account.AccountNumber</strong></li>
+            <li>Chủ tài khoản: <strong>@_account.AccountName</strong></li>
+        </ul>
+        <p>
+            Sau khi đặt hàng, trang xác nhận sẽ hiển thị mã QR chứa sẵn số tiền và nội dung chuyển khoản;
+            bạn chỉ cần quét bằng ứng dụng ngân hàng. Vui lòng ghi mã đơn hàng vào nội dung chuyển khoản để
+            chúng tôi đối chiếu nhanh hơn.
+        </p>
+    }
+    else
+    {
+        <p>Thông tin tài khoản đang được cập nhật.</p>
+    }
 
     <h2 id="xac-nhan">Xác nhận thanh toán</h2>
     <p>Chúng tôi sẽ xác nhận khoản thanh toán của bạn trong vòng <strong>[thời gian xác nhận]</strong>.</p>
@@ -39,3 +55,19 @@
     <h2 id="hoan-tien">Hoàn tiền</h2>
     <p>Việc hoàn tiền được thực hiện theo <a href="@(InfoPages.Returns + "#hoan-tien")">Chính sách đổi trả</a>.</p>
 </InfoPage>
+
+@code {
+    private BankTransferAccountDto? _account;
+
+    private readonly CancellationTokenSource _cts = new();
+
+    // In-memory configuration read (no outbound call), so it is safe on the prerender pass too.
+    protected override async Task OnInitializedAsync() =>
+        _account = await Sender.Send(new GetBankTransferAccountQuery(), _cts.Token);
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

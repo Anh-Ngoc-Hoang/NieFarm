@@ -34,7 +34,9 @@ public class CancelMyOrderCommandHandler(
             return Result.Success();
 
         if (!order.IsCancellableByCustomer)
-            return Result.Error(OrderLookupMessages.NotCancellable);
+            return Result.Error(order.PaymentStatus == PaymentStatus.Paid
+                ? OrderLookupMessages.PaidNotCancellable
+                : OrderLookupMessages.NotCancellable);
 
         var result = await workflow.CancelByCustomerAsync(
             order, userId, displayName, request.Reason, cancellationToken);

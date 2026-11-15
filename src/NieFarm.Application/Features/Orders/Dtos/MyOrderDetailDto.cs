@@ -1,3 +1,4 @@
+using NieFarm.Application.Features.Payments.Dtos;
 using NieFarm.Domain.Enums;
 
 namespace NieFarm.Application.Features.Orders.Dtos;
@@ -11,4 +12,5 @@ public record MyOrderDetailDto(
     string ShippingAddress, string? Note, OrderStatus Status, PaymentMethod PaymentMethod,
     decimal Subtotal, decimal ShippingFee, decimal Discount, decimal Total,
     DateTime PlacedAt, List<MyOrderLineDto> Lines,
-    bool CanCancel, IReadOnlyList<OrderTimelineEntryDto> Timeline);
+    bool CanCancel, IReadOnlyList<OrderTimelineEntryDto> Timeline,
+    PaymentStatus PaymentStatus, DateTime? PaidAtUtc, BankTransferInstructionsDto? BankTransfer);

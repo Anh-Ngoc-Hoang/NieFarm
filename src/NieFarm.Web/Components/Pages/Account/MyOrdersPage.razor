@@ -61,6 +61,12 @@
                                     <span class="badge-status @OrderStatusText.PillClass(order.Status)">
                                         @OrderStatusText.Vi(order.Status)
                                     </span>
+                                    @if (order.PaymentMethod == PaymentMethod.BankTransfer
+                                         && order.PaymentStatus == PaymentStatus.AwaitingPayment
+                                         && order.Status != OrderStatus.Cancelled)
+                                    {
+                                        <span class="badge-status badge-status--pending">@OrderStatusText.Vi(PaymentStatus.AwaitingPayment)</span>
+                                    }
                                     <span class="acct__row-total">@SiteContent.Vnd(order.Total)</span>
                                     <NfIcon Name="arrow-right" Size="16" CssClass="acct__row-arrow" />
                                 </div>

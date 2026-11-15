@@ -11,4 +11,6 @@ public record OrderAdminListDto(
     bool IsRead,
     int ItemCount,
     decimal Total,
-    DateTime PlacedAt);
+    DateTime PlacedAt,
+    PaymentMethod PaymentMethod,
+    PaymentStatus PaymentStatus);

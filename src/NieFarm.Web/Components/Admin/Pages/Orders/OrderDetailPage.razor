@@ -6,6 +6,7 @@
 @using NieFarm.Application.Features.Admin.Orders.Queries
 @using Ardalis.Result
 @using NieFarm.Domain.Enums
+@implements IDisposable
 @inject ISender Sender
 @inject NewOrderCountState OrderCountState
 
@@ -39,8 +40,9 @@ else
     <AdminCard Title="Status">
         <div class="admin-card__body" style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
             <AdminBadge Text="@_order.Status.ToString()" Variant="@OrdersPage.StatusVariant(_order.Status)" />
-            <AdminBadge Text="@PaymentMethodText(_order.PaymentMethod)" Variant="muted" />
-            @if (_order.AllowedNextStatuses.Count == 0)
+            <AdminBadge Text="@OrdersPage.PaymentText(_order.PaymentMethod, _order.PaymentStatus)"
+                        Variant="@OrdersPage.PaymentVariant(_order.PaymentMethod, _order.PaymentStatus)" />
+            @if (_order.AllowedNextStatuses.Count == 0 && _order.PaymentBlockedStatuses.Count == 0)
             {
                 <span class="cell-muted">This order is @_order.Status. Its status can no longer change.</span>
             }
@@ -54,8 +56,110 @@ else
                         @ActionLabel(next)
                     </button>
                 }
+
+                @* Moves the matrix allows but the payment rules block: shown disabled, with the reason. *@
+                @foreach (var blocked in _order.PaymentBlockedStatuses)
+                {
+                    <button type="button" class="btn-admin" disabled aria-describedby="payment-blocked-hint">
+                        @ActionLabel(blocked)
+                    </button>
+                }
+                @if (_order.PaymentBlockedStatuses.Count > 0)
+                {
+                    <span id="payment-blocked-hint" class="cell-muted" style="font-size:13px;">
+                        Delivery is locked until the bank transfer is recorded.
+                    </span>
+                }
             }
         </div>
+    </AdminCard>
+
+    <AdminCard Title="Payment">
+        @if (_order.PaymentMethod == PaymentMethod.CashOnDelivery)
+        {
+            <div class="admin-card__body cell-muted">Cash on delivery — collected by the courier.</div>
+        }
+        else
+        {
+            <div class="admin-card__body">
+                <dl style="margin:0 0 16px;display:grid;grid-template-columns:160px 1fr;gap:10px 16px;">
+                    <dt class="cell-muted">Status</dt>
+                    <dd style="margin:0;"><AdminBadge Text="@OrdersPage.PaymentStatusText(_order.PaymentStatus)" Variant="@OrdersPage.PaymentStatusVariant(_order.PaymentStatus)" /></dd>
+
+                    <dt class="cell-muted">Amount due</dt>
+                    <dd style="margin:0;">@Money.Vnd(_order.Total)</dd>
+
+                    <dt class="cell-muted">Transfer content</dt>
+                    <dd style="margin:0;">@_order.Code</dd>
+
+                    @if (_order.PaidAtUtc is { } paidAt)
+                    {
+                        <dt class="cell-muted">Paid at (GMT+7)</dt>
+                        <dd style="margin:0;">@VnTime.FromUtc(paidAt).ToString("dd/MM/yyyy HH:mm")</dd>
+
+                        <dt class="cell-muted">Paid amount</dt>
+                        <dd style="margin:0;">@Money.Vnd(_order.PaidAmount ?? 0m)</dd>
+                    }
+
+                    @if (LatestReference is not null)
+                    {
+                        <dt class="cell-muted">Reference</dt>
+                        <dd style="margin:0;">@LatestReference</dd>
+                    }
+                </dl>
+
+                <div style="display:flex;flex-wrap:wrap;gap:12px;">
+                    @if (_order.CanConfirmPayment)
+                    {
+                        <button type="button" class="btn-admin" disabled="@_saving"
+                                @onclick="() => OpenPaymentModal(PaymentModalMode.Confirm)">Record payment received</button>
+                    }
+                    @if (_order.CanRevertPayment)
+                    {
+                        <button type="button" class="btn-admin-outline"
+                                style="color:var(--admin-danger);border-color:var(--admin-danger);"
+                                disabled="@_saving"
+                                @onclick="() => OpenPaymentModal(PaymentModalMode.Revert)">Undo payment</button>
+                    }
+                    @if (_order.CanMarkRefunded)
+                    {
+                        <button type="button" class="btn-admin" disabled="@_saving"
+                                @onclick="() => OpenPaymentModal(PaymentModalMode.Refund)">Mark as refunded</button>
+                    }
+                </div>
+            </div>
+
+            @if (_order.PaymentHistory.Count > 0)
+            {
+                <div style="overflow-x:auto;">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th style="width:170px;">When (GMT+7)</th>
+                                <th style="width:220px;">Change</th>
+                                <th style="width:140px;">Amount</th>
+                                <th style="width:160px;">By</th>
+                                <th style="width:160px;">Reference</th>
+                                <th>Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var change in _order.PaymentHistory)
+                            {
+                                <tr>
+                                    <td class="cell-muted">@VnTime.FromUtc(change.ChangedAtUtc).ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="cell-primary">@(change.FromStatus is null ? change.ToStatus.ToString() : $"{change.FromStatus} → {change.ToStatus}")</td>
+                                    <td>@(change.Amount is { } amount ? Money.Vnd(amount) : "—")</td>
+                                    <td>@PaymentActorText(change)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(change.Reference) ? "—" : change.Reference)</td>
+                                    <td>@(string.IsNullOrWhiteSpace(change.Note) ? "—" : change.Note)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
     </AdminCard>
 
     <AdminCard Title="Status history">
@@ -173,17 +277,27 @@ else
     </div>
 }
 
-<OrderStatusChangeModal @ref="_modal" Busy="_saving" Error="_modalError" OnConfirm="ConfirmStatusChangeAsync" />
+<OrderStatusChangeModal @ref="_modal" Busy="_saving" Error="_modalError" Warning="@CancelPaidWarning"
+                        OnConfirm="ConfirmStatusChangeAsync" />
+<OrderPaymentModal @ref="_paymentModal" Busy="_saving" Error="_modalError" OnConfirm="ConfirmPaymentAsync" />
 
 @code {
     [Parameter] public int Id { get; set; }
 
     private OrderDetailDto? _order;
     private OrderStatusChangeModal? _modal;
+    private OrderPaymentModal? _paymentModal;
     private string? _modalError;
     private string? _statusError;
     private bool _loaded;
     private bool _saving;
+    private readonly CancellationTokenSource _cts = new();
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -203,12 +317,83 @@ else
         _loaded = true;
     }
 
-    private static string PaymentMethodText(PaymentMethod method) => method switch
+    // The reference of the most recent payment row that carries one (what the admin looks up in the bank app).
+    private string? LatestReference =>
+        _order?.PaymentHistory.LastOrDefault(c => !string.IsNullOrWhiteSpace(c.Reference))?.Reference;
+
+    // Shown in the cancel dialog only; the modal ignores it for other transitions.
+    private string? CancelPaidWarning => _order is { PaymentStatus: PaymentStatus.Paid }
+        ? $"This order has been paid ({Money.Vnd(_order.PaidAmount ?? 0m)}). Cancelling flags it as Refund due — refund the customer from your bank."
+        : null;
+
+    private static string PaymentActorText(OrderPaymentChangeDto change) => change.ChangedBy switch
     {
-        PaymentMethod.CashOnDelivery => "Cash on Delivery",
-        PaymentMethod.BankTransfer => "Bank Transfer",
-        _ => method.ToString()
+        OrderStatusActor.Admin => string.IsNullOrWhiteSpace(change.ChangedByName) ? "Admin" : change.ChangedByName,
+        OrderStatusActor.Customer => "Customer",
+        _ => string.IsNullOrWhiteSpace(change.ChangedByName) ? "System" : change.ChangedByName
     };
+
+    private void OpenPaymentModal(PaymentModalMode mode)
+    {
+        if (_order is null) return;
+        _modalError = null;
+        _statusError = null;
+        // The amount is display-only: Confirm shows the total due, Refund shows what was received.
+        var amount = mode == PaymentModalMode.Refund ? _order.PaidAmount ?? _order.Total : _order.Total;
+        _paymentModal?.Show(mode, _order.Code, amount, _order.Status == OrderStatus.Cancelled);
+    }
+
+    private async Task ConfirmPaymentAsync((PaymentModalMode Mode, string? Reference, string? Note) args)
+    {
+        if (_order is null || _saving) return;
+
+        _saving = true;
+        _modalError = null;
+        _statusError = null;
+
+        try
+        {
+            var result = args.Mode switch
+            {
+                PaymentModalMode.Confirm => await Sender.Send(
+                    new ConfirmOrderPaymentCommand(Id, _order.Status, args.Reference, args.Note), _cts.Token),
+                PaymentModalMode.Revert => await Sender.Send(
+                    new RevertOrderPaymentCommand(Id, args.Note ?? string.Empty), _cts.Token),
+                _ => await Sender.Send(
+                    new MarkOrderRefundedCommand(Id, args.Reference, args.Note), _cts.Token)
+            };
+
+            var message = result.ValidationErrors.Select(e => e.ErrorMessage)
+                .Concat(result.Errors)
+                .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
+
+            if (result.IsSuccess)
+            {
+                _paymentModal?.Hide();
+                await LoadAsync();
+            }
+            else if (result.Status == ResultStatus.Conflict)
+            {
+                _paymentModal?.Hide();
+                _statusError = message ?? "This order was updated by someone else. The page has been refreshed.";
+                await LoadAsync();
+            }
+            else if (result.Status == ResultStatus.NotFound)
+            {
+                _paymentModal?.Hide();
+                _statusError = "This order no longer exists.";
+                await LoadAsync();
+            }
+            else
+            {
+                _modalError = message ?? "Could not update the payment.";
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
 
     private static string ActionLabel(OrderStatus to) => to switch
     {
@@ -261,7 +446,7 @@ else
         try
         {
             var result = await Sender.Send(
-                new UpdateOrderStatusCommand(Id, _order.Status, args.To, args.Note));
+                new UpdateOrderStatusCommand(Id, _order.Status, args.To, args.Note, _order.PaymentStatus));
 
             var message = result.ValidationErrors.Select(e => e.ErrorMessage)
                 .Concat(result.Errors)
