@@ -1,0 +1,179 @@
+@using System.Globalization
+@using NieFarm.Application.Features.Carts.Commands
+@using NieFarm.Application.Features.Products.Dtos
+@using NieFarm.Web.Services.Cart
+@implements IDisposable
+@inject ISender Sender
+@inject CartState CartState
+
+@*
+    The one product grid card (R-09): /cua-hang, the home featured band and the PDP related grid.
+    The <article> keeps a STATIC class (CLAUDE.md trap: a Razor class expression on a data-reveal
+    element wipes the JS-added "is-in"); all state lives on inner elements.
+
+    Footer action, by product:
+      no options, available -> "Thêm vào giỏ" (AddToCartCommand with no selection)
+      has options           -> "Chọn loại" link to the PDP (grind/weight must be chosen there)
+      nothing available     -> "Tạm hết hàng" (no button; the PDP link stays)
+    The add button is disabled until the circuit is interactive (the page prerenders first).
+*@
+
+<article class="pcard" data-reveal style="--d:@DelayText">
+    @* tabindex -1 only: the product-name link below is the tab stop, but the image link stays in the
+       accessibility tree so the photo's alt text is reachable (ui.md). *@
+    <a class="pcard__media" href="@Href" tabindex="-1">
+        @if (Product.Badge is not null)
+        {
+            <span class="pcard__tag pcard__tag--new">@Product.Badge</span>
+        }
+        <img src="@Product.ImageUrl" alt="@Product.ImageAlt" />
+        @if (ShowQuickView)
+        {
+            <span class="pcard__quick">
+                Xem chi tiết <i><NfIcon Name="arrow-right" Size="13" /></i>
+            </span>
+        }
+    </a>
+    <div class="pcard__body">
+        <p class="pcard__cat">@Product.CategoryName</p>
+        <h3 class="pcard__name"><a href="@Href">@Product.Name</a></h3>
+        <div class="pcard__foot pcard__foot--act">
+            <span class="pcard__price">@Money.Vnd(Product.Price)</span>
+            @if (!Product.IsAvailable)
+            {
+                <span class="pcard__soldout">Tạm hết hàng</span>
+            }
+            else if (Product.HasOptions)
+            {
+                <a class="pcard__choose" href="@Href" aria-label="@($"Chọn loại cho {Product.Name}")">
+                    Chọn loại <NfIcon Name="arrow-right" Size="13" />
+                </a>
+            }
+            else
+            {
+                <button type="button" class="pcard__add" disabled="@(_adding || !RendererInfo.IsInteractive)" aria-busy="@(_adding ? "true" : "false")"
+                        aria-label="@($"Thêm {Product.Name} vào giỏ hàng")" @onclick="AddAsync">
+                    @if (_added)
+                    {
+                        <NfIcon Name="check" Size="16" />
+                        <span class="pcard__add-text">Đã thêm</span>
+                    }
+                    else
+                    {
+                        @* While adding, the button keeps this idle look (disabled, aria-busy) so its
+                           width never jumps; the live region announces the progress. *@
+                        <NfIcon Name="cart" Size="16" />
+                        <span class="pcard__add-text">Thêm vào giỏ</span>
+                    }
+                </button>
+            }
+        </div>
+        <span class="sr-only" role="status">@_status</span>
+        @if (_error is not null)
+        {
+            <p class="pcard__err" role="alert">@_error</p>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ProductCardDto Product { get; set; } = default!;
+
+    /// <summary>Reveal stagger in seconds.</summary>
+    [Parameter] public double Delay { get; set; }
+
+    /// <summary>The hover "Xem chi tiết" pill over the photo (not used on the PDP related grid).</summary>
+    [Parameter] public bool ShowQuickView { get; set; } = true;
+
+    [CascadingParameter(Name = "CartAnonymousId")] public string? CartAnonymousId { get; set; }
+
+    private CancellationTokenSource? _resetCts;
+    private bool _disposed;
+    private bool _adding;
+    private bool _added;
+    private string? _status;
+    private string? _error;
+
+    private string Href => $"/san-pham/{Product.Slug}";
+    private string DelayText => Delay.ToString("0.00", CultureInfo.InvariantCulture) + "s";
+
+    private async Task AddAsync()
+    {
+        if (_adding || _disposed) return;   // double-click guard
+
+        // Captured before the await: the parameter may be re-bound to another product meanwhile.
+        var name = Product.Name;
+        var productId = Product.Id;
+
+        _adding = true;
+        _added = false;
+        _error = null;
+        _status = "Đang thêm vào giỏ hàng";
+
+        try
+        {
+            var result = await Sender.Send(new AddToCartCommand(productId, [], 1, CartAnonymousId));
+
+            if (result.IsSuccess)
+            {
+                CartState.Set(result.Value.ItemCount);   // header badge, no extra round trip
+                _added = true;
+                _status = $"Đã thêm {name} vào giỏ hàng";
+                _ = ResetAddedAsync();
+            }
+            else
+            {
+                _status = null;
+                _error = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+                    ?? "Không thể thêm vào giỏ hàng.";
+            }
+        }
+        catch (Exception)
+        {
+            _status = null;
+            _error = "Không thể thêm vào giỏ hàng.";
+        }
+        finally
+        {
+            _adding = false;
+        }
+    }
+
+    private async Task ResetAddedAsync()
+    {
+        if (_disposed) return;
+
+        CancelReset();
+        var cts = _resetCts = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (_disposed) return;
+
+        _added = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CancelReset()
+    {
+        var cts = _resetCts;
+        _resetCts = null;
+        cts?.Cancel();
+        cts?.Dispose();
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        CancelReset();
+    }
+}

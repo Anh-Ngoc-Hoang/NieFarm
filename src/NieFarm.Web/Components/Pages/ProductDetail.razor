@@ -381,20 +381,7 @@
                             var related = _relatedProducts[i];
                             var delay = (i % 3) * 0.06;
 
-                            <article class="pcard" data-reveal style="--d:@(delay.ToString("0.00", CultureInfo.InvariantCulture))s">
-                                <a class="pcard__media" href="@($"/san-pham/{related.Slug}")">
-                                    @if (related.Badge is not null)
-                                    {
-                                        <span class="pcard__tag pcard__tag--new">@related.Badge</span>
-                                    }
-                                    <img src="@related.ImageUrl" alt="@related.ImageAlt" />
-                                </a>
-                                <div class="pcard__body">
-                                    <p class="pcard__cat">@related.CategoryName</p>
-                                    <h3 class="pcard__name"><a href="@($"/san-pham/{related.Slug}")">@related.Name</a></h3>
-                                    <div class="pcard__foot"><span class="pcard__price">@Money.Vnd(related.Price)</span></div>
-                                </div>
-                            </article>
+                            <ProductCard @key="related.Id" Product="related" Delay="delay" ShowQuickView="false" />
                         }
                     </div>
                 </section>

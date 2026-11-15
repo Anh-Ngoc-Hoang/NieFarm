@@ -16,15 +16,7 @@ public class GetShopProductsQueryHandler(IReadRepositoryBase<Product> repository
             new VisibleProductsSpec(request.CategoryIds, request.Sort), cancellationToken);
 
         return products
-            .Select(p => new ProductCardDto(
-                p.Slug,
-                p.Name,
-                p.Category?.Name ?? string.Empty,
-                p.Price,
-                p.ImageUrl,
-                p.ImageAlt,
-                string.IsNullOrWhiteSpace(p.Badge) ? null : p.Badge,
-                p.Summary))
+            .Select(ProductCardMapper.ToCard)
             .ToList();
     }
 }

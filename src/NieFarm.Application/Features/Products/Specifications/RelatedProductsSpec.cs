@@ -14,6 +14,9 @@ public sealed class RelatedProductsSpec : Specification<Product>
     {
         Query.Where(p => p.IsVisible && p.Id != excludeProductId)
             .Include(p => p.Category)
+            .Include(p => p.Options).ThenInclude(o => o.Values)
+            .Include(p => p.Variants).ThenInclude(v => v.Values)
+            .AsSplitQuery()
             .OrderBy(p => p.SortOrder)
             .ThenBy(p => p.Name)
             .Take(take);

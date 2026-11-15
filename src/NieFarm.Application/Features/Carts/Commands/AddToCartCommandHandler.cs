@@ -42,7 +42,7 @@ public class AddToCartCommandHandler(
 
             // The server-side re-check that makes the UI's IsOutOfStock disable cosmetic
             // rather than load-bearing.
-            if (!variant.IsAvailable)
+            if (!ProductAvailability.IsVariantPurchasable(product, variant))
                 return Result<CartDto>.Error("Sản phẩm hiện tạm hết hàng.");
         }
 

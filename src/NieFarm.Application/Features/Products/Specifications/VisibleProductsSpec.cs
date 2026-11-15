@@ -18,7 +18,11 @@ public sealed class VisibleProductsSpec : Specification<Product>
         if (categoryIds is { Count: > 0 })
             Query.Where(p => categoryIds.Contains(p.CategoryId));
 
-        Query.Include(p => p.Category);
+        // Options/Variants feed the card's HasOptions/IsAvailable (R-09).
+        Query.Include(p => p.Category)
+            .Include(p => p.Options).ThenInclude(o => o.Values)
+            .Include(p => p.Variants).ThenInclude(v => v.Values)
+            .AsSplitQuery();
 
         // Exactly one ordering chain — two unconditional OrderBy calls on the same builder
         // would silently discard the first.

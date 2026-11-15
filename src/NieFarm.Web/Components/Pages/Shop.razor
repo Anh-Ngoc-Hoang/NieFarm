@@ -15,8 +15,8 @@
     supplies neither — the add-if-absent/remove-if-present toggle semantics are unchanged.
     Ratings, old price and category counts are omitted: ProductCardDto/ProductCategoryFilterDto
     carry none of them (plan §2.3). The dead 1-page pagination <nav> is deleted outright; the count
-    line is now honest ("Hiển thị N sản phẩm"). The inert "Thêm vào giỏ" button is replaced by
-    ".pcard__quick" ("Xem chi tiết →"), which needs no product decision (D11 stays open).
+    line is now honest ("Hiển thị N sản phẩm"). The grid renders Shared/ProductCard (R-09, D11
+    closed): a real "Thêm vào giỏ" for products with no options, "Chọn loại" otherwise.
 *@
 
 <PageTitle>Cửa hàng - Nie Farm Việt Nam</PageTitle>
@@ -88,25 +88,7 @@
                     var product = _products[i];
                     var delay = (i % 3) * 0.06;
 
-                    <article class="pcard" data-reveal style="--d:@(delay.ToString("0.00", CultureInfo.InvariantCulture))s">
-                        <a class="pcard__media" href="@($"/san-pham/{product.Slug}")">
-                            @if (product.Badge is not null)
-                            {
-                                <span class="pcard__tag pcard__tag--new">@product.Badge</span>
-                            }
-                            <img src="@product.ImageUrl" alt="@product.ImageAlt" />
-                            <span class="pcard__quick">
-                                Xem chi tiết <i><NfIcon Name="arrow-right" Size="13" /></i>
-                            </span>
-                        </a>
-                        <div class="pcard__body">
-                            <p class="pcard__cat">@product.CategoryName</p>
-                            <h3 class="pcard__name"><a href="@($"/san-pham/{product.Slug}")">@product.Name</a></h3>
-                            <div class="pcard__foot">
-                                <span class="pcard__price">@Money.Vnd(product.Price)</span>
-                            </div>
-                        </div>
-                    </article>
+                    <ProductCard @key="product.Id" Product="product" Delay="delay" />
                 }
             </div>
         }

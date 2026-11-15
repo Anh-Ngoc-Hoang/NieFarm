@@ -14,6 +14,9 @@ public sealed class HomeFeaturedProductsSpec : Specification<Product>
     {
         Query.Where(p => p.IsVisible)
             .Include(p => p.Category)
+            .Include(p => p.Options).ThenInclude(o => o.Values)
+            .Include(p => p.Variants).ThenInclude(v => v.Values)
+            .AsSplitQuery()
             .OrderByDescending(p => p.IsFeatured)
             .ThenBy(p => p.SortOrder)
             .ThenBy(p => p.Id)

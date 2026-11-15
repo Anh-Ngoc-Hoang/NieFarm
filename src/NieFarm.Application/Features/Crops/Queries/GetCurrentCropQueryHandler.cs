@@ -2,7 +2,7 @@ using Ardalis.Specification;
 using MediatR;
 using NieFarm.Application.Features.Crops.Dtos;
 using NieFarm.Application.Features.Crops.Specifications;
-using NieFarm.Application.Features.Products.Dtos;
+using NieFarm.Application.Features.Products;
 using NieFarm.Application.Features.Products.Specifications;
 using NieFarm.Domain.Entities;
 
@@ -34,15 +34,7 @@ public class GetCurrentCropQueryHandler(
             .OrderBy(cp => cp.SortOrder)
             .Select(cp => productById.GetValueOrDefault(cp.ProductId))
             .Where(p => p is not null)
-            .Select(p => new ProductCardDto(
-                p!.Slug,
-                p.Name,
-                p.Category?.Name ?? string.Empty,
-                p.Price,
-                p.ImageUrl,
-                p.ImageAlt,
-                string.IsNullOrWhiteSpace(p.Badge) ? null : p.Badge,
-                p.Summary))
+            .Select(p => ProductCardMapper.ToCard(p!))
             .ToList();
 
         return new CurrentCropDto(

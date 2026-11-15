@@ -28,7 +28,7 @@ public class SaveCropCommandHandler(
             // Value check only, then discarded — never passed to the write repository
             // (data-access.md's "mixed read + write" rule).
             var existingProducts = await productReadRepository.ListAsync(
-                new ProductsByIdsSpec(distinctIds, visibleOnly: false), cancellationToken);
+                new ProductsByIdsSpec(distinctIds, visibleOnly: false, includeVariants: false), cancellationToken);
 
             if (existingProducts.Count != distinctIds.Count)
                 return Result<int>.Error("One or more selected products no longer exist.");

@@ -637,6 +637,37 @@ a.btn { color: var(--btn-fg); }
 .pcard__rate { margin-left: auto; display: inline-flex; align-items: center; gap: .3rem; font-size: var(--fs-xs); color: var(--ink-55); }
 .pcard__rate svg { width: 14px; height: 14px; color: var(--gold); fill: currentColor; stroke: none; }
 
+/* Card action row (R-09). Mobile-first: the add button is a 44px icon circle; the label joins it
+   from 40rem. No infinite animation anywhere in here. */
+.pcard__foot--act { align-items: center; flex-wrap: wrap; justify-content: space-between; row-gap: .5rem; }
+.pcard__add {
+    display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+    min-width: 44px; min-height: 44px; padding: 0;
+    border-radius: var(--r-pill);
+    background: var(--ink); color: #fff;
+    font-size: var(--fs-xs); font-weight: 600; letter-spacing: -.01em;
+    cursor: pointer;
+    transition: background-color .3s var(--ease), opacity .3s var(--ease);
+}
+.pcard__add .ico { width: 1rem; height: 1rem; flex: none; }
+.pcard__add:hover:not(:disabled) { background: var(--red); }
+.pcard__add:focus-visible, .pcard__choose:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.pcard__add:disabled { opacity: .55; cursor: default; }
+.pcard__add-text { display: none; }
+.pcard__choose {
+    display: inline-flex; align-items: center; gap: .35rem;
+    min-height: 44px; padding-inline: .25rem;
+    font-size: var(--fs-xs); font-weight: 600; color: var(--ink);
+}
+.pcard__choose .ico { width: .85rem; height: .85rem; flex: none; }
+.pcard__choose:hover { color: var(--red); }
+.pcard__soldout { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-55); }
+.pcard__err { font-size: var(--fs-xs); color: var(--red); }
+@media (min-width: 40rem) {
+    .pcard__add { padding-inline: 1.1rem; min-width: 9.25rem; }
+    .pcard__add-text { display: inline; }
+}
+
 .gallery { display: grid; gap: .75rem; }
 .gallery__main { position: relative; aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden; background: var(--tint-warm); }
 .gallery__main img { width: 100%; height: 100%; object-fit: cover; }

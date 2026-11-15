@@ -46,7 +46,7 @@ public sealed class CartAssembler(IReadRepositoryBase<Product> products)
             var variant = ProductVariantResolver.FindVariant(product, labels);
 
             var unitPrice = variant?.Price ?? product.Price;
-            var isAvailable = product.Options.Count == 0 || variant is { IsAvailable: true };
+            var isAvailable = ProductAvailability.IsVariantPurchasable(product, variant);
 
             var imageAlt = string.IsNullOrWhiteSpace(product.ImageAlt) ? product.Name : product.ImageAlt;
             var quantity = Math.Clamp(item.Quantity, 1, DomainCart.MaxQuantityPerItem);

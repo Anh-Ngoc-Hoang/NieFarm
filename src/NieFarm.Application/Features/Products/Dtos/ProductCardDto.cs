@@ -1,8 +1,11 @@
 namespace NieFarm.Application.Features.Products.Dtos;
 
 /// <summary>
-/// The fields a product grid card needs — used by <c>/cua-hang</c> and the "Sản phẩm liên
-/// quan" band on <c>/san-pham/{slug}</c>. <see cref="Summary"/> is shown only by the latter.
+/// The fields a product grid card needs — used by <c>/cua-hang</c>, the home featured band and
+/// "shop the crop" list, the "Sản phẩm liên quan" band on <c>/san-pham/{slug}</c> and the
+/// <c>ArticleDetail</c> sidebar. <c>ProductCard.razor</c> does not display <see cref="Summary"/>.
+/// <see cref="Id"/>, <see cref="HasOptions"/> and <see cref="IsAvailable"/> (appended last) drive the
+/// card's add-to-cart button; the record must stay JSON-serialisable (Home's [PersistentState]).
 /// </summary>
 public record ProductCardDto(
     string Slug,
@@ -12,4 +15,7 @@ public record ProductCardDto(
     string ImageUrl,
     string ImageAlt,
     string? Badge,
-    string Summary);
+    string Summary,
+    int Id,
+    bool HasOptions,
+    bool IsAvailable);
