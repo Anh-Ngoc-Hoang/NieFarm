@@ -14,4 +14,5 @@ public record MyOrderDetailDto(
     DateTime PlacedAt, List<MyOrderLineDto> Lines,
     bool CanCancel, IReadOnlyList<OrderTimelineEntryDto> Timeline,
     PaymentStatus PaymentStatus, DateTime? PaidAtUtc, BankTransferInstructionsDto? BankTransfer,
-    string? ShippingZoneName = null);
+    string? ShippingZoneName = null,
+    string? CouponCode = null);

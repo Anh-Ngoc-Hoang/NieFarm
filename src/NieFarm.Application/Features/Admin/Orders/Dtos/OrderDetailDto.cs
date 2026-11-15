@@ -56,4 +56,5 @@ public record OrderDetailDto(
     bool CanMarkRefunded,
     List<OrderPaymentChangeDto> PaymentHistory,
     string? ShippingProvince = null,
-    string? ShippingZoneName = null);
+    string? ShippingZoneName = null,
+    string? CouponCode = null);

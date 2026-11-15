@@ -221,7 +221,7 @@
                                 @if (_order.Discount > 0m)
                                 {
                                     <div class="row">
-                                        <dt>Giảm giá</dt>
+                                        <dt>Giảm giá@(string.IsNullOrWhiteSpace(_order.CouponCode) ? null : $" ({_order.CouponCode})")</dt>
                                         <dd class="nf-track__discount">-@SiteContent.Vnd(_order.Discount)</dd>
                                     </div>
                                 }

@@ -26,4 +26,5 @@ public record OrderLookupDto(
     PaymentStatus PaymentStatus,
     DateTime? PaidAtUtc,
     BankTransferInstructionsDto? BankTransfer,
-    string? ShippingZoneName = null);
+    string? ShippingZoneName = null,
+    string? CouponCode = null);

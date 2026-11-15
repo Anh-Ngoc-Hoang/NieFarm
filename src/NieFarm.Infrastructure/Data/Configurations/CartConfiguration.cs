@@ -15,6 +15,7 @@ public class CartConfiguration : IEntityTypeConfiguration<Cart>
         // Match AspNetUsers.Id (nvarchar(450)), as OrderConfiguration does.
         builder.Property(c => c.UserId).HasMaxLength(450);
         builder.Property(c => c.AnonymousId).HasMaxLength(64);
+        builder.Property(c => c.CouponCode).HasMaxLength(Cart.CouponCodeMaxLength);
 
         // A cart row is owned by a user or by an anonymous id, never both, and each owner has
         // at most one.

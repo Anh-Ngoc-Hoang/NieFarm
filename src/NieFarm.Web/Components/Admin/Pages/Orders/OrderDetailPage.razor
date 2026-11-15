@@ -268,7 +268,7 @@ else
 
                     @if (_order.Discount > 0m)
                     {
-                        <dt class="cell-muted">Discount</dt>
+                        <dt class="cell-muted">Discount@(string.IsNullOrWhiteSpace(_order.CouponCode) ? null : $" ({_order.CouponCode})")</dt>
                         <dd style="margin:0;text-align:right;">-@Money.Vnd(_order.Discount)</dd>
                     }
 

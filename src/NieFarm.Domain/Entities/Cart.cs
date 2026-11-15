@@ -27,6 +27,15 @@ public class Cart : BaseEntity
     /// <summary>nf_cart cookie value; null once the cart has been claimed by a user.</summary>
     public string? AnonymousId { get; private set; }
 
+    /// <summary>
+    /// The coupon code the shopper applied (stored trimmed and upper-cased), or null. It is only a
+    /// remembered input: the coupon is looked up and re-evaluated on every cart build, so a code that
+    /// stops applying stays here with a zero discount and a reason until the shopper removes it.
+    /// </summary>
+    public string? CouponCode { get; private set; }
+
+    public const int CouponCodeMaxLength = Coupon.CodeMaxLength;
+
     public IReadOnlyCollection<CartItem> Items => _items.AsReadOnly();
 
     public int TotalQuantity => _items.Sum(i => i.Quantity);
@@ -113,6 +122,26 @@ public class Cart : BaseEntity
         SetUpdatedAt();
     }
 
+    /// <summary>Remembers a code the shopper typed; the caller has already normalised and format-checked it.</summary>
+    public void ApplyCoupon(string code)
+    {
+        var normalised = Coupon.Normalise(code);
+        if (!Coupon.IsValidCode(normalised))
+            throw new ArgumentException("The coupon code is not valid.", nameof(code));
+
+        CouponCode = normalised;
+        SetUpdatedAt();
+    }
+
+    public void RemoveCoupon()
+    {
+        if (CouponCode is null)
+            return;
+
+        CouponCode = null;
+        SetUpdatedAt();
+    }
+
     /// <summary>Re-labels this cart as belonging to the given user (fast merge path — no row copy).</summary>
     public void AssignToUser(string userId)
     {
@@ -128,6 +157,13 @@ public class Cart : BaseEntity
     /// </summary>
     public void MergeFrom(Cart other)
     {
+        // An applied code survives sign-in; the account's own code (if any) wins.
+        if (CouponCode is null && other.CouponCode is not null)
+        {
+            CouponCode = other.CouponCode;
+            SetUpdatedAt();
+        }
+
         foreach (var item in other.Items)
         {
             if (IsFullFor(item.ProductId, item.VariantKey))

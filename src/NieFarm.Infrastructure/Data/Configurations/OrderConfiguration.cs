@@ -38,6 +38,18 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.Property(o => o.ShippingProvince).HasMaxLength(120);
         builder.Property(o => o.ShippingZoneName).HasMaxLength(100);
 
+        // The order row is the coupon redemption (R-10 D14). Restrict: a coupon that has been used
+        // cannot be deleted out from under the orders that carry it.
+        builder.Property(o => o.CouponCode).HasMaxLength(Coupon.CodeMaxLength);
+        builder.Property(o => o.CouponPhoneKey).HasMaxLength(20);
+        builder.HasOne<Coupon>()
+            .WithMany()
+            .HasForeignKey(o => o.CouponId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(o => new { o.CouponId, o.Status })
+            .HasDatabaseName("IX_Orders_CouponId_Status")
+            .HasFilter("[CouponId] IS NOT NULL");
+
         // Subtotal and Total are computed from the lines, never stored.
         builder.Ignore(o => o.Subtotal);
         builder.Ignore(o => o.Total);

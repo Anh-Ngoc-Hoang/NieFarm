@@ -188,7 +188,7 @@
                                 @if (_order.Discount > 0m)
                                 {
                                     <div class="row">
-                                        <dt>Giảm giá</dt>
+                                        <dt>Giảm giá@(string.IsNullOrWhiteSpace(_order.CouponCode) ? null : $" ({_order.CouponCode})")</dt>
                                         <dd style="color:var(--green)">-@SiteContent.Vnd(_order.Discount)</dd>
                                     </div>
                                 }

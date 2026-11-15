@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddSingleton<ISlugGenerator, SlugGenerator>();
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSingleton<IOrderLookupThrottle, OrderLookupThrottle>();
+        services.AddSingleton<ICouponAttemptThrottle, CouponAttemptThrottle>();
         services.AddScoped<IShippingRateProvider, DbShippingRateProvider>();
 
         services.Configure<BankTransferOptions>(configuration.GetSection(BankTransferOptions.SectionName));

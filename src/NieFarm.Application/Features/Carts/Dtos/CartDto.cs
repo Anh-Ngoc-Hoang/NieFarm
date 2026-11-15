@@ -1,3 +1,5 @@
+using NieFarm.Domain.Enums;
+
 namespace NieFarm.Application.Features.Carts.Dtos;
 
 public record CartLineDto(
@@ -13,6 +15,18 @@ public record CartLineDto(
     decimal LineTotal,
     bool IsAvailable);
 
+/// <summary>
+/// The coupon code the cart remembers and how it was evaluated on this build. <see cref="IsApplied"/> is true
+/// only when the coupon is eligible AND actually lowers the total; otherwise <see cref="Message"/> says why
+/// (Vietnamese, customer-facing). <see cref="Type"/> is null when the code no longer resolves to a coupon.
+/// </summary>
+public record CartCouponDto(
+    string Code,
+    CouponType? Type,
+    bool IsApplied,
+    string? Message,
+    CouponEligibility Eligibility);
+
 public record CartDto(
     IReadOnlyList<CartLineDto> Lines,
     int ItemCount,
@@ -23,7 +37,8 @@ public record CartDto(
     string? ShippingZoneName = null,
     bool ShippingProvinceResolved = false,
     decimal? FreeShippingThreshold = null,
-    decimal? FreeShippingRemaining = null)
+    decimal? FreeShippingRemaining = null,
+    CartCouponDto? Coupon = null)
 {
     public bool IsEmpty => Lines.Count == 0;
     public bool HasUnavailableLines => Lines.Any(l => !l.IsAvailable);

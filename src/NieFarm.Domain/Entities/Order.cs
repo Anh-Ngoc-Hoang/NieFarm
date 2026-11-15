@@ -27,6 +27,11 @@ namespace NieFarm.Domain.Entities;
 /// <see cref="ConfirmPayment"/> requires the items to be loaded. Restocking (R-06) belongs in
 /// OrderStatusWorkflow.
 /// </para>
+/// <para>
+/// Coupon invariant (R-10): the order row is the redemption. Active uses of a coupon are the orders that
+/// carry its CouponId and are not Cancelled, so no status path may need an explicit "release"; do not add
+/// a counter that has to be decremented. <see cref="ApplyCoupon"/> is called once, at creation.
+/// </para>
 /// </summary>
 public class Order : BaseEntity
 {
@@ -84,6 +89,18 @@ public class Order : BaseEntity
     /// <summary>The shipping zone whose fee was charged; null = the base fee (or a legacy order).</summary>
     public string? ShippingZoneName { get; private set; }
 
+    /// <summary>The coupon this order redeemed. An order with a coupon whose status is not Cancelled is one active use of it.</summary>
+    public int? CouponId { get; private set; }
+
+    /// <summary>Snapshot of the coupon code at the time of the order.</summary>
+    public string? CouponCode { get; private set; }
+
+    /// <summary>
+    /// Normalised phone typed on the order, kept on every coupon order (account or guest) so the per-customer
+    /// limit also holds when someone signs out and orders again with the same number.
+    /// </summary>
+    public string? CouponPhoneKey { get; private set; }
+
     public IReadOnlyCollection<OrderItem> Items => _items.AsReadOnly();
 
     public IReadOnlyCollection<OrderStatusChange> StatusChanges => _statusChanges.AsReadOnly();
@@ -132,6 +149,31 @@ public class Order : BaseEntity
         decimal unitPrice, int quantity)
     {
         _items.Add(OrderItem.Create(productId, productName, variant, imageUrl, unitPrice, quantity));
+        SetUpdatedAt();
+    }
+
+    /// <summary>
+    /// Snapshots the coupon and its discount. Runs after the items are added; the discount is computed by
+    /// the pricing engine, never accepted from the browser. Redemption is the order row itself: because
+    /// the use is counted from non-cancelled orders, cancelling the order releases it.
+    /// </summary>
+    public void ApplyCoupon(int couponId, string code, string? phoneKey, decimal discount)
+    {
+        if (_items.Count == 0)
+            throw new InvalidOperationException("A coupon can only be applied after the items are added.");
+        if (CouponId is not null)
+            throw new InvalidOperationException("The order already has a coupon.");
+        if (Status != OrderStatus.New)
+            throw new InvalidOperationException("A coupon can only be applied to a new order.");
+        if (string.IsNullOrWhiteSpace(code))
+            throw new ArgumentException("A coupon code is required.", nameof(code));
+        if (discount <= 0m || discount > Subtotal + ShippingFee)
+            throw new InvalidOperationException("The coupon discount must be above 0 and no more than the subtotal plus shipping.");
+
+        CouponId = couponId;
+        CouponCode = code.Trim().ToUpperInvariant();
+        CouponPhoneKey = string.IsNullOrWhiteSpace(phoneKey) ? null : phoneKey.Trim();
+        Discount = discount;
         SetUpdatedAt();
     }
 

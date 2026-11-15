@@ -54,6 +54,7 @@ public class GetOrderDetailQueryHandler(IReadRepositoryBase<Order> repository)
                     c.ChangedByName, c.Amount, c.Reference, c.Note))
                 .ToList(),
             order.ShippingProvince,
-            order.ShippingZoneName);
+            order.ShippingZoneName,
+            order.CouponCode);
     }
 }

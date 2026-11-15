@@ -49,6 +49,7 @@ public class GetMyOrderDetailQueryHandler(
             order.PaymentStatus,
             order.PaidAt,
             BankTransferInstructions.Build(order, bankAccountProvider.GetAccount()),
-            order.ShippingZoneName));
+            order.ShippingZoneName,
+            order.CouponCode));
     }
 }

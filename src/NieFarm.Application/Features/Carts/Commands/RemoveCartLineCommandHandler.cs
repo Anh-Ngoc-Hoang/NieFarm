@@ -32,6 +32,6 @@ public class RemoveCartLineCommandHandler(IRepositoryBase<DomainCart> repository
         cart.RemoveItem(request.ProductId, request.VariantKey);
         await repository.UpdateAsync(cart, cancellationToken);
 
-        return Result<CartDto>.Success(await assembler.BuildAsync(cart, new CartPricingContext(request.Province), cancellationToken));
+        return Result<CartDto>.Success(await assembler.BuildAsync(cart, new CartPricingContext(request.Province, userId), cancellationToken));
     }
 }

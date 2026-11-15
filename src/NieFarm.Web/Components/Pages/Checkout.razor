@@ -7,6 +7,7 @@
 @using NieFarm.Application.Features.Carts.Commands
 @using NieFarm.Application.Features.Carts.Dtos
 @using NieFarm.Application.Features.Carts.Queries
+@using NieFarm.Application.Features.Coupons
 @using NieFarm.Application.Features.Orders.Commands
 @using NieFarm.Application.Features.Payments.Dtos
 @using NieFarm.Application.Features.Payments.Queries
@@ -320,6 +321,13 @@
                         <dt>@ShippingLabel</dt>
                         <dd>@(IsFreeShipping ? "Miễn phí" : Money.Vnd(_cart?.ShippingFee ?? 0m))</dd>
                     </div>
+                    @if (_cart is { Discount: > 0m })
+                    {
+                        <div class="row row--discount">
+                            <dt>Giảm giá@(_cart.Coupon is { IsApplied: true } applied ? $" ({applied.Code})" : null)</dt>
+                            <dd>-@Money.Vnd(_cart.Discount)</dd>
+                        </div>
+                    }
                 </dl>
 
                 @if (ShippingNote is { } shippingNote)
@@ -327,11 +335,46 @@
                     <p class="checkout__ship-hint" role="status">@shippingNote</p>
                 }
 
-                <div class="checkout__promo">
-                    <label class="sr-only" for="promo">Mã giảm giá</label>
-                    <input id="promo" type="text" placeholder="Mã giảm giá" class="nf-field" style="flex:1" />
-                    <button type="button" class="btn btn--ghost btn--sm"><span>Áp dụng</span></button>
-                </div>
+                @if (_cart is { IsEmpty: false })
+                {
+                    <div class="checkout__coupon">
+                        @if (_cart.Coupon is { } coupon)
+                        {
+                            <div class="checkout__coupon-chip">
+                                <span class="checkout__coupon-code">
+                                    <NfIcon Name="check" Size="16" /> @coupon.Code
+                                </span>
+                                <button type="button" class="linkbtn" disabled="@(_updating || _submitting)"
+                                        @onclick="RemoveCouponAsync">Gỡ mã</button>
+                            </div>
+                            <p class="checkout__coupon-note @(coupon.IsApplied ? "checkout__coupon-note--ok" : null)" role="status">
+                                @(coupon.IsApplied
+                                    ? CouponMessages.Applied(coupon.Code, _cart.Discount)
+                                    : CouponMessages.NotApplied(coupon.Code, coupon.Message ?? CouponMessages.Invalid))
+                            </p>
+                        }
+                        else
+                        {
+                            <div class="checkout__coupon-form">
+                                <label class="sr-only" for="promo">Mã giảm giá</label>
+                                <input id="promo" type="text" placeholder="Nhập mã giảm giá" class="nf-field"
+                                       maxlength="@NieFarm.Domain.Entities.Coupon.CodeMaxLength" autocomplete="off" autocapitalize="characters"
+                                       spellcheck="false" aria-describedby="@(_couponError is null ? null : "promo-error")"
+                                       disabled="@(_updating || _submitting)"
+                                       @bind="_couponInput" @bind:event="oninput" @onkeydown="OnCouponKeyDownAsync" />
+                                <button type="button" class="btn btn--ghost btn--sm"
+                                        disabled="@(_updating || _submitting)" @onclick="ApplyCouponAsync">
+                                    <span>Áp dụng</span>
+                                </button>
+                            </div>
+                        }
+
+                        @if (_couponError is not null)
+                        {
+                            <p id="promo-error" class="checkout__coupon-error" role="alert">@_couponError</p>
+                        }
+                    </div>
+                }
 
                 <div class="checkout__total">
                     <span>Tổng cộng</span>
@@ -611,6 +654,84 @@
                     .Concat(result.Errors)
                     .DefaultIfEmpty("Không thể xóa sản phẩm khỏi giỏ hàng. Vui lòng thử lại.")
                     .ToList();
+            }
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        finally { _updating = false; }
+
+        if (CurrentProvince != _pricedProvince)
+            await RefreshCartAsync();
+    }
+
+    // ----- Promo code (R-10). Both calls are cart writes on the shared context, so they run inside the same
+    // _updating guard as every other cart write and never overlap a submit. -----
+
+    private string? _couponInput;
+    private string? _couponError;
+
+    private Task OnCouponKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Enter" ? ApplyCouponAsync() : Task.CompletedTask;
+
+    private async Task ApplyCouponAsync()
+    {
+        if (_updating || _submitting || _cart is null) return;
+
+        var code = _couponInput?.Trim();
+        if (string.IsNullOrEmpty(code))
+        {
+            _couponError = "Vui lòng nhập mã giảm giá.";
+            return;
+        }
+
+        _updating = true;
+        _couponError = null;
+        try
+        {
+            var province = CurrentProvince;
+            var result = await Sender.Send(new ApplyCouponCommand(code, CartAnonymousId, province), _cts.Token);
+
+            if (result.IsSuccess)
+            {
+                _cart = result.Value;
+                _pricedProvince = province;
+                _couponInput = null;
+                _errors = [];
+            }
+            else
+            {
+                _couponError = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+                    ?? CouponMessages.Invalid;
+            }
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        finally { _updating = false; }
+
+        // A province change that arrived while this write was in flight was skipped; catch up.
+        if (CurrentProvince != _pricedProvince)
+            await RefreshCartAsync();
+    }
+
+    private async Task RemoveCouponAsync()
+    {
+        if (_updating || _submitting) return;
+        _updating = true;
+        _couponError = null;
+        try
+        {
+            var province = CurrentProvince;
+            var result = await Sender.Send(new RemoveCouponCommand(CartAnonymousId, province), _cts.Token);
+
+            if (result.IsSuccess)
+            {
+                _cart = result.Value;
+                _pricedProvince = province;
+                _errors = [];
+            }
+            else
+            {
+                _couponError = result.Errors.FirstOrDefault() ?? "Không thể gỡ mã giảm giá. Vui lòng thử lại.";
             }
         }
         catch (OperationCanceledException) { /* circuit tore down */ }

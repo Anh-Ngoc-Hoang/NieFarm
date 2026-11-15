@@ -1,0 +1,258 @@
+@using NieFarm.Application.Features.Admin.Coupons.Commands
+@using NieFarm.Application.Features.Admin.Coupons.Queries
+@using NieFarm.Domain.Entities
+@using NieFarm.Domain.Enums
+@using NieFarm.Web.Content
+@inject ISender Sender
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="coupon-form-title">
+        <div class="admin-modal__dialog admin-modal__dialog--wide">
+            <div class="admin-modal__head">
+                <h2 id="coupon-form-title">@(_model.Id is null ? "Add Coupon" : "Edit Coupon")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="Close">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                @if (_locked)
+                {
+                    <div class="form-alert" style="background:rgba(0,0,0,0.05);" role="note">
+                        This coupon has been used (@_model.TimesRedeemed time@(_model.TimesRedeemed == 1 ? "" : "s")),
+                        so its code and type are locked. To change them, disable it and create a new coupon.
+                    </div>
+                }
+
+                <div class="form-grid form-grid--2">
+                    <div>
+                        <label class="form-label-admin" for="cp-code">Code *</label>
+                        <input id="cp-code" class="form-control-admin" maxlength="@Coupon.CodeMaxLength"
+                               disabled="@_locked" autocomplete="off" style="text-transform:uppercase;"
+                               @bind="_model.Code" />
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            4-30 characters: A-Z, 0-9, hyphen or underscore. Customers can type it in any case.
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="cp-type">Discount type *</label>
+                        <select id="cp-type" class="form-control-admin" disabled="@_locked" @bind="_model.Type">
+                            <option value="@CouponType.Percentage">Percentage off the subtotal</option>
+                            <option value="@CouponType.FixedAmount">Fixed amount off the subtotal</option>
+                            <option value="@CouponType.FreeShipping">Free shipping</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="margin-top:16px;">
+                    <label class="form-label-admin" for="cp-desc">Internal note</label>
+                    <input id="cp-desc" class="form-control-admin" maxlength="@Coupon.DescriptionMaxLength"
+                           placeholder="Only visible here, e.g. Tet 2027 campaign" @bind="_model.Description" />
+                </div>
+
+                @if (_model.Type != CouponType.FreeShipping)
+                {
+                    <div class="form-grid form-grid--2" style="margin-top:16px;">
+                        <div>
+                            <label class="form-label-admin" for="cp-value">
+                                @(_model.Type == CouponType.Percentage ? "Percentage (%) *" : "Amount (₫) *")
+                            </label>
+                            <input id="cp-value" class="form-control-admin" type="number" min="1"
+                                   step="@(_model.Type == CouponType.Percentage ? 1 : 1000)" @bind="_model.Value" />
+                        </div>
+                        @if (_model.Type == CouponType.Percentage)
+                        {
+                            <div>
+                                <label class="form-label-admin" for="cp-max">Maximum discount (₫)</label>
+                                <input id="cp-max" class="form-control-admin" type="number" min="1" step="1000"
+                                       placeholder="No cap" @bind="_model.MaxDiscountAmount" />
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="cell-muted" style="font-size:12px;margin-top:8px;">
+                        Waives the shipping fee (the zone fee or the base fee). It gives nothing extra on an order
+                        that already ships free.
+                    </div>
+                }
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        <label class="form-label-admin" for="cp-min">Minimum order (₫)</label>
+                        <input id="cp-min" class="form-control-admin" type="number" min="0" step="1000"
+                               @bind="_model.MinOrderSubtotal" />
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            Compared with the subtotal before any discount. 0 = no minimum.
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:flex-end;">
+                        <label class="form-check-admin">
+                            <input type="checkbox" @bind="_model.IsActive" /> Active
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        <label class="form-label-admin" for="cp-start">Starts (GMT+7)</label>
+                        <input id="cp-start" class="form-control-admin" type="datetime-local" @bind="_model.StartsAtLocal" />
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="cp-end">Ends (GMT+7)</label>
+                        <input id="cp-end" class="form-control-admin" type="datetime-local" @bind="_model.EndsAtLocal" />
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            Leave empty for no start or end. The coupon stops working at the end time.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-grid form-grid--2" style="margin-top:16px;">
+                    <div>
+                        <label class="form-label-admin" for="cp-limit">Total usage limit</label>
+                        <input id="cp-limit" class="form-control-admin" type="number" min="1"
+                               placeholder="Unlimited" @bind="_model.UsageLimit" />
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            Counts orders that are not cancelled; cancelling an order frees its use.
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label-admin" for="cp-each">Uses per customer</label>
+                        <input id="cp-each" class="form-control-admin" type="number" min="1"
+                               placeholder="Unlimited" @bind="_model.PerCustomerLimit" />
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            A customer is matched by account or by phone number. Guests can sidestep it with
+                            another number.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="Close" disabled="@_saving">Cancel</button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public CouponType Type { get; set; } = CouponType.Percentage;
+        public decimal Value { get; set; }
+        public decimal? MaxDiscountAmount { get; set; }
+        public decimal MinOrderSubtotal { get; set; }
+        public DateTime? StartsAtLocal { get; set; }   // Vietnam wall-clock time
+        public DateTime? EndsAtLocal { get; set; }
+        public int? UsageLimit { get; set; }
+        public int? PerCustomerLimit { get; set; } = 1;
+        public bool IsActive { get; set; } = true;
+        public int TimesRedeemed { get; set; }
+    }
+
+    private FormModel _model = new();
+    private List<string> _errors = [];
+    private bool _visible;
+    private bool _saving;
+
+    private bool _locked => _model.TimesRedeemed > 0;
+
+    public void OpenForCreate()
+    {
+        _model = new FormModel();
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public async Task OpenForEditAsync(int id)
+    {
+        var coupon = await Sender.Send(new GetCouponForEditQuery(id));
+        if (coupon is null)
+            return;
+
+        _model = new FormModel
+        {
+            Id = coupon.Id,
+            Code = coupon.Code,
+            Description = coupon.Description,
+            Type = coupon.Type,
+            Value = coupon.Value,
+            MaxDiscountAmount = coupon.MaxDiscountAmount,
+            MinOrderSubtotal = coupon.MinOrderSubtotal,
+            StartsAtLocal = coupon.StartsAtUtc is { } s ? VnTime.FromUtc(s) : null,
+            EndsAtLocal = coupon.EndsAtUtc is { } e ? VnTime.FromUtc(e) : null,
+            UsageLimit = coupon.UsageLimit,
+            PerCustomerLimit = coupon.PerCustomerLimit,
+            IsActive = coupon.IsActive,
+            TimesRedeemed = coupon.TimesRedeemed
+        };
+        _errors = [];
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private void Close() => _visible = false;
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            var isPercentage = _model.Type == CouponType.Percentage;
+            var result = await Sender.Send(new SaveCouponCommand(
+                _model.Id,
+                _model.Code ?? string.Empty,
+                _model.Description,
+                _model.Type,
+                _model.Type == CouponType.FreeShipping ? 0m : _model.Value,
+                isPercentage ? _model.MaxDiscountAmount : null,
+                _model.MinOrderSubtotal,
+                _model.StartsAtLocal is { } s ? VnTime.ToUtc(s) : null,
+                _model.EndsAtLocal is { } e ? VnTime.ToUtc(e) : null,
+                _model.UsageLimit,
+                _model.PerCustomerLimit,
+                _model.IsActive));
+
+            if (!result.IsSuccess)
+            {
+                _errors = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .DefaultIfEmpty("Could not save the coupon.")
+                    .ToList();
+                return;
+            }
+
+            _visible = false;
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

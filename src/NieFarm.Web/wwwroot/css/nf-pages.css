@@ -614,7 +614,19 @@
 .checkout__summary .row dt { color: var(--ink-55); font-size: var(--fs-sm); }
 .checkout__summary .row dd { margin: 0; font-weight: 600; }
 .checkout__ship-hint { margin: -.5rem 0 1.25rem; font-size: var(--fs-xs); color: var(--ink-55); line-height: 1.5; }
-.checkout__promo { display: flex; gap: .6rem; padding-block: 1.25rem; margin-bottom: 1.5rem; border-block: 1px solid var(--line); }
+.checkout__summary .row--discount dd { color: var(--ok); }
+.checkout__coupon { padding-block: 1.25rem; margin-bottom: 1.5rem; border-block: 1px solid var(--line); }
+.checkout__coupon-form { display: flex; gap: .6rem; }
+.checkout__coupon-form .nf-field { flex: 1; min-width: 0; text-transform: uppercase; }
+.checkout__coupon-form .nf-field::placeholder { text-transform: none; }
+.checkout__coupon-chip { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.checkout__coupon-code { display: inline-flex; align-items: center; gap: .4rem; flex: 1 1 auto; min-width: 0; font-weight: 600; letter-spacing: .04em; color: var(--green); overflow-wrap: anywhere; }
+/* NfIcon's .ico is width/height 100%: inside this flex row it would stretch, so pin the glyph's size. */
+.checkout__coupon-code > svg { flex: none; width: 16px; height: 16px; }
+.checkout__coupon-chip .linkbtn { flex: none; }
+.checkout__coupon-note { margin: .6rem 0 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--ink-70); }
+.checkout__coupon-note--ok { color: var(--ok); }
+.checkout__coupon-error { margin: .6rem 0 0; font-size: var(--fs-xs); line-height: 1.5; color: var(--red); }
 .checkout__total { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
 .checkout__total span:first-child { font-weight: 600; }
 .checkout__total b { font-size: 1.6rem; font-weight: 700; letter-spacing: -.03em; color: var(--red); font-variant-numeric: tabular-nums; }

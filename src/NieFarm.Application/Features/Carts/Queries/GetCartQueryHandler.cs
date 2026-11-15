@@ -20,6 +20,6 @@ public class GetCartQueryHandler(IReadRepositoryBase<Cart> repository, ICurrentU
         var cart = await repository.FirstOrDefaultAsync(
             new CartByOwnerSpec(userId, request.AnonymousId), cancellationToken);
 
-        return await assembler.BuildAsync(cart, new CartPricingContext(request.Province), cancellationToken);
+        return await assembler.BuildAsync(cart, new CartPricingContext(request.Province, userId), cancellationToken);
     }
 }

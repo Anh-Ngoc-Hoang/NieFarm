@@ -1,0 +1,206 @@
+@page "/admin/coupons"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.Coupons.Commands
+@using NieFarm.Application.Features.Admin.Coupons.Dtos
+@using NieFarm.Application.Features.Admin.Coupons.Queries
+@using NieFarm.Domain.Enums
+@using NieFarm.Web.Content
+@inject ISender Sender
+
+<AdminPageTitle Title="Coupons" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Coupons</h1>
+        <p>
+            Discount codes customers type at checkout. One coupon per order. A use is an order that is not
+            cancelled, so cancelling an order frees its use. A coupon that has been used can no longer change
+            its code or type and cannot be deleted (disable it instead). Free shipping is decided after the
+            discount: an order that reaches the free-shipping threshold gets nothing extra from a free-shipping coupon.
+        </p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="() => _formModal.OpenForCreate()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Coupon
+    </button>
+</div>
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by code or note…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="form-alert form-alert--error" role="alert" style="margin-bottom:16px;">@_error</div>
+}
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Discount</th>
+                <th>Min. order</th>
+                <th>Valid (GMT+7)</th>
+                <th style="width:110px;">Used</th>
+                <th style="width:110px;">Status</th>
+                <th style="width:140px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var coupon in _filtered)
+            {
+                <tr>
+                    <td class="cell-primary" style="cursor:pointer;" @onclick="() => _formModal.OpenForEditAsync(coupon.Id)">
+                        <code>@coupon.Code</code>
+                        @if (!string.IsNullOrWhiteSpace(coupon.Description))
+                        {
+                            <div class="cell-muted" style="font-size:12px;">@coupon.Description</div>
+                        }
+                    </td>
+                    <td>@DiscountText(coupon)</td>
+                    <td class="cell-muted">@(coupon.MinOrderSubtotal > 0 ? Money.Vnd(coupon.MinOrderSubtotal) : "None")</td>
+                    <td class="cell-muted">@ValidText(coupon)</td>
+                    <td>
+                        @coupon.ActiveUses / @(coupon.UsageLimit?.ToString() ?? "∞")
+                        @if (coupon.TimesRedeemed != coupon.ActiveUses)
+                        {
+                            <div class="cell-muted" style="font-size:12px;">@coupon.TimesRedeemed all-time</div>
+                        }
+                    </td>
+                    <td><AdminBadge Text="@coupon.Status.ToString()" Variant="@BadgeVariant(coupon.Status)" /></td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit"
+                                    @onclick="() => _formModal.OpenForEditAsync(coupon.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon" type="button" title="@(coupon.IsActive ? "Disable" : "Enable")"
+                                    disabled="@_busy" @onclick="() => ToggleAsync(coupon)">
+                                <span class="material-symbols-outlined" aria-hidden="true">@(coupon.IsActive ? "toggle_on" : "toggle_off")</span>
+                            </button>
+                            @if (coupon.TimesRedeemed == 0)
+                            {
+                                <button class="btn-icon btn-icon--danger" type="button" title="Delete"
+                                        @onclick="() => AskDelete(coupon)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No coupons found.</div>
+    }
+</div>
+
+<CouponFormModal @ref="_formModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete coupon?"
+              Message="@($"Delete the coupon \"{_deleteTarget?.Code}\"? This cannot be undone.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<CouponAdminListDto> _all = [];
+    private List<CouponAdminListDto> _filtered = [];
+    private string _search = string.Empty;
+    private string? _error;
+    private bool _busy;
+
+    private CouponFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private CouponAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _all = await Sender.Send(new GetCouponsAdminQuery());
+        ApplyFilters();
+    }
+
+    private void ApplyFilters() =>
+        _filtered = _all.Where(c =>
+            string.IsNullOrWhiteSpace(_search)
+            || c.Code.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase)
+            || (c.Description?.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false))
+            .ToList();
+
+    private static string DiscountText(CouponAdminListDto c) => c.Type switch
+    {
+        CouponType.Percentage => c.MaxDiscountAmount is { } cap
+            ? $"{c.Value:0}% (max {Money.Vnd(cap)})"
+            : $"{c.Value:0}%",
+        CouponType.FixedAmount => Money.Vnd(c.Value),
+        _ => "Free shipping"
+    };
+
+    private static string ValidText(CouponAdminListDto c)
+    {
+        if (c.StartsAtUtc is null && c.EndsAtUtc is null)
+            return "Always";
+
+        const string format = "dd/MM/yyyy HH:mm";
+        var from = c.StartsAtUtc is { } s ? VnTime.FromUtc(s).ToString(format) : "…";
+        var to = c.EndsAtUtc is { } e ? VnTime.FromUtc(e).ToString(format) : "…";
+        return $"{from} to {to}";
+    }
+
+    private static string BadgeVariant(CouponAdminStatus status) => status switch
+    {
+        CouponAdminStatus.Active => "success",
+        CouponAdminStatus.Scheduled => "default",
+        CouponAdminStatus.UsedUp => "warning",
+        _ => "muted"
+    };
+
+    private async Task ToggleAsync(CouponAdminListDto coupon)
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Sender.Send(new SetCouponActiveCommand(coupon.Id, !coupon.IsActive));
+            if (!result.IsSuccess)
+                _error = result.Errors.FirstOrDefault() ?? "Could not update the coupon.";
+
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AskDelete(CouponAdminListDto coupon)
+    {
+        _error = null;
+        _deleteTarget = coupon;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteCouponCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+            _error = result.Errors.FirstOrDefault() ?? "Could not delete the coupon.";
+
+        await ReloadAsync();
+    }
+}

@@ -6,8 +6,11 @@ using NieFarm.Application.Common.Exceptions;
 using NieFarm.Application.Common.Interfaces;
 using NieFarm.Application.Features.Carts;
 using NieFarm.Application.Features.Carts.Specifications;
+using NieFarm.Application.Features.Coupons;
+using NieFarm.Application.Features.Coupons.Specifications;
 using NieFarm.Application.Features.Orders.Dtos;
 using NieFarm.Application.Features.Payments;
+using NieFarm.Domain.Entities;
 using NieFarm.Domain.Enums;
 using NieFarm.Application.Features.Orders.Specifications;
 using DomainCart = NieFarm.Domain.Entities.Cart;
@@ -15,9 +18,20 @@ using Order = NieFarm.Domain.Entities.Order;
 
 namespace NieFarm.Application.Features.Orders.Commands;
 
+/// <summary>
+/// Places the order. Coupon redemption (R-10, plan D14/D15): the order row IS the redemption, and ONE
+/// SaveChanges (the order's AddAsync) carries the order INSERT and the coupon's rowversion-checked UPDATE in
+/// one transaction. That works because <see cref="IRepositoryBase{T}"/> saves over the circuit's shared
+/// scoped context, i.e. it is an implicit unit of work: every tracked change is persisted together. So this
+/// handler (a) discards stale tracked entities first, (b) loads the coupon through the WRITE repository
+/// BEFORE the assembler counts the active uses through a fresh read, and (c) must not leave other pending
+/// changes on the context. If another order took the last use in between, either the count sees it or the
+/// coupon UPDATE fails on the stale row version and the shopper is asked to confirm again.
+/// </summary>
 public class CreateOrderCommandHandler(
     IRepositoryBase<Order> repository,
     IRepositoryBase<DomainCart> cartRepository,
+    IRepositoryBase<Coupon> couponRepository,
     CartAssembler assembler,
     IWriteContextRefresher contextRefresher,
     ICurrentUser currentUser,
@@ -39,7 +53,20 @@ public class CreateOrderCommandHandler(
         var cartEntity = await cartRepository.FirstOrDefaultAsync(
             new CartByOwnerSpec(customerId, request.AnonymousId), cancellationToken);
 
-        var cart = await assembler.BuildAsync(cartEntity, new CartPricingContext(request.Province), cancellationToken);
+        // The coupon the cart remembers is loaded through the WRITE repository (tracked, with its row
+        // version) BEFORE the assembler counts its uses; see the class summary.
+        Coupon? trackedCoupon = null;
+        if (!string.IsNullOrWhiteSpace(cartEntity?.CouponCode))
+        {
+            trackedCoupon = await couponRepository.FirstOrDefaultAsync(
+                new CouponByCodeSpec(cartEntity.CouponCode, tracked: true), cancellationToken);
+        }
+
+        // The per-customer limit counts the account AND the phone typed here (the display paths only know
+        // the account), so the check below can refuse an order the cart on screen did not flag.
+        var phoneKey = CouponCodeFormat.PhoneKey(request.Phone);
+        var cart = await assembler.BuildAsync(
+            cartEntity, new CartPricingContext(request.Province, customerId, phoneKey, trackedCoupon), cancellationToken);
         if (cart.IsEmpty)
             return Result<OrderPlacedDto>.Error("Giỏ hàng đang trống.");
 
@@ -48,6 +75,11 @@ public class CreateOrderCommandHandler(
         // rather than silently being charged at a stale price or dropped.
         if (cart.HasUnavailableLines)
             return Result<OrderPlacedDto>.Error("Một số sản phẩm trong giỏ hàng đã hết hàng. Vui lòng cập nhật giỏ hàng.");
+
+        // Phone-keyed limit: not visible to the cart the shopper saw, so it is a plain refusal rather
+        // than a Conflict, and is decided before the total comparison.
+        if (cart.Coupon is { Eligibility: CouponEligibility.CustomerLimitReached })
+            return Result<OrderPlacedDto>.Error(CouponMessages.CustomerLimitReachedAtCheckout);
 
         // Intent check: the shopper confirmed ExpectedTotal; if a price, fee, zone, threshold or line
         // availability changed since, make them look again. Never used as a price.
@@ -92,7 +124,28 @@ public class CreateOrderCommandHandler(
         foreach (var line in cart.Lines)
             order.AddItem(line.ProductId, line.Name, Truncate(line.Variant, 150), line.ImageUrl, line.UnitPrice, line.Quantity);
 
-        await repository.AddAsync(order, cancellationToken);
+        // Only a coupon that is eligible AND lowers the total is redeemed; one that shows a message with a
+        // zero discount (FreeShipping on an already-free order) is not.
+        var redeemed = false;
+        if (cart.Coupon is { IsApplied: true } && trackedCoupon is not null && cart.Discount > 0m)
+        {
+            order.ApplyCoupon(trackedCoupon.Id, trackedCoupon.Code, phoneKey, cart.Discount);
+            trackedCoupon.RecordRedemption();
+            redeemed = true;
+        }
+
+        try
+        {
+            // One SaveChanges: the order INSERT and (when redeemed) the coupon's rowversion-checked UPDATE.
+            await repository.AddAsync(order, cancellationToken);
+        }
+        catch (ConcurrencyConflictException) when (redeemed)
+        {
+            // Another order took the use first. The transaction rolled back, the tracker was cleared and the
+            // cart is untouched: ask the shopper to confirm again.
+            logger.LogInformation("A coupon redemption lost a race; the order was not placed");
+            return Result<OrderPlacedDto>.Conflict(CouponMessages.Busy);
+        }
 
         // Not atomic with the write above — Repository<T> saves per operation and NieFarm has
         // no unit-of-work seam. This ordering (create the order first, delete the cart second)
