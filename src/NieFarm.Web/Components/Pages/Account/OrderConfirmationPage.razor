@@ -24,7 +24,7 @@
     The aria-live region is always rendered so its later text change is announced.
 *@
 
-<PageTitle>Đặt hàng thành công - Nie Farm Việt Nam</PageTitle>
+<PageTitle>@(_paid ? "Thanh toán thành công" : "Đặt hàng thành công") - Nie Farm Việt Nam</PageTitle>
 <HeadContent>
     <meta name="robots" content="noindex" />
 </HeadContent>
@@ -39,7 +39,7 @@
             <svg class="ico" width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 14.1 5 5 11-14.3" /></svg>
         </span>
 
-        <h1 style="margin-top:1.5rem">Đặt hàng thành công!</h1>
+        <h1 style="margin-top:1.5rem">@(_paid ? "Thanh toán thành công!" : "Đặt hàng thành công!")</h1>
         <p class="lede" style="margin:.75rem auto 0">
             @if (_paid)
             {
