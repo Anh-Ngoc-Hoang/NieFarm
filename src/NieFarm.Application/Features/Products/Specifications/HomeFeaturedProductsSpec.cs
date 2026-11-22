@@ -17,6 +17,8 @@ public sealed class HomeFeaturedProductsSpec : Specification<Product>
             .Include(p => p.Options).ThenInclude(o => o.Values)
             .Include(p => p.Variants).ThenInclude(v => v.Values)
             .AsSplitQuery()
+            // Read-only band; no need to pin the entities in the circuit-long context.
+            .AsNoTrackingWithIdentityResolution()
             .OrderByDescending(p => p.IsFeatured)
             .ThenBy(p => p.SortOrder)
             .ThenBy(p => p.Id)

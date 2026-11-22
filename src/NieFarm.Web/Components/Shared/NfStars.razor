@@ -60,5 +60,9 @@
     private readonly string _id = System.Guid.NewGuid().ToString("N");
 
     private string AriaLabel =>
-        $"Đánh giá {Value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} trên 5 sao";
+        // vi-VN so a half star reads "4,5" like every other figure on the Vietnamese storefront.
+        $"Đánh giá {Value.ToString("0.#", ViCulture)} trên 5 sao";
+
+    private static readonly System.Globalization.CultureInfo ViCulture =
+        System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
 }

@@ -57,7 +57,13 @@
             {
                 <tr>
                     <td class="cell-primary">@review.ProductName</td>
-                    <td>@review.AuthorName</td>
+                    <td>
+                        @review.AuthorName
+                        @if (review.IsVerifiedPurchase)
+                        {
+                            <div style="margin-top:4px;"><AdminBadge Text="Verified purchase" Variant="success" /></div>
+                        }
+                    </td>
                     <td><StarRating Value="@review.Rating" CssClass="nf-stars--sm" /></td>
                     <td>
                         <button type="button" style="background:none;border:none;padding:0;cursor:pointer;text-align:left;"

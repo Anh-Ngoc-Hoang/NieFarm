@@ -263,6 +263,28 @@
     cursor: pointer;
 }
 
+/* Shop search (R-13) — a real GET form inside .shophead. Mobile-first: input and button always share one
+   row (the input shrinks). The native WebKit clear glyph is hidden so the
+   page's own 44px clear link is the only one. */
+.shophead__lede { font-size: .9375rem; max-width: 34ch; }
+.shopsearch { display: flex; gap: .75rem; max-width: 34rem; margin-top: clamp(1.5rem, 3vw, 2rem); }
+.shopsearch__box { position: relative; flex: 1 1 0; min-width: 0; }
+.shopsearch__icon { position: absolute; left: 1rem; top: 50%; translate: 0 -50%; display: flex; color: var(--ink-38); pointer-events: none; }
+.shopsearch__icon .ico { width: 17px; height: 17px; flex: none; }
+.shopsearch__input { min-height: 44px; padding-inline: 2.75rem; }
+.shopsearch__input::-webkit-search-cancel-button { appearance: none; }
+.shopsearch__clear { position: absolute; right: 0; top: 50%; translate: 0 -50%; display: grid; place-items: center; width: 44px; height: 44px; color: var(--ink-55); }
+.shopsearch__clear:hover { color: var(--ink); }
+.shopsearch__clear .ico { width: 16px; height: 16px; flex: none; }
+.shopsearch__go { flex: none; min-height: 44px; }
+
+.shopresults { padding-bottom: clamp(3rem, 7vw, 6rem); }
+.shopresult { margin: 0 0 1.5rem; font-size: .875rem; scroll-margin-top: calc(var(--hdr-h) + 5.5rem); }
+.shopresult:focus { outline: none; }
+.shopempty { padding-block: 4rem; text-align: center; border-top: 1px solid var(--line); }
+.shopempty .muted { margin: 0 0 1.5rem; }
+.shoppager { margin-top: clamp(2.5rem, 5vw, 4rem); }
+
 /* Results grid — shared by the Shop page, the PDP "related products" band, the home page's
    featured-products band and (Phase 3, step 3.2) the /kien-thuc article grid. */
 .grid-products {
@@ -333,6 +355,16 @@
 .review { border-bottom: 1px solid var(--line); padding-bottom: 1.75rem; }
 .review__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .6rem; }
 .review__author { font-weight: 600; }
+.review__who { display: inline-flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+/* "Đã mua hàng" label (R-17). NfIcon's .ico is 100% wide, so inside this inline-flex pill it is
+   pinned to 12px; the label is a conditional element with a static class. */
+.review__verified {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .15rem .55rem; border-radius: var(--r-pill);
+    background: rgba(44, 74, 52, .08); color: var(--green);
+    font-size: var(--fs-xs); font-weight: 600; line-height: 1.4;
+}
+.review__verified .ico { width: 12px; height: 12px; flex: none; }
 .review__date { font-size: var(--fs-xs); color: var(--ink-38); }
 .review__rating { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
 .review__body { color: var(--ink-70); font-size: var(--fs-sm); }

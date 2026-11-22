@@ -1,0 +1,87 @@
+@*
+    Numbered pager for server-paged lists (R-13, /cua-hang). Every page is a real <a href>, so it works
+    without JavaScript, can be opened in a new tab and is crawlable. State is carried by attributes only
+    (aria-current / aria-disabled) — never a Razor class expression — so nothing here is ever wiped by a
+    re-render of a data-reveal ancestor.
+
+    Mobile-first: below 640px the numbers are hidden and the row reads "Trước · 2 / 5 · Sau"; from 640px
+    the number run (first, last, current ±1, "…" for gaps) is shown and the status text is display:none
+    (so it is never read twice; on mobile it is the only place the current page is announced).
+    A disabled "Trước"/"Sau" is a <span aria-disabled="true">, not a dead link. Hidden when there is
+    only one page.
+*@
+@if (TotalPages > 1)
+{
+    <nav class="pager" aria-label="Phân trang">
+        @if (Page > 1)
+        {
+            <a class="pager__step" href="@HrefFor(Page - 1)" rel="prev" aria-label="Trang trước">
+                <NfIcon Name="arrow-right" Size="14" CssClass="pager__flip" /> <span>Trước</span>
+            </a>
+        }
+        else
+        {
+            <span class="pager__step" aria-disabled="true"><NfIcon Name="arrow-right" Size="14" CssClass="pager__flip" /> <span>Trước</span></span>
+        }
+
+        <p class="pager__status"><span class="sr-only">Trang </span>@Page<span aria-hidden="true"> / </span><span class="sr-only"> trên </span>@TotalPages</p>
+
+        <ul class="pager__nums">
+            @foreach (var item in Items())
+            {
+                if (item is null)
+                {
+                    <li class="pager__gap" aria-hidden="true">…</li>
+                }
+                else if (item == Page)
+                {
+                    <li><a class="pager__num" href="@HrefFor(item.Value)" aria-current="page" aria-label="@($"Trang {item}, trang hiện tại")">@item</a></li>
+                }
+                else
+                {
+                    <li><a class="pager__num" href="@HrefFor(item.Value)" aria-label="@($"Trang {item}")">@item</a></li>
+                }
+            }
+        </ul>
+
+        @if (Page < TotalPages)
+        {
+            <a class="pager__step" href="@HrefFor(Page + 1)" rel="next" aria-label="Trang sau">
+                <span>Sau</span> <NfIcon Name="arrow-right" Size="14" />
+            </a>
+        }
+        else
+        {
+            <span class="pager__step" aria-disabled="true"><span>Sau</span> <NfIcon Name="arrow-right" Size="14" /></span>
+        }
+    </nav>
+}
+
+@code {
+    /// <summary>Current page, 1-based.</summary>
+    [Parameter, EditorRequired] public int Page { get; set; }
+
+    [Parameter, EditorRequired] public int TotalPages { get; set; }
+
+    /// <summary>Builds the URL of a page; the caller owns the rest of the query string.</summary>
+    [Parameter, EditorRequired] public Func<int, string> HrefFor { get; set; } = default!;
+
+    /// <summary>Page numbers to show, with <c>null</c> standing for a gap: 1 … p-1 p p+1 … last.</summary>
+    private IEnumerable<int?> Items()
+    {
+        int? previous = null;
+        for (var n = 1; n <= TotalPages; n++)
+        {
+            if (n != 1 && n != TotalPages && Math.Abs(n - Page) > 1)
+                continue;
+
+            if (previous is not null && n - previous > 2)
+                yield return null;
+            else if (previous is not null && n - previous == 2)
+                yield return n - 1;   // a one-page gap is shown as the page itself, not as "…"
+
+            yield return n;
+            previous = n;
+        }
+    }
+}

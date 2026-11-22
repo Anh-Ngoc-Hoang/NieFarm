@@ -11,7 +11,10 @@ public class ProductCategoryConfiguration : IEntityTypeConfiguration<ProductCate
         builder.ToTable("ProductCategories");
         builder.HasKey(c => c.Id);
 
-        builder.Property(c => c.Name).IsRequired().HasMaxLength(150);
+        // Accent-insensitive so the shop search can match the category name too (R-13); see
+        // ProductConfiguration for why Latin1_General_100_CI_AI.
+        builder.Property(c => c.Name).IsRequired().HasMaxLength(150)
+            .UseCollation("Latin1_General_100_CI_AI");
         builder.Property(c => c.Slug).IsRequired().HasMaxLength(160);
 
         builder.HasIndex(c => c.Slug).IsUnique();

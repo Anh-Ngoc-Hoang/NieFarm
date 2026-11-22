@@ -32,6 +32,19 @@
                         <dd class="cell-primary" style="margin:0;">@_authorName</dd>
                     </div>
                     <div>
+                        <dt class="cell-muted" style="font-size:12px;">Purchase</dt>
+                        <dd style="margin:0;">
+                            @if (_isVerifiedPurchase)
+                            {
+                                <AdminBadge Text="Verified purchase" Variant="success" />
+                            }
+                            else
+                            {
+                                <span class="cell-muted">Not verified</span>
+                            }
+                        </dd>
+                    </div>
+                    <div>
                         <dt class="cell-muted" style="font-size:12px;">Rating</dt>
                         <dd style="margin:0;"><StarRating Value="@_rating" CssClass="nf-stars--sm" /></dd>
                     </div>
@@ -92,6 +105,7 @@
     private DateTime _createdAt;
     private ReviewStatus _status;
     private DateTime? _commentEditedAt;
+    private bool _isVerifiedPurchase;
 
     private string _comment = string.Empty;
     private string _original = string.Empty;
@@ -112,6 +126,7 @@
         _createdAt = review.CreatedAt;
         _status = review.Status;
         _commentEditedAt = review.CommentEditedAt;
+        _isVerifiedPurchase = review.IsVerifiedPurchase;
 
         _comment = review.Comment;
         _original = review.Comment;

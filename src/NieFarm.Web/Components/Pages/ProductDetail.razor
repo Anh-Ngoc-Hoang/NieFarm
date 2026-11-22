@@ -347,7 +347,13 @@
                         {
                             <article class="review">
                                 <div class="review__head">
-                                    <span class="review__author">@review.AuthorName</span>
+                                    <span class="review__who">
+                                        <span class="review__author">@review.AuthorName</span>
+                                        @if (review.IsVerifiedPurchase)
+                                        {
+                                            <span class="review__verified"><NfIcon Name="check" Size="12" />Đã mua hàng</span>
+                                        }
+                                    </span>
                                     <span class="review__date">@review.CreatedAt.ToString("dd/MM/yyyy", Vietnamese)</span>
                                 </div>
                                 <div class="review__rating">

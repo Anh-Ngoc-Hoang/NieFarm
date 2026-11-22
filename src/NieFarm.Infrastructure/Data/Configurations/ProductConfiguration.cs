@@ -12,7 +12,11 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.ToTable("Products");
         builder.HasKey(p => p.Id);
 
-        builder.Property(p => p.Name).IsRequired().HasMaxLength(200);
+        // Accent-insensitive (and case-insensitive) so the shop search finds "ca phe dak lak" for
+        // "Cà phê Đắk Lắk" (R-13). Latin1_General_100_CI_AI folds Vietnamese diacritics and đ/Đ;
+        // Vietnamese_100_CI_AI does not. It also makes ORDER BY / uniqueness on Name accent-blind.
+        builder.Property(p => p.Name).IsRequired().HasMaxLength(200)
+            .UseCollation("Latin1_General_100_CI_AI");
         builder.Property(p => p.Slug).IsRequired().HasMaxLength(220);
 
         // Money is decimal(18,2) throughout — see .claude/rules/conventions.md.

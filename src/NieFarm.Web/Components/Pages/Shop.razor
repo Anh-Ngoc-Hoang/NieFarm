@@ -1,40 +1,84 @@
 @page "/cua-hang"
 @using System.Globalization
+@using NieFarm.Application.Common.Models
+@using NieFarm.Application.Features.Products
 @using NieFarm.Application.Features.Products.Dtos
 @using NieFarm.Application.Features.Products.Queries
 @inject ISender Sender
+@inject NavigationManager Navigation
+@implements IDisposable
 
 @*
-    Full markup rewrite from docs/design-preview/cua-hang.html
-    (docs/plans/public-site-redesign-nf2.md §7, step 2.6). The whole @code block is unchanged:
-    SortOptions, _selectedCategoryIds, _sort, the Task.WhenAll parallel read, ClearFiltersAsync,
-    ReloadProductsAsync, _loading. _selectedCategoryIds stays a multi-select HashSet<int> — the
-    prototype's chip group is single-select, but GetShopProductsQuery takes an array, so narrowing
-    to single-select would be a silent behaviour regression (plan §2.3/§10 decision 3). ToggleCategory
-    is adapted from a checkbox's ChangeEventArgs to a plain int parameter since a <button> chip
-    supplies neither — the add-if-absent/remove-if-present toggle semantics are unchanged.
-    Ratings, old price and category counts are omitted: ProductCardDto/ProductCategoryFilterDto
-    carry none of them (plan §2.3). The dead 1-page pagination <nav> is deleted outright; the count
-    line is now honest ("Hiển thị N sản phẩm"). The grid renders Shared/ProductCard (R-09, D11
-    closed): a real "Thêm vào giỏ" for products with no options, "Chọn loại" otherwise.
+    Markup from docs/design-preview/cua-hang.html (docs/plans/public-site-redesign-nf2.md §7, step 2.6),
+    made searchable and paged by R-13 (docs/plans/R-13-17-product-search-ratings-verified-reviews.md).
+
+    THE URL IS THE SOURCE OF TRUTH: ?tim-kiem=…&danh-muc=ID&danh-muc=ID&sap-xep=gia-tang|gia-giam&trang=N.
+    OnParametersSetAsync parses it (every parameter is bound as a string/string[] and TryParsed, so a
+    junk value can never throw), validates category ids against the visible categories, and loads the
+    page. Chips, sort and search only navigate; any change but the page itself drops "trang". Typing
+    pushes history on the first keystroke of a search and replaces afterwards, so Back leaves the search
+    rather than replaying every keystroke. The pager is plain <a href> (works without JavaScript); the
+    search form is a real GET form that the interactive circuit takes over (preventDefault).
+    _selectedIds stays a multi-select (repeat the key) — GetShopProductsQuery takes a set.
+
+    _searchText (the input) is written from the URL only when the navigation did not come from this
+    page (_lastNavigatedSearch), otherwise the user's in-flight typing would be overwritten by the
+    normalised echo of an older keystroke. Loads use a CTS (newest request wins) instead of a
+    "skip if busy" guard. After a change of page number alone, focus moves to the result line.
+    [PersistentState] carries the first load across prerender -> interactive (checked against a key).
+    The grid renders Shared/ProductCard; the closing editorial strip is unchanged.
 *@
 
-<PageTitle>Cửa hàng - Nie Farm Việt Nam</PageTitle>
+<PageTitle>@TitleText</PageTitle>
 <HeadContent>
     <meta name="description"
           content="Bộ sưu tập cà phê hạt rang mộc nguyên bản và dụng cụ pha chế chuyên dụng của Nie Farm, tuyển chọn từ nông trại đến tách cà phê của bạn." />
+    @if (_search is not null)
+    {
+        <meta name="robots" content="noindex, follow" />
+    }
+    <link rel="canonical" href="@CanonicalHref" />
 </HeadContent>
 
 <section class="shophead">
-    <div class="shell shophead__row">
-        <div>
-            <p class="eyebrow" data-reveal="fade">Cửa hàng</p>
-            <h1 data-reveal style="--d:.06s">Cà phê <span class="accent">đang có sẵn</span></h1>
+    <div class="shell">
+        <div class="shophead__row">
+            <div>
+                <p class="eyebrow" data-reveal="fade">Cửa hàng</p>
+                <h1 data-reveal style="--d:.06s">Cà phê <span class="accent">đang có sẵn</span></h1>
+            </div>
+            <p class="muted shophead__lede" data-reveal="fade" style="--d:.12s">
+                Khám phá bộ sưu tập cà phê hạt rang mộc nguyên bản và dụng cụ pha chế chuyên dụng, tuyển
+                chọn kỹ lưỡng từ nông trại đến tách cà phê của bạn.
+            </p>
         </div>
-        <p class="muted" data-reveal="fade" style="--d:.12s;font-size:.9375rem;max-width:34ch">
-            Khám phá bộ sưu tập cà phê hạt rang mộc nguyên bản và dụng cụ pha chế chuyên dụng, tuyển
-            chọn kỹ lưỡng từ nông trại đến tách cà phê của bạn.
-        </p>
+
+        <form class="shopsearch" role="search" method="get" action="/cua-hang"
+              @onsubmit="OnSearchSubmit" @onsubmit:preventDefault="@RendererInfo.IsInteractive">
+            <label class="sr-only" for="shop-search">Tìm sản phẩm</label>
+            <div class="shopsearch__box">
+                <span class="shopsearch__icon" aria-hidden="true"><NfIcon Name="search" Size="17" /></span>
+                <input id="shop-search" name="tim-kiem" type="search" class="nf-field shopsearch__input"
+                       placeholder="Tìm sản phẩm..." maxlength="@ProductSearchTerm.MaxLength" autocomplete="off"
+                       enterkeyhint="search"
+                       @bind="_searchText" @bind:event="oninput" @bind:after="OnSearchTypedAsync" />
+                @if (_searchText.Length > 0)
+                {
+                    <a class="shopsearch__clear" href="@ClearSearchHref" aria-label="Xóa từ khóa tìm kiếm">
+                        <NfIcon Name="close" Size="16" />
+                    </a>
+                }
+            </div>
+            @foreach (var id in _selectedIds)
+            {
+                <input type="hidden" name="danh-muc" value="@id" />
+            }
+            @if (SortSlug(_sort) is { } sortSlug)
+            {
+                <input type="hidden" name="sap-xep" value="@sortSlug" />
+            }
+            <button type="submit" class="btn btn--sm shopsearch__go"><span>Tìm kiếm</span></button>
+        </form>
     </div>
 </section>
 
@@ -43,14 +87,14 @@
     <div class="filterbar">
         <div class="shell filterbar__in">
             <div class="chips" role="group" aria-label="Danh mục">
-                <button type="button" class="chip" aria-pressed="@(_selectedCategoryIds.Count == 0 ? "true" : "false")"
-                        @onclick="ClearFiltersAsync">
+                <button type="button" class="chip" aria-pressed="@(_selectedIds.Count == 0 ? "true" : "false")"
+                        @onclick="ClearCategories">
                     Tất cả
                 </button>
                 @foreach (var category in _categories)
                 {
                     var categoryId = category.Id;
-                    <button type="button" class="chip" aria-pressed="@(_selectedCategoryIds.Contains(categoryId) ? "true" : "false")"
+                    <button type="button" class="chip" aria-pressed="@(_selectedIds.Contains(categoryId) ? "true" : "false")"
                             @onclick="() => ToggleCategory(categoryId)">
                         @category.Name
                     </button>
@@ -58,7 +102,7 @@
             </div>
             <label class="sortwrap">
                 Sắp xếp
-                <select @bind="_sort" @bind:after="ReloadProductsAsync">
+                <select @bind="_sortValue" @bind:after="OnSortChanged">
                     @foreach (var option in SortOptions)
                     {
                         <option value="@option.Value">@option.Label</option>
@@ -69,29 +113,38 @@
     </div>
 }
 
-<section style="padding-bottom:clamp(3rem,7vw,6rem)">
+<section class="shopresults">
     <div class="shell">
-        @if (_products.Count == 0)
-        {
-            <div style="text-align:center;padding-block:4rem;border-top:1px solid var(--line)">
-                <p class="muted" style="margin-bottom:1.5rem">Không tìm thấy sản phẩm phù hợp với bộ lọc.</p>
-                <button type="button" class="btn btn--ghost" @onclick="ClearFiltersAsync"><span>Xóa bộ lọc</span></button>
-            </div>
-        }
-        else
-        {
-            <p class="muted" style="font-size:.875rem;margin-bottom:1.5rem">Hiển thị @_products.Count sản phẩm</p>
+        <p class="shopresult muted" id="shop-result" role="status" tabindex="-1" @ref="_resultRef">@ResultText</p>
 
-            <div class="grid-products">
-                @for (var i = 0; i < _products.Count; i++)
-                {
-                    var product = _products[i];
-                    var delay = (i % 3) * 0.06;
+        <div aria-busy="@(_loading ? "true" : "false")">
+            @if (_products.Items.Count > 0)
+            {
+                <div class="grid-products">
+                    @for (var i = 0; i < _products.Items.Count; i++)
+                    {
+                        var product = _products.Items[i];
+                        var delay = (i % 3) * 0.06;
 
-                    <ProductCard @key="product.Id" Product="product" Delay="delay" />
-                }
-            </div>
-        }
+                        <ProductCard @key="product.Id" Product="product" Delay="delay" />
+                    }
+                </div>
+
+                <div class="shoppager">
+                    <NfPager Page="_products.Page" TotalPages="_products.TotalPages" HrefFor="PageHref" />
+                </div>
+            }
+            else if (_loaded && !_loading)
+            {
+                <div class="shopempty">
+                    <p class="muted">@EmptyText</p>
+                    @if (_search is not null || _selectedIds.Count > 0)
+                    {
+                        <a class="btn btn--ghost" href="/cua-hang"><span>Xóa tìm kiếm và bộ lọc</span></a>
+                    }
+                </div>
+            }
+        </div>
     </div>
 </section>
 
@@ -126,63 +179,360 @@
 </section>
 
 @code {
-    private static readonly (ShopSortOrder Value, string Label)[] SortOptions =
+    private const int SearchDebounceMs = 300;
+    private const string ShopPath = "/cua-hang";
+
+    private static readonly (string Value, string Label)[] SortOptions =
     [
-        (ShopSortOrder.Newest, "Mới nhất"),
-        (ShopSortOrder.PriceAscending, "Giá: Thấp đến Cao"),
-        (ShopSortOrder.PriceDescending, "Giá: Cao đến Thấp")
+        ("", "Mới nhất"),
+        ("gia-tang", "Giá: Thấp đến Cao"),
+        ("gia-giam", "Giá: Cao đến Thấp")
     ];
 
-    private readonly HashSet<int> _selectedCategoryIds = [];
-    private ShopSortOrder _sort = ShopSortOrder.Newest;
+    /// <summary>
+    /// First load (categories + one page), carried across the prerender -> interactive hop so the grid
+    /// does not flash empty. <see cref="Key"/> encodes the URL state it was loaded for; a failed
+    /// deserialisation or a key mismatch just falls back to re-querying.
+    /// </summary>
+    public record ShopData(
+        IReadOnlyList<ProductCategoryFilterDto> Categories,
+        PagedResult<ProductCardDto> Products,
+        string Key);
+
+    [SupplyParameterFromQuery(Name = "tim-kiem")] public string? SearchParam { get; set; }
+    [SupplyParameterFromQuery(Name = "danh-muc")] public string[]? CategoryParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sap-xep")] public string? SortParam { get; set; }
+    [SupplyParameterFromQuery(Name = "trang")] public string? PageParam { get; set; }
+
+    [PersistentState] public ShopData? Data { get; set; }
+
     private IReadOnlyList<ProductCategoryFilterDto> _categories = [];
-    private IReadOnlyList<ProductCardDto> _products = [];
+    private PagedResult<ProductCardDto> _products = new([], 1, GetShopProductsQuery.DefaultPageSize, 0);
+    private List<int> _selectedIds = [];
+    private ShopSortOrder _sort = ShopSortOrder.Newest;
+    private string _sortValue = "";
+    private string _searchText = "";
+    private string? _search;                // normalised term of the URL
+    private string? _lastNavigatedSearch;   // what this page last navigated to (or read from the URL)
+    private bool _searchInitialised;
+    private bool _categoriesLoaded;
+    private bool _loaded;
     private bool _loading;
+    private bool _focusResult;
+    private string? _loadedKey;
+    private string? _loadedFilterKey;
+    private int _loadedPage;
+    private CancellationTokenSource? _loadCts;
+    private CancellationTokenSource? _typingCts;
+    private ElementReference _resultRef;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        // Safe to run in parallel — each IReadRepositoryBase handler gets its own DbContext
-        // (data-access.md).
-        var categoriesTask = Sender.Send(new GetShopCategoriesQuery());
-        var productsTask = Sender.Send(new GetShopProductsQuery());
-        await Task.WhenAll(categoriesTask, productsTask);
+        var search = ProductSearchTerm.Normalize(SearchParam);
+        var sort = ParseSort(SortParam);
+        var page = ParsePage(PageParam);
+        var requestedIds = ParseIds(CategoryParam);
 
-        _categories = await categoriesTask;
-        _products = await productsTask;
-    }
-
-    /// <summary>Adds the category if absent, removes it if present — a <c>&lt;button&gt;</c> chip
-    /// (unlike the old checkbox) supplies no <see cref="ChangeEventArgs"/>, so this reads current
-    /// membership from <see cref="_selectedCategoryIds"/> instead of an event value.</summary>
-    private async Task ToggleCategory(int categoryId)
-    {
-        if (!_selectedCategoryIds.Remove(categoryId))
+        // Overwrite the input only for a navigation this page did not make itself.
+        if (!_searchInitialised || search != _lastNavigatedSearch)
         {
-            _selectedCategoryIds.Add(categoryId);
+            _searchText = search ?? string.Empty;
+            _lastNavigatedSearch = search;
+            _searchInitialised = true;
         }
 
-        await ReloadProductsAsync();
-    }
+        _search = search;
+        _sort = sort;
+        _sortValue = SortSlug(sort) ?? string.Empty;
+        if (_categoriesLoaded)
+            _selectedIds = KnownCategories(requestedIds, _categories);
 
-    private async Task ClearFiltersAsync()
-    {
-        _selectedCategoryIds.Clear();
-        await ReloadProductsAsync();
-    }
+        var filterKey = $"{search}|{string.Join(',', requestedIds)}|{sort}";
+        var key = $"{filterKey}|{page}";
 
-    private async Task ReloadProductsAsync()
-    {
-        if (_loading)
+        if (_loaded && key == _loadedKey)
+        {
+            // The URL is back on the state already on screen (e.g. chip A, then A again, or page 2 then
+            // Back, before the load finished). Cancel that in-flight load — newest request wins —
+            // so it cannot overwrite the page with a state the URL no longer describes.
+            if (_loading)
+            {
+                _loadCts?.Cancel();
+                _loading = false;
+            }
+
             return;
+        }
 
+        if (!_loaded && Data is not null && Data.Key == key)
+        {
+            _categories = Data.Categories;
+            _categoriesLoaded = true;
+            _selectedIds = KnownCategories(requestedIds, _categories);
+            _products = Data.Products;
+            _loadedKey = key;
+            _loadedFilterKey = filterKey;
+            _loadedPage = _products.Page;
+            _loaded = true;
+            return;
+        }
+
+        await LoadAsync(key, filterKey, search, requestedIds, sort, page);
+    }
+
+    private async Task LoadAsync(
+        string key, string filterKey, string? search, List<int> requestedIds, ShopSortOrder sort, int page)
+    {
+        var token = CancelLoad().Token;
         _loading = true;
+
         try
         {
-            _products = await Sender.Send(new GetShopProductsQuery(_selectedCategoryIds.ToArray(), _sort));
+            // Categories first (once): the requested ids are validated against them before the
+            // products query runs.
+            var categories = _categoriesLoaded
+                ? _categories
+                : await Sender.Send(new GetShopCategoriesQuery(), token);
+            var ids = KnownCategories(requestedIds, categories);
+
+            var products = await Sender.Send(new GetShopProductsQuery(ids, search, sort, page), token);
+
+            if (token.IsCancellationRequested)
+                return;
+
+            // Focus the result line only when nothing but the page number changed.
+            _focusResult = _loaded && filterKey == _loadedFilterKey && products.Page != _loadedPage;
+
+            _categories = categories;
+            _categoriesLoaded = true;
+            _selectedIds = ids;
+            _products = products;
+            _loadedKey = key;
+            _loadedFilterKey = filterKey;
+            _loadedPage = products.Page;
+            _loaded = true;
+            Data = new ShopData(categories, products, key);
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer request or the component was disposed.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Same, if the component was disposed mid-flight.
         }
         finally
         {
-            _loading = false;
+            if (!token.IsCancellationRequested)
+                _loading = false;
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusResult || _loading)
+            return;
+
+        _focusResult = false;
+        try
+        {
+            await _resultRef.FocusAsync();
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+        {
+            // Circuit gone or element replaced; losing a focus move is harmless.
+        }
+    }
+
+    // --- navigation --------------------------------------------------------------------------
+
+    private void ToggleCategory(int categoryId)
+    {
+        var ids = _selectedIds.ToList();
+        if (!ids.Remove(categoryId))
+            ids.Add(categoryId);
+
+        Go(ids, _sort, replace: false);
+    }
+
+    private void ClearCategories() => Go([], _sort, replace: false);
+
+    private void OnSortChanged() => Go(_selectedIds, ParseSort(_sortValue), replace: false);
+
+    /// <summary>Applies the typed search after a pause (or at once on Enter / the button).</summary>
+    private async Task OnSearchTypedAsync()
+    {
+        // Capture the token before any await: a newer keystroke disposes this CTS.
+        var token = ResetTyping().Token;
+        try
+        {
+            await Task.Delay(SearchDebounceMs, token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
+        // _lastNavigatedSearch (set the moment a navigation is issued), not _search (set only when the
+        // URL change arrives): a slow round trip must not make the next debounce think the session
+        // has not started and push a second history entry.
+        if (ProductSearchTerm.Normalize(_searchText) == _lastNavigatedSearch)
+            return;
+
+        // Within a search session keystrokes replace the history entry; the first one pushes.
+        Go(_selectedIds, _sort, replace: _lastNavigatedSearch is not null);
+    }
+
+    private void OnSearchSubmit()
+    {
+        CancelTyping();
+        if (ProductSearchTerm.Normalize(_searchText) != _lastNavigatedSearch)
+            Go(_selectedIds, _sort, replace: false);
+    }
+
+    /// <summary>The one navigation helper: current typed search + the given filters, back to page 1.</summary>
+    private void Go(IEnumerable<int> ids, ShopSortOrder sort, bool replace)
+    {
+        CancelTyping();
+        var search = ProductSearchTerm.Normalize(_searchText);
+        _lastNavigatedSearch = search;
+        Navigation.NavigateTo(BuildUrl(search, ids, sort, page: 1), replace: replace);
+    }
+
+    private string PageHref(int page) => BuildUrl(_search, _selectedIds, _sort, page);
+    private string ClearSearchHref => BuildUrl(null, _selectedIds, _sort, page: 1);
+
+    private static string BuildUrl(string? search, IEnumerable<int> ids, ShopSortOrder sort, int page)
+    {
+        var parts = new List<string>();
+        if (search is not null)
+            parts.Add("tim-kiem=" + Uri.EscapeDataString(search));
+        foreach (var id in ids)
+            parts.Add("danh-muc=" + id.ToString(CultureInfo.InvariantCulture));
+        if (SortSlug(sort) is { } slug)
+            parts.Add("sap-xep=" + slug);
+        if (page > 1)
+            parts.Add("trang=" + page.ToString(CultureInfo.InvariantCulture));
+
+        return parts.Count == 0 ? ShopPath : ShopPath + "?" + string.Join('&', parts);
+    }
+
+    // --- parsing (never throws on a hand-edited URL) -------------------------------------------
+
+    private static ShopSortOrder ParseSort(string? raw) => raw switch
+    {
+        "gia-tang" => ShopSortOrder.PriceAscending,
+        "gia-giam" => ShopSortOrder.PriceDescending,
+        _ => ShopSortOrder.Newest
+    };
+
+    private static string? SortSlug(ShopSortOrder sort) => sort switch
+    {
+        ShopSortOrder.PriceAscending => "gia-tang",
+        ShopSortOrder.PriceDescending => "gia-giam",
+        _ => null
+    };
+
+    private static int ParsePage(string? raw) =>
+        int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var page) && page >= 1 ? page : 1;
+
+    /// <summary>Positive, distinct, ascending ids from the repeated key; anything else is dropped.</summary>
+    private static List<int> ParseIds(string[]? raw)
+    {
+        if (raw is null)
+            return [];
+
+        return raw
+            .Take(200)
+            .Select(r => int.TryParse(r, NumberStyles.None, CultureInfo.InvariantCulture, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(GetShopProductsQuery.MaxCategoryIds)
+            .Order()
+            .ToList();
+    }
+
+    private static List<int> KnownCategories(IEnumerable<int> ids, IReadOnlyList<ProductCategoryFilterDto> categories) =>
+        ids.Where(id => categories.Any(c => c.Id == id)).ToList();
+
+    // --- display -------------------------------------------------------------------------------
+
+    private string TitleText
+    {
+        get
+        {
+            var page = _products.Page > 1 ? $" - Trang {_products.Page}" : string.Empty;
+            return _search is not null
+                ? $"Tìm kiếm sản phẩm{page} - Nie Farm Việt Nam"
+                : $"Cửa hàng{page} - Nie Farm Việt Nam";
+        }
+    }
+
+    // Canonical: category + page, never the search term or the sort order. Root-relative on purpose:
+    // there is no forwarded-headers setup, so an absolute URL could carry a proxy's internal host.
+    // A search result's page number says nothing about the unfiltered listing, so it canonicalises to page 1.
+    private string CanonicalHref =>
+        BuildUrl(null, _selectedIds, ShopSortOrder.Newest, _search is not null ? 1 : _products.Page);
+
+    private string ResultText
+    {
+        get
+        {
+            if (_loading)
+                return "Đang tải sản phẩm…";
+
+            var total = _products.TotalCount;
+            if (total == 0)
+                return _loaded ? "Không có sản phẩm nào." : string.Empty;
+
+            if (_products.TotalPages <= 1)
+                return $"Hiển thị {total} sản phẩm";
+
+            var from = (_products.Page - 1) * _products.PageSize + 1;
+            var to = from + _products.Items.Count - 1;
+            return from == to
+                ? $"Sản phẩm thứ {from} trong {total}"
+                : $"Hiển thị {from}–{to} trong {total} sản phẩm";
+        }
+    }
+
+    private string EmptyText =>
+        _search is not null
+            ? $"Không tìm thấy sản phẩm nào khớp với “{_search}”. Hãy thử từ khóa khác hoặc xóa bộ lọc."
+            : _selectedIds.Count > 0
+                ? "Các danh mục đã chọn hiện chưa có sản phẩm."
+                : "Cửa hàng đang cập nhật sản phẩm. Vui lòng quay lại sau nhé.";
+
+    // --- cancellation --------------------------------------------------------------------------
+
+    private CancellationTokenSource CancelLoad()
+    {
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        return _loadCts = new CancellationTokenSource();
+    }
+
+    private CancellationTokenSource ResetTyping()
+    {
+        CancelTyping();
+        return _typingCts = new CancellationTokenSource();
+    }
+
+    private void CancelTyping()
+    {
+        _typingCts?.Cancel();
+        _typingCts?.Dispose();
+        _typingCts = null;
+    }
+
+    public void Dispose()
+    {
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        CancelTyping();
     }
 }

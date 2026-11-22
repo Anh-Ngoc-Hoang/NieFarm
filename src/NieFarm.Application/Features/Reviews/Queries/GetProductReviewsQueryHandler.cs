@@ -10,6 +10,7 @@ namespace NieFarm.Application.Features.Reviews.Queries;
 
 public class GetProductReviewsQueryHandler(
     IReadRepositoryBase<Review> repository,
+    IReadRepositoryBase<Order> orders,
     ICurrentUser currentUser)
     : IRequestHandler<GetProductReviewsQuery, ProductReviewsDto>
 {
@@ -25,9 +26,15 @@ public class GetProductReviewsQueryHandler(
             new ProductReviewsVisibleToSpec(request.ProductId, userId), cancellationToken);
 
         var approved = reviews.Where(r => r.Status == ReviewStatus.Approved).ToList();
-        var averageRating = approved.Count == 0
-            ? 0
-            : Math.Round(approved.Average(r => (double)r.Rating), 1, MidpointRounding.AwayFromZero);
+        var averageRating = ReviewRatings.Average(approved.Select(r => r.Rating));
+
+        // R-17: verified-purchase flag. Only reviews the caller may already see reach this point
+        // (approved rows + their own pending one), and only a bool leaves VerifiedPurchases.
+        // One query for the whole list.
+        var verified = await VerifiedPurchases.LoadAsync(
+            orders,
+            reviews.Select(r => (r.AuthorUserId, r.ProductId)).Distinct().ToList(),
+            cancellationToken);
 
         // Display order: the caller's own pending review (at most one, per D5) first, then
         // approved reviews newest-first.
@@ -35,7 +42,9 @@ public class GetProductReviewsQueryHandler(
             .OrderByDescending(r => r.Status == ReviewStatus.Pending)
             .ThenByDescending(r => r.CreatedAt)
             .Select(r => new ProductReviewDto(
-                r.Id, r.AuthorName, r.Rating, r.Comment, r.CreatedAt, r.Status == ReviewStatus.Pending))
+                r.Id, r.AuthorName, r.Rating, r.Comment, r.CreatedAt,
+                r.Status == ReviewStatus.Pending,
+                verified.Contains((r.AuthorUserId, r.ProductId))))
             .ToList();
 
         return new ProductReviewsDto(averageRating, approved.Count, ordered);

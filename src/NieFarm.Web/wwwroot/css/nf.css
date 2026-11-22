@@ -636,6 +636,13 @@ a.btn { color: var(--btn-fg); }
 .pcard__old { font-size: var(--fs-xs); color: var(--ink-38); text-decoration: line-through; }
 .pcard__rate { margin-left: auto; display: inline-flex; align-items: center; gap: .3rem; font-size: var(--fs-xs); color: var(--ink-55); }
 .pcard__rate svg { width: 14px; height: 14px; color: var(--gold); fill: currentColor; stroke: none; }
+.pcard__rate-count { color: var(--ink-55); }
+
+/* Category + rating share one row (R-13). The rating is optional, so the row keeps its own height
+   and the card never jumps when a product has no review yet. */
+.pcard__meta { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 1.25rem; }
+.pcard__meta > .pcard__cat { min-width: 0; overflow-wrap: anywhere; }
+.pcard__meta > .pcard__rate { flex: none; margin: 0 0 0 auto; line-height: 1.4; }
 
 /* Card action row (R-09). Mobile-first: the add button is a 44px icon circle; the label joins it
    from 40rem. No infinite animation anywhere in here. */
@@ -666,6 +673,42 @@ a.btn { color: var(--btn-fg); }
 @media (min-width: 40rem) {
     .pcard__add { padding-inline: 1.1rem; min-width: 9.25rem; }
     .pcard__add-text { display: inline; }
+}
+
+/* Numbered pager (Shared/NfPager.razor, R-13). State is read from attributes — aria-current on the
+   page link, aria-disabled on a locked Trước/Sau — never from a Razor class expression. Mobile-first:
+   "Trước 2 / 5 Sau" below 40rem, the number run from 40rem. NfIcon's .ico is 100% wide, so the arrows
+   are pinned to 14px. No animation. */
+.pager { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.pager__step {
+    display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+    min-width: 44px; min-height: 44px; padding-inline: 1rem;
+    border-radius: var(--r-pill);
+    box-shadow: inset 0 0 0 1px var(--line);
+    font-size: var(--fs-xs); font-weight: 600; color: var(--ink);
+    transition: box-shadow .3s var(--ease), color .3s var(--ease);
+}
+a.pager__step:hover { box-shadow: inset 0 0 0 1px var(--ink-38); }
+.pager__step[aria-disabled="true"] { color: var(--ink-38); box-shadow: inset 0 0 0 1px var(--line-soft); cursor: default; }
+.pager__step .ico { width: 14px; height: 14px; flex: none; }
+.pager__flip { transform: scaleX(-1); }
+.pager__status { margin: 0; font-size: var(--fs-xs); color: var(--ink-55); font-variant-numeric: tabular-nums; }
+.pager__nums { display: none; align-items: center; gap: .25rem; margin: 0; padding: 0; list-style: none; }
+.pager__num {
+    display: grid; place-items: center;
+    min-width: 44px; min-height: 44px; padding-inline: .4rem;
+    border-radius: var(--r-pill);
+    font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-70);
+    transition: box-shadow .3s var(--ease), color .3s var(--ease), background .3s var(--ease);
+}
+.pager__num:hover { box-shadow: inset 0 0 0 1px var(--ink-38); color: var(--ink); }
+.pager__num[aria-current="page"] { background: var(--ink); color: #fff; box-shadow: none; }
+.pager__gap { min-width: 1.5rem; text-align: center; color: var(--ink-38); }
+.pager__step:focus-visible, .pager__num:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+@media (min-width: 40rem) {
+    .pager { justify-content: center; gap: 1rem; }
+    .pager__status { display: none; }
+    .pager__nums { display: flex; }
 }
 
 .gallery { display: grid; gap: .75rem; }

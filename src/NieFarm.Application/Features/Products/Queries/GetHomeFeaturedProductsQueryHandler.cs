@@ -6,7 +6,9 @@ using NieFarm.Domain.Entities;
 
 namespace NieFarm.Application.Features.Products.Queries;
 
-public class GetHomeFeaturedProductsQueryHandler(IReadRepositoryBase<Product> repository)
+public class GetHomeFeaturedProductsQueryHandler(
+    IReadRepositoryBase<Product> repository,
+    IReadRepositoryBase<Review> reviews)
     : IRequestHandler<GetHomeFeaturedProductsQuery, IReadOnlyList<ProductCardDto>>
 {
     public async Task<IReadOnlyList<ProductCardDto>> Handle(
@@ -16,8 +18,6 @@ public class GetHomeFeaturedProductsQueryHandler(IReadRepositoryBase<Product> re
 
         var products = await repository.ListAsync(new HomeFeaturedProductsSpec(take), cancellationToken);
 
-        return products
-            .Select(ProductCardMapper.ToCard)
-            .ToList();
+        return await ProductCardAssembler.ToCardsAsync(products, reviews, cancellationToken);
     }
 }

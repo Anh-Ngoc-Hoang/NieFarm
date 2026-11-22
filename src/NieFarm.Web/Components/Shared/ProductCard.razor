@@ -16,6 +16,8 @@
       has options           -> "Chọn loại" link to the PDP (grind/weight must be chosen there)
       nothing available     -> "Tạm hết hàng" (no button; the PDP link stays)
     The add button is disabled until the circuit is interactive (the page prerenders first).
+    The rating (R-13) sits beside the category in .pcard__meta and is hidden until the product has an
+    Approved review.
 *@
 
 <article class="pcard" data-reveal style="--d:@DelayText">
@@ -35,7 +37,19 @@
         }
     </a>
     <div class="pcard__body">
-        <p class="pcard__cat">@Product.CategoryName</p>
+        <div class="pcard__meta">
+            <p class="pcard__cat">@Product.CategoryName</p>
+            @if (Product.AverageRating is { } rating && Product.ReviewCount > 0)
+            {
+                @* Gold star + "4,8 (12)" (vi-VN comma). The visible figures are hidden from assistive tech
+                   and replaced by one full sentence, so a screen reader never hears "4 phẩy 8 mở ngoặc". *@
+                <p class="pcard__rate">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17.3 6.4 20.3l1.2-6.3L3 9.6l6.3-.8L12 3Z" /></svg>
+                    <span aria-hidden="true">@rating.ToString("0.0", ViCulture)<span class="pcard__rate-count"> (@Product.ReviewCount)</span></span>
+                    <span class="sr-only">@($"Đánh giá {rating.ToString("0.0", ViCulture)} trên 5 sao, {Product.ReviewCount} lượt đánh giá")</span>
+                </p>
+            }
+        </div>
         <h3 class="pcard__name"><a href="@Href">@Product.Name</a></h3>
         <div class="pcard__foot pcard__foot--act">
             <span class="pcard__price">@Money.Vnd(Product.Price)</span>
@@ -93,6 +107,8 @@
     private bool _added;
     private string? _status;
     private string? _error;
+
+    private static readonly CultureInfo ViCulture = CultureInfo.GetCultureInfo("vi-VN");
 
     private string Href => $"/san-pham/{Product.Slug}";
     private string DelayText => Delay.ToString("0.00", CultureInfo.InvariantCulture) + "s";

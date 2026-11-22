@@ -13,4 +13,5 @@ public record ReviewAdminListDto(
     ReviewStatus Status,
     DateTime CreatedAt,
     DateTime? ModeratedAt,
-    DateTime? CommentEditedAt);
+    DateTime? CommentEditedAt,
+    bool IsVerifiedPurchase);
