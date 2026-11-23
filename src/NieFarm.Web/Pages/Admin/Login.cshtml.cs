@@ -9,7 +9,6 @@ namespace NieFarm.Web.Pages.Admin;
 /// Sign-in endpoint for the Blazor login form. It lives in a Razor Page because
 /// SignInManager has to write the auth cookie onto a real HTTP response.
 /// </summary>
-[IgnoreAntiforgeryToken]
 public class LoginModel(
     SignInManager<ApplicationUser> signInManager,
     ILogger<LoginModel> logger) : PageModel

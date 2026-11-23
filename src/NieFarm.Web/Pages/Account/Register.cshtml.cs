@@ -11,7 +11,6 @@ namespace NieFarm.Web.Pages.Account;
 /// Self-service registration endpoint. Lives in a Razor Page (not the Blazor form itself)
 /// because signing the new account in immediately needs a real HTTP response.
 /// </summary>
-[IgnoreAntiforgeryToken]
 public class RegisterModel(
     ISender sender,
     SignInManager<ApplicationUser> signInManager,

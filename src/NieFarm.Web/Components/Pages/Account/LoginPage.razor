@@ -33,6 +33,7 @@
             }
 
             <form action="/pages/tai-khoan/dang-nhap" method="post" class="auth__form">
+                <AntiforgeryToken />
                 <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
 
                 <div>

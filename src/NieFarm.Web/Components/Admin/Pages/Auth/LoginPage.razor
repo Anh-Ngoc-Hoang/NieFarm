@@ -22,6 +22,7 @@
         EditForm cannot set the auth cookie, because the circuit has no HTTP response.
     *@
     <form action="/pages/admin/login" method="post">
+        <AntiforgeryToken />
         <div class="login-field">
             <label class="form-label-admin" for="Email">Email</label>
             <input class="form-control-admin" id="Email" name="Email" type="email"

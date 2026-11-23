@@ -12,7 +12,6 @@ namespace NieFarm.Web.Pages.Account;
 /// Sign-in endpoint for the public customer login form. It lives in a Razor Page because
 /// SignInManager has to write the auth cookie onto a real HTTP response.
 /// </summary>
-[IgnoreAntiforgeryToken]
 public class LoginModel(
     SignInManager<ApplicationUser> signInManager,
     UserManager<ApplicationUser> userManager,
