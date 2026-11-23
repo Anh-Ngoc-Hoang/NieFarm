@@ -8,6 +8,11 @@ namespace NieFarm.Web.Middleware;
 /// because the response has already started. Always stashes the value in HttpContext.Items so
 /// App.razor can read it even on the very request the cookie was just appended (a freshly
 /// appended cookie is not present in Request.Cookies on the same request).
+///
+/// The cookie is appended ONLY when the request has none, so its expiry is fixed from issue and
+/// never renewed. The abandoned-cart cleanup (R-23, CartRetentionPolicy) relies on exactly that to
+/// decide a guest cart can no longer be reached. Do not make the cookie sliding, or re-issue it on
+/// every request, without first moving rule A of AbandonedGuestCartsSpec from CreatedAt to UpdatedAt.
 /// </summary>
 public class CartCookieMiddleware(RequestDelegate next)
 {

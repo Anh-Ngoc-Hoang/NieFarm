@@ -84,9 +84,14 @@ try
     builder.Services.AddScoped<NewOrderCountState>();
     builder.Services.AddScoped<PendingReviewCountState>();
 
-    // Per-circuit cart state — merges the guest cart, seeds the demo cart and holds the live
-    // item count for the header badge.
+    // Per-circuit cart state — merges the guest cart into the account cart at sign-in and holds the
+    // live item count for the header badge.
     builder.Services.AddScoped<CartState>();
+
+    // R-23: periodic deletion of abandoned guest carts (starts after app.Run(), i.e. after seeding).
+    builder.Services.Configure<CartCleanupOptions>(
+        builder.Configuration.GetSection(CartCleanupOptions.SectionName));
+    builder.Services.AddHostedService<AbandonedCartCleanupService>();
 
     // Circuit-scoped hand-off of the just-placed order to the success page (never queried by code).
     builder.Services.AddScoped<PlacedOrderState>();

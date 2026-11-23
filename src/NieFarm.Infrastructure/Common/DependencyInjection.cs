@@ -10,6 +10,7 @@ using NieFarm.Infrastructure.Data.Repositories;
 using NieFarm.Infrastructure.Identity;
 using NieFarm.Infrastructure.Services;
 using NieFarm.Infrastructure.Services.Addresses;
+using NieFarm.Infrastructure.Services.Carts;
 using NieFarm.Infrastructure.Services.Payments;
 using NieFarm.Infrastructure.Services.Shipping;
 
@@ -59,6 +60,7 @@ public static class DependencyInjection
         services.AddSingleton<IOrderLookupThrottle, OrderLookupThrottle>();
         services.AddSingleton<ICouponAttemptThrottle, CouponAttemptThrottle>();
         services.AddScoped<IShippingRateProvider, DbShippingRateProvider>();
+        services.AddScoped<IAbandonedCartPurger, AbandonedCartPurger>();
 
         services.Configure<BankTransferOptions>(configuration.GetSection(BankTransferOptions.SectionName));
         services.Configure<SePayOptions>(configuration.GetSection(SePayOptions.SectionName));
