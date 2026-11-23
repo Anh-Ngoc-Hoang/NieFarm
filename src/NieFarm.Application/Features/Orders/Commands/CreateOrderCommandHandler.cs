@@ -122,7 +122,7 @@ public class CreateOrderCommandHandler(
         // re-checked above and prices/name/image come from the Products table via
         // CartAssembler, which is what keeps security.md satisfied.
         foreach (var line in cart.Lines)
-            order.AddItem(line.ProductId, line.Name, Truncate(line.Variant, 150), line.ImageUrl, line.UnitPrice, line.Quantity);
+            order.AddItem(line.ProductId, line.Name, Truncate(line.Variant, 150), line.ImageUrl, line.UnitPrice, line.Quantity, line.VariantKey);
 
         // Only a coupon that is eligible AND lowers the total is redeemed; one that shows a message with a
         // zero discount (FreeShipping on an already-free order) is not.

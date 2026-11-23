@@ -1707,3 +1707,26 @@ a.hpartner__link:focus-visible .hpartner__logo { filter: none; opacity: 1; }
     .ipage__aside { position: sticky; top: calc(var(--hdr-h) + 2rem); }
     .ipage__nav { border-top: 0; padding-top: 0; }
 }
+
+/* ==========================================================================
+   Buy again (R-16, D-18) -- the "Mua lai" button and its result block on
+   /tai-khoan/don-hang/{id}. Static classes only: nothing here carries
+   data-reveal or .draw. The status wrapper is always in the DOM so a screen
+   reader announces the text that is inserted into it.
+   ========================================================================== */
+.reorder { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line); display: grid; gap: 1rem; justify-items: start; }
+.reorder__result { display: grid; gap: .75rem; justify-items: start; max-width: 40rem; }
+.reorder__summary { margin: 0; color: var(--ok); font-size: var(--fs-sm); }
+.reorder__cart { font-size: var(--fs-sm); font-weight: 600; color: var(--green); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .2em; }
+.reorder__cart:hover { color: var(--red); }
+.reorder__skipped-title { margin: .25rem 0 0; font-size: var(--fs-sm); color: var(--ink-70); }
+.reorder__skipped { list-style: none; margin: 0; padding: 0; width: 100%; font-size: var(--fs-sm); }
+.reorder__skipped li { display: grid; gap: .15rem; padding-block: .75rem; border-top: 1px solid var(--line); }
+.reorder__skipped li:last-child { border-bottom: 1px solid var(--line); }
+.reorder__skipped-name { font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.reorder__skipped-why { color: var(--red); font-size: var(--fs-xs); }
+.reorder__error { margin: 0; color: var(--red); font-size: var(--fs-sm); }
+
+@media (min-width: 640px) {
+    .reorder__skipped li { grid-template-columns: minmax(0, 1fr) auto; gap: 1.5rem; align-items: baseline; }
+}

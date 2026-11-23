@@ -146,9 +146,9 @@ public class Order : BaseEntity
 
     public void AddItem(
         int? productId, string productName, string variant, string imageUrl,
-        decimal unitPrice, int quantity)
+        decimal unitPrice, int quantity, string variantKey = "")
     {
-        _items.Add(OrderItem.Create(productId, productName, variant, imageUrl, unitPrice, quantity));
+        _items.Add(OrderItem.Create(productId, productName, variant, imageUrl, unitPrice, quantity, variantKey));
         SetUpdatedAt();
     }
 

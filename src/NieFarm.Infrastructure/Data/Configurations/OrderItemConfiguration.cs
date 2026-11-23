@@ -13,6 +13,8 @@ public class OrderItemConfiguration : IEntityTypeConfiguration<OrderItem>
 
         builder.Property(i => i.ProductName).IsRequired().HasMaxLength(200);
         builder.Property(i => i.Variant).HasMaxLength(150);
+        // Existing rows get '' (no backfill); see OrderItem.VariantKey.
+        builder.Property(i => i.VariantKey).IsRequired().HasMaxLength(400).HasDefaultValue(string.Empty);
         builder.Property(i => i.ImageUrl).HasMaxLength(500);
         builder.Property(i => i.UnitPrice).HasPrecision(18, 2);
 

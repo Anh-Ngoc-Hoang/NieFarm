@@ -10,6 +10,7 @@
 @inject ISender Sender
 @inject NavigationManager Navigation
 @inject NieFarm.Web.Services.Orders.PaymentStatusNotifier PaymentNotifier
+@inject NieFarm.Web.Services.Cart.CartState CartState
 
 @*
     Markup-only rewrite onto NieFarm 2.0 (docs/plans/public-site-redesign-nf2.md
@@ -24,6 +25,10 @@
     Order workflow (docs/plans/R-07-order-workflow.md): the status pill now follows the status (it used
     to be a fixed green), the header carries the OrderTrackProgress rail, and a New order can be
     cancelled through CancelMyOrderCommand (ownership is enforced server-side by MyOrderByIdSpec).
+
+    Buy again (R-16, D-17/D-18): the button lives here and not on the list row, which is an <a> and cannot
+    hold a button. ReorderCommand re-prices every line from the catalog; the result block is plain text
+    (product names come from the order snapshot) and lists the lines that were left out.
 
     D18 live status: once the query has succeeded (the caller owns the order) the page subscribes to
     PaymentStatusNotifier in OnAfterRender and, on an event, re-runs GetMyOrderDetailQuery. Disposed
@@ -98,6 +103,50 @@
                     {
                         <p class="nf-track__ok" role="status">@_cancelNotice</p>
                     }
+
+                    @* Buy again (R-16). Every status may be bought again, a cancelled order included. *@
+                    <div class="reorder">
+                        <button type="button" class="btn btn--ghost" @onclick="ReorderAsync"
+                                disabled="@(_reordering || _cancelBusy || !RendererInfo.IsInteractive)">
+                            <span>@(_reordering ? "Đang thêm vào giỏ…" : "Mua lại")</span>
+                        </button>
+
+                        <div role="status">
+                            @if (_reorderResult is not null)
+                            {
+                                <div class="reorder__result">
+                                    @if (_reorderResult.AddedLines > 0)
+                                    {
+                                        <p class="reorder__summary">Đã thêm @_reorderResult.AddedLines sản phẩm vào giỏ hàng. Giá được cập nhật theo giá hiện tại.</p>
+                                        <a class="reorder__cart" href="/thanh-toan">Xem giỏ hàng</a>
+                                    }
+                                    else
+                                    {
+                                        <p class="reorder__summary">@OrderMessages.ReorderNothingAdded</p>
+                                    }
+
+                                    @if (_reorderResult.Skipped.Count > 0)
+                                    {
+                                        <p class="reorder__skipped-title">Một số sản phẩm chưa thể thêm vào giỏ hàng:</p>
+                                        <ul class="reorder__skipped">
+                                            @foreach (var skipped in _reorderResult.Skipped)
+                                            {
+                                                <li>
+                                                    <span class="reorder__skipped-name">@skipped.ProductName</span>
+                                                    <span class="reorder__skipped-why">@OrderMessages.ReorderSkipReasonText(skipped.Reason)</span>
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (_reorderError is not null)
+                        {
+                            <p class="reorder__error" role="alert">@_reorderError</p>
+                        }
+                    </div>
                 </div>
 
                 <div class="nf-track__cols">
@@ -223,6 +272,9 @@
     private bool _cancelBusy;
     private string? _cancelError;
     private string? _cancelNotice;
+    private bool _reordering;
+    private string? _reorderError;
+    private ReorderResultDto? _reorderResult;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -237,7 +289,11 @@
         }
 
         if (_order is not null && _order.Code != result.Value.Code)
+        {
             _justPaid = false;
+            _reorderResult = null;
+            _reorderError = null;
+        }
         _order = result.Value;
     }
 
@@ -287,7 +343,7 @@
 
     private async Task CancelAsync(string? reason)
     {
-        if (_cancelBusy) return;
+        if (_cancelBusy || _reordering) return;
         _cancelBusy = true;
         _cancelError = null;
         _cancelNotice = null;
@@ -327,6 +383,49 @@
         finally
         {
             _cancelBusy = false;
+        }
+    }
+
+    private async Task ReorderAsync()
+    {
+        // One command at a time: it shares the circuit's write context with the cart and cancel commands.
+        if (_reordering || _cancelBusy || !RendererInfo.IsInteractive) return;
+        _reordering = true;
+        _reorderError = null;
+        _reorderResult = null;
+
+        try
+        {
+            var result = await Sender.Send(new ReorderCommand(Id), _cts.Token);
+
+            if (result.IsSuccess)
+            {
+                _reorderResult = result.Value;
+                CartState.Set(result.Value.CartItemCount);
+            }
+            else if (result.Status is ResultStatus.NotFound or ResultStatus.Unauthorized)
+            {
+                Navigation.NotFound();
+            }
+            else
+            {
+                _reorderError = result.ValidationErrors.Select(v => v.ErrorMessage)
+                    .Concat(result.Errors)
+                    .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m))
+                    ?? "Đã có lỗi xảy ra. Vui lòng thử lại.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Circuit disposed mid-command; nothing to show.
+        }
+        catch (Exception)
+        {
+            _reorderError = "Đã có lỗi xảy ra. Vui lòng thử lại.";
+        }
+        finally
+        {
+            _reordering = false;
         }
     }
 

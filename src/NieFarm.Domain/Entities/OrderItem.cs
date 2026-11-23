@@ -16,6 +16,15 @@ public class OrderItem : BaseEntity
     /// <summary>Name and price are copied at checkout so the order never changes retroactively.</summary>
     public string ProductName { get; private set; } = string.Empty;
     public string Variant { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// The canonical cart <c>VariantKey</c> (option value labels joined with '|') the line was bought with,
+    /// kept so "buy again" can resolve the same variant without parsing the display text in
+    /// <see cref="Variant"/>. Empty for a product with no options and for orders placed before this column
+    /// existed (those fall back to parsing <see cref="Variant"/>).
+    /// </summary>
+    public string VariantKey { get; private set; } = string.Empty;
+
     public string ImageUrl { get; private set; } = string.Empty;
     public decimal UnitPrice { get; private set; }
     public int Quantity { get; private set; }
@@ -26,13 +35,14 @@ public class OrderItem : BaseEntity
 
     internal static OrderItem Create(
         int? productId, string productName, string variant, string imageUrl,
-        decimal unitPrice, int quantity)
+        decimal unitPrice, int quantity, string variantKey = "")
     {
         return new OrderItem
         {
             ProductId = productId,
             ProductName = productName.Trim(),
             Variant = variant.Trim(),
+            VariantKey = variantKey?.Trim() ?? string.Empty,
             ImageUrl = imageUrl.Trim(),
             UnitPrice = unitPrice,
             Quantity = quantity < 1 ? 1 : quantity
