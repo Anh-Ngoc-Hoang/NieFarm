@@ -14,7 +14,7 @@ namespace NieFarm.Infrastructure.Identity;
 /// exactly when checkout submits and order-history loads run. The provider is resolved
 /// lazily through IServiceProvider so this type stays constructible in scopes that have
 /// no component model (Razor Pages, minimal API endpoints), where it falls back to
-/// HttpContext and then to null.
+/// HttpContext and then to null (see GetProviderUserAsync for why that fallback is explicit).
 /// </summary>
 public sealed class CurrentUser(
     IServiceProvider serviceProvider,
@@ -22,31 +22,47 @@ public sealed class CurrentUser(
 {
     public async Task<string?> GetUserIdAsync(CancellationToken cancellationToken = default)
     {
-        var provider = serviceProvider.GetService<AuthenticationStateProvider>();
-        if (provider is not null)
-        {
-            var state = await provider.GetAuthenticationStateAsync();
-            var id = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (!string.IsNullOrEmpty(id))
-                return id;
-        }
+        var providerUser = await GetProviderUserAsync();
+        var id = providerUser?.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!string.IsNullOrEmpty(id))
+            return id;
 
         return httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier);
     }
 
     public async Task<string?> GetDisplayNameAsync(CancellationToken cancellationToken = default)
     {
-        var provider = serviceProvider.GetService<AuthenticationStateProvider>();
-        if (provider is not null)
-        {
-            var state = await provider.GetAuthenticationStateAsync();
-            var name = ResolveDisplayName(state.User);
-            if (name is not null)
-                return name;
-        }
+        var providerUser = await GetProviderUserAsync();
+        var name = providerUser is null ? null : ResolveDisplayName(providerUser);
+        if (name is not null)
+            return name;
 
         var httpUser = httpContextAccessor.HttpContext?.User;
         return httpUser is null ? null : ResolveDisplayName(httpUser);
+    }
+
+    /// <summary>
+    /// The user known to the Blazor circuit, or null when there is no component scope. In a Razor
+    /// Page request ServerAuthenticationStateProvider is registered but THROWS
+    /// InvalidOperationException from GetAuthenticationStateAsync rather than returning null
+    /// (verified by the R-16 spike), so that case must be caught here and left to the HttpContext
+    /// fallback — otherwise any command sent from a PageModel (e.g. ChangeMyPasswordCommand)
+    /// would fail. Behaviour inside a circuit is unchanged.
+    /// </summary>
+    private async Task<ClaimsPrincipal?> GetProviderUserAsync()
+    {
+        var provider = serviceProvider.GetService<AuthenticationStateProvider>();
+        if (provider is null)
+            return null;
+
+        try
+        {
+            return (await provider.GetAuthenticationStateAsync()).User;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

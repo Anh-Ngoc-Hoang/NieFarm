@@ -870,6 +870,72 @@
 }
 
 /* ==========================================================================
+   Account shell (R-16, D-01) — Shared/AccountShell.razor + AccountNav.razor.
+   Mobile: the nav is one horizontally scrolling hairline row above the page
+   body. From 960px it becomes a sticky left column. The active link is
+   styled from aria-current, never from a Razor class expression.
+   ========================================================================== */
+.acct-shell { display: grid; gap: 1.5rem; }
+/* Grid items default to min-width:auto, which would stop the nav row from scrolling. */
+.acct-shell > * { min-width: 0; }
+
+.acct-nav {
+    display: flex;
+    gap: .25rem;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+    /* Bleed to the viewport edge on phones so the row scrolls under the gutter. */
+    margin-inline: calc(var(--gutter) * -1);
+    padding-inline: var(--gutter);
+}
+.acct-nav::-webkit-scrollbar { display: none; }
+.acct-nav a {
+    flex: none;
+    padding: .85rem .9rem;
+    margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+    font-size: var(--fs-sm);
+    color: var(--ink-70);
+    white-space: nowrap;
+    transition: color .2s var(--ease), border-color .2s var(--ease);
+}
+.acct-nav a:hover { color: var(--ink); }
+.acct-nav a[aria-current="page"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--red); }
+
+/* Profile page (/tai-khoan/ho-so): two hairline-separated blocks, a narrow single-column form each. */
+.acct-block + .acct-block { margin-top: clamp(2.5rem, 5vw, 3.5rem); padding-top: clamp(2.5rem, 5vw, 3.5rem); border-top: 1px solid var(--line); }
+.acct-block__title { display: flex; align-items: center; gap: .6rem; font-size: var(--fs-h3); margin-bottom: 1.5rem; }
+/* NfIcon's .ico is width/height 100%: pinned here because the heading is a flex row. */
+.acct-block__title .ico { width: 20px; height: 20px; flex: none; color: var(--ink-55); }
+.acct-block .alert { max-width: 30rem; margin-bottom: 1.25rem; }
+.acct-form { display: grid; gap: 1.25rem; max-width: 30rem; }
+.acct-form__actions { padding-top: .25rem; }
+.acct-note { font-size: var(--fs-xs); color: var(--ink-55); margin-top: .5rem; }
+.acct-form .nf-field[readonly] { background: var(--tint); color: var(--ink-70); cursor: default; }
+
+@media (min-width: 960px) {
+    .acct-shell { grid-template-columns: 13.5rem minmax(0, 1fr); gap: clamp(2.5rem, 5vw, 4.5rem); align-items: start; }
+    .acct-nav {
+        position: sticky;
+        top: calc(var(--hdr-h) + 2rem);
+        flex-direction: column;
+        gap: 0;
+        overflow: visible;
+        margin-inline: 0;
+        padding-inline: 0;
+        border-bottom: 0;
+    }
+    .acct-nav a {
+        margin-bottom: 0;
+        padding: .75rem 0 .75rem 1rem;
+        border-bottom: 0;
+        border-left: 2px solid transparent;
+    }
+    .acct-nav a[aria-current="page"] { border-left-color: var(--red); }
+}
+
+/* ==========================================================================
    /dang-nhap, /dang-ky — Auth screens (Phase 5, step 5.1). No prototype
    source; the split layout + polaroid collage concept is kept from the
    original Tailwind build, restyled in the house language: polaroid drop

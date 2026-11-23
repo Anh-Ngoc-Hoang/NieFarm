@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -11,9 +12,10 @@ public class LogoutModel(
 {
     public async Task<IActionResult> OnGetAsync()
     {
-        var user = User.Identity?.Name;
+        // D-03 (R-16): the user id only, never the email (Identity.Name is the email here).
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         await signInManager.SignOutAsync();
-        logger.LogInformation("Customer sign-out for {Email}", user);
+        logger.LogInformation("Customer sign-out for user {UserId}", userId);
 
         return Redirect("/");
     }

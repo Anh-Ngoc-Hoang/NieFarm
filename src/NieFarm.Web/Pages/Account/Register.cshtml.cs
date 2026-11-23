@@ -34,7 +34,8 @@ public class RegisterModel(
         {
             // Sign in immediately; SignInManager needs this real HTTP response for the cookie.
             await signInManager.PasswordSignInAsync(Email, Password, isPersistent: false, lockoutOnFailure: false);
-            logger.LogInformation("Customer registered: {Email}", Email);
+            // D-03 (R-16): the user id only, never the email.
+            logger.LogInformation("Customer registered: user {UserId}", result.Value);
             return Redirect("/");
         }
 
@@ -43,7 +44,8 @@ public class RegisterModel(
             .Concat(result.Errors)
             .FirstOrDefault() ?? "Không thể tạo tài khoản. Vui lòng thử lại.";
 
-        logger.LogWarning("Customer registration failed for {Email}: {Message}", Email, message);
+        // Status only (D-03): an Identity error description can quote the email or user name.
+        logger.LogWarning("Customer registration failed ({ResultStatus})", result.Status);
 
         return Redirect("/dang-ky"
             + $"?error={Uri.EscapeDataString(message)}"

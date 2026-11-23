@@ -48,6 +48,10 @@
                             @* Full-viewport click-catcher so clicking anywhere outside the menu closes it. *@
                             <div class="hdr__user-scrim" @onclick="CloseUserMenu"></div>
                             <div class="hdr__user-menu">
+                                <a href="/tai-khoan" @onclick="CloseUserMenu">
+                                    <NfIcon Name="user" Size="18" />
+                                    Tài khoản của tôi
+                                </a>
                                 <a href="/tai-khoan/don-hang" @onclick="CloseUserMenu">
                                     <NfIcon Name="receipt" Size="18" />
                                     Đơn hàng của tôi
@@ -94,6 +98,10 @@
             }
             <AuthorizeView>
                 <Authorized>
+                    <a href="/tai-khoan" @onclick="CloseMobileMenu">
+                        <NfIcon Name="user" Size="18" />
+                        Tài khoản của tôi
+                    </a>
                     <a href="/tai-khoan/don-hang" @onclick="CloseMobileMenu">
                         <NfIcon Name="receipt" Size="18" />
                         Đơn hàng của tôi

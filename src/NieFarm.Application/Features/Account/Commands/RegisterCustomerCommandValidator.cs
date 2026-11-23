@@ -17,10 +17,8 @@ public class RegisterCustomerCommandValidator : AbstractValidator<RegisterCustom
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Vui lòng nhập mật khẩu.")
-            .MinimumLength(8).WithMessage("Mật khẩu phải có ít nhất 8 ký tự.")
-            .Matches("[A-Z]").WithMessage("Mật khẩu phải có ít nhất một chữ hoa.")
-            .Matches("[a-z]").WithMessage("Mật khẩu phải có ít nhất một chữ thường.")
-            .Matches("[0-9]").WithMessage("Mật khẩu phải có ít nhất một chữ số.");
+            .MeetsPasswordPolicy()
+            .MaximumLength(PasswordRules.MaxLength).WithMessage(AccountMessages.PasswordTooLong);
 
         RuleFor(x => x.ConfirmPassword)
             .Equal(x => x.Password).WithMessage("Mật khẩu xác nhận không khớp.");

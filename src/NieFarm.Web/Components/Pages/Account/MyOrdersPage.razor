@@ -19,65 +19,63 @@
     <meta name="robots" content="noindex" />
 </HeadContent>
 
-<div class="acct">
-    <div class="shell">
-        <div class="acct__head">
-            <h1>Đơn hàng của tôi</h1>
-            <p class="lede" style="margin-top:.5rem">Theo dõi tình trạng và lịch sử các đơn hàng đã đặt.</p>
-        </div>
-
-        @if (_orders is null)
-        {
-            <div style="display:grid;gap:1rem">
-                @for (var i = 0; i < 3; i++)
-                {
-                    <div style="height:6rem;border-radius:var(--r-sm);background:var(--tint)"></div>
-                }
-            </div>
-        }
-        else if (_orders.Count == 0)
-        {
-            <div class="acct__empty">
-                <NfIcon Name="cart" Size="40" CssClass="acct__empty-icon" />
-                <p class="muted" style="margin:1rem 0 1.5rem">Bạn chưa có đơn hàng nào.</p>
-                <a class="btn btn--red" href="/cua-hang"><span>Mua sắm ngay</span></a>
-            </div>
-        }
-        else
-        {
-            <ul class="acct__list">
-                @foreach (var order in _orders)
-                {
-                    <li>
-                        <a href="/tai-khoan/don-hang/@order.Id" class="acct__row">
-                            <div class="acct__row-in">
-                                <div>
-                                    <p class="acct__row-code">Mã đơn: <b>@order.Code</b></p>
-                                    <p class="acct__row-meta">
-                                        Ngày đặt: @VnTime.FromUtc(order.PlacedAt).ToString("dd/MM/yyyy") · @order.ItemCount sản phẩm
-                                    </p>
-                                </div>
-                                <div class="acct__row-right">
-                                    <span class="badge-status @OrderStatusText.PillClass(order.Status)">
-                                        @OrderStatusText.Vi(order.Status)
-                                    </span>
-                                    @if (order.PaymentMethod == PaymentMethod.BankTransfer
-                                         && order.PaymentStatus == PaymentStatus.AwaitingPayment
-                                         && order.Status != OrderStatus.Cancelled)
-                                    {
-                                        <span class="badge-status badge-status--pending">@OrderStatusText.Vi(PaymentStatus.AwaitingPayment)</span>
-                                    }
-                                    <span class="acct__row-total">@SiteContent.Vnd(order.Total)</span>
-                                    <NfIcon Name="arrow-right" Size="16" CssClass="acct__row-arrow" />
-                                </div>
-                            </div>
-                        </a>
-                    </li>
-                }
-            </ul>
-        }
+<AccountShell>
+    <div class="acct__head">
+        <h1>Đơn hàng của tôi</h1>
+        <p class="lede" style="margin-top:.5rem">Theo dõi tình trạng và lịch sử các đơn hàng đã đặt.</p>
     </div>
-</div>
+
+    @if (_orders is null)
+    {
+        <div style="display:grid;gap:1rem">
+            @for (var i = 0; i < 3; i++)
+            {
+                <div style="height:6rem;border-radius:var(--r-sm);background:var(--tint)"></div>
+            }
+        </div>
+    }
+    else if (_orders.Count == 0)
+    {
+        <div class="acct__empty">
+            <NfIcon Name="cart" Size="40" CssClass="acct__empty-icon" />
+            <p class="muted" style="margin:1rem 0 1.5rem">Bạn chưa có đơn hàng nào.</p>
+            <a class="btn btn--red" href="/cua-hang"><span>Mua sắm ngay</span></a>
+        </div>
+    }
+    else
+    {
+        <ul class="acct__list">
+            @foreach (var order in _orders)
+            {
+                <li>
+                    <a href="/tai-khoan/don-hang/@order.Id" class="acct__row">
+                        <div class="acct__row-in">
+                            <div>
+                                <p class="acct__row-code">Mã đơn: <b>@order.Code</b></p>
+                                <p class="acct__row-meta">
+                                    Ngày đặt: @VnTime.FromUtc(order.PlacedAt).ToString("dd/MM/yyyy") · @order.ItemCount sản phẩm
+                                </p>
+                            </div>
+                            <div class="acct__row-right">
+                                <span class="badge-status @OrderStatusText.PillClass(order.Status)">
+                                    @OrderStatusText.Vi(order.Status)
+                                </span>
+                                @if (order.PaymentMethod == PaymentMethod.BankTransfer
+                                     && order.PaymentStatus == PaymentStatus.AwaitingPayment
+                                     && order.Status != OrderStatus.Cancelled)
+                                {
+                                    <span class="badge-status badge-status--pending">@OrderStatusText.Vi(PaymentStatus.AwaitingPayment)</span>
+                                }
+                                <span class="acct__row-total">@SiteContent.Vnd(order.Total)</span>
+                                <NfIcon Name="arrow-right" Size="16" CssClass="acct__row-arrow" />
+                            </div>
+                        </div>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</AccountShell>
 
 @code {
     private List<MyOrderListDto>? _orders;

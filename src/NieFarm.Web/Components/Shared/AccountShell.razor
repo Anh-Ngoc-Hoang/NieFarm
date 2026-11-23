@@ -1,0 +1,20 @@
+@*
+    Wrapper (not a layout, so PublicLayout stays the layout) that gives the account pages one
+    frame: the section nav plus the page body (R-16, D-01). Pages render their own ".acct__head"
+    inside ChildContent. The shell carries no data-reveal and no Razor class expression.
+*@
+
+<div class="acct">
+    <div class="shell">
+        <div class="acct-shell">
+            <AccountNav />
+            <div class="acct-shell__body">
+                @ChildContent
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

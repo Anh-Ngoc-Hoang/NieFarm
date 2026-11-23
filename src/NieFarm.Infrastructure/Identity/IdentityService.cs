@@ -1,8 +1,12 @@
 using Ardalis.Result;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using NieFarm.Application.Common.Interfaces;
+using NieFarm.Application.Features.Account;
+using NieFarm.Application.Features.Account.Profile.Dtos;
 using NieFarm.Application.Features.Admin.Accounts.Dtos;
 using NieFarm.Application.Features.Admin.Roles.Dtos;
+using NieFarm.Infrastructure.Data;
 
 namespace NieFarm.Infrastructure.Identity;
 
@@ -12,7 +16,8 @@ namespace NieFarm.Infrastructure.Identity;
 /// </summary>
 public class IdentityService(
     UserManager<ApplicationUser> userManager,
-    RoleManager<IdentityRole> roleManager) : IIdentityService
+    RoleManager<IdentityRole> roleManager,
+    AppDbContext db) : IIdentityService
 {
     public async Task<List<AccountDto>> GetAllAccountsAsync(CancellationToken cancellationToken)
     {
@@ -196,6 +201,122 @@ public class IdentityService(
         // No role assignment: there is no Customer role (see §6.1). "Customer" just means
         // "an authenticated account with none of AdminRoles.All" — nothing further to do here.
         return Result<string>.Success(user.Id);
+    }
+
+    public async Task<CustomerProfileDto?> GetCustomerProfileAsync(string userId, CancellationToken cancellationToken)
+    {
+        // A no-tracking projection: the scoped context lives as long as a Blazor circuit, so a tracked
+        // read could keep serving a stale name or phone after another request changed the row.
+        return await userManager.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new CustomerProfileDto(u.FullName, u.Email ?? string.Empty, u.PhoneNumber))
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<Result> UpdateCustomerProfileAsync(
+        string userId, string fullName, string? phoneNumber, CancellationToken cancellationToken)
+    {
+        // The user store swallows a failed UpdateAsync (for example ConcurrencyFailure) and leaves the
+        // entity Modified in this scoped context, which in Blazor Server lives as long as the circuit; the
+        // next checkout would then fail in DiscardTrackedEntities ("unsaved changes"). So: refuse to run
+        // over someone else's pending changes, never read a cached copy of this user, and always detach
+        // exactly this user afterwards (never the whole context). The same applies to ChangePasswordAsync.
+        if (!TryPrepareUserLoad(userId))
+            return Result.Error(new ErrorList([AccountErrorCodes.SaveFailed]));
+
+        ApplicationUser? user = null;
+        try
+        {
+            user = await userManager.FindByIdAsync(userId);
+            if (user is null)
+                return Result.NotFound();
+
+            user.FullName = fullName.Trim();
+
+            // Assign the property and use UpdateAsync, NOT SetPhoneNumberAsync: SetPhoneNumberAsync also
+            // updates the security stamp, which would let SecurityStampValidator sign this very session
+            // out at its next check (R-16 D-06). Email is never touched here (D-07).
+            user.PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber.Trim();
+
+            var updated = await userManager.UpdateAsync(user);
+            return updated.Succeeded
+                ? Result.Success()
+                : Result.Error(new ErrorList([AccountErrorCodes.SaveFailed]));
+        }
+        finally
+        {
+            DetachUser(user);
+        }
+    }
+
+    public async Task<Result> ChangePasswordAsync(
+        string userId, string currentPassword, string newPassword, CancellationToken cancellationToken)
+    {
+        if (!TryPrepareUserLoad(userId))
+            return Result.Error(new ErrorList([AccountErrorCodes.SaveFailed]));
+
+        ApplicationUser? user = null;
+        try
+        {
+            user = await userManager.FindByIdAsync(userId);
+            if (user is null)
+                return Result.NotFound();
+
+            // A locked-out account may not keep guessing the current password through this form.
+            if (await userManager.IsLockedOutAsync(user))
+                return Result.Error(new ErrorList([AccountErrorCodes.LockedOut]));
+
+            var changed = await userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+            if (changed.Succeeded)
+            {
+                await userManager.ResetAccessFailedCountAsync(user);
+                return Result.Success();
+            }
+
+            var codes = changed.Errors.Select(e => e.Code).ToList();
+
+            if (codes.Contains(AccountErrorCodes.PasswordMismatch))
+            {
+                // Counts toward lockout, so this form cannot be used to brute-force the password.
+                await userManager.AccessFailedAsync(user);
+
+                return Result.Error(new ErrorList([
+                    await userManager.IsLockedOutAsync(user)
+                        ? AccountErrorCodes.LockedOut
+                        : AccountErrorCodes.PasswordMismatch]));
+            }
+
+            return Result.Error(new ErrorList(codes));
+        }
+        finally
+        {
+            DetachUser(user);
+        }
+    }
+
+    /// <summary>
+    /// Readies the scoped context for a customer write: false when it holds pending changes that belong
+    /// to some other operation (those are never silently discarded, so the caller reports a failure);
+    /// otherwise any already-tracked copy of this user is detached so the next load reads the database,
+    /// not a stale cached instance.
+    /// </summary>
+    private bool TryPrepareUserLoad(string userId)
+    {
+        if (db.ChangeTracker.HasChanges())
+            return false;
+
+        foreach (var entry in db.ChangeTracker.Entries<ApplicationUser>().Where(e => e.Entity.Id == userId).ToList())
+            entry.State = EntityState.Detached;
+
+        return true;
+    }
+
+    /// <summary>Detaches just this user (also when a failed save left it Modified); the rest of the context is untouched.</summary>
+    private void DetachUser(ApplicationUser? user)
+    {
+        if (user is not null)
+            db.Entry(user).State = EntityState.Detached;
     }
 
     private async Task<AccountDto> MapAsync(ApplicationUser user)

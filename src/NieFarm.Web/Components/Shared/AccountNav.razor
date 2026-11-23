@@ -1,0 +1,55 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+@*
+    Section navigation for the signed-in customer's account pages (R-16, D-01).
+    A static link list: on phones it is one horizontally scrolling hairline row, from 960px it
+    becomes a sticky left column (".acct-nav" in nf-pages.css). The active link carries
+    aria-current="page" as an attribute (never a Razor class expression), derived from the
+    current path, so it follows client-side navigation through LocationChanged.
+*@
+
+<nav class="acct-nav" aria-label="Tài khoản của tôi">
+    @foreach (var item in Items)
+    {
+        <a href="@item.Href" aria-current="@(IsActive(item) ? "page" : null)">@item.Label</a>
+    }
+</nav>
+
+@code {
+    /// <summary>
+    /// Exact path or any sub-path of <paramref name="Prefix"/> lights the link up, as does the exact
+    /// <paramref name="Alias"/> path (/tai-khoan is an alias of the profile page).
+    /// </summary>
+    private sealed record NavLink(string Label, string Href, string Prefix, string? Alias = null);
+
+    private static readonly NavLink[] Items =
+    [
+        new("Hồ sơ", "/tai-khoan/ho-so", "/tai-khoan/ho-so", Alias: "/tai-khoan"),
+        new("Đơn hàng của tôi", "/tai-khoan/don-hang", "/tai-khoan/don-hang"),
+    ];
+
+    private string _path = "/";
+
+    protected override void OnInitialized()
+    {
+        UpdatePath();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdatePath();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdatePath() =>
+        _path = "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+
+    private bool IsActive(NavLink item) =>
+        (item.Alias is not null && _path.Equals(item.Alias, StringComparison.OrdinalIgnoreCase))
+        || _path.Equals(item.Prefix, StringComparison.OrdinalIgnoreCase)
+        || _path.StartsWith(item.Prefix + "/", StringComparison.OrdinalIgnoreCase);
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

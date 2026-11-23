@@ -1,0 +1,213 @@
+@page "/tai-khoan"
+@page "/tai-khoan/ho-so"
+@attribute [Authorize]
+@using Ardalis.Result
+@using NieFarm.Application.Features.Account
+@using NieFarm.Application.Features.Account.Profile.Commands
+@using NieFarm.Application.Features.Account.Profile.Queries
+@inject ISender Sender
+@inject NavigationManager Navigation
+
+@*
+    Customer profile and password (R-16, docs/plans/R-16-customer-account.md D-05..D-09).
+
+    Two blocks:
+      - "Thông tin cá nhân": a Blazor form. Saving sends UpdateMyProfileCommand, which deliberately
+        leaves the security stamp alone (D-06); the page then force-loads the ManageAccount refresh
+        endpoint so the header shows the new name (the circuit cannot rewrite the auth cookie).
+      - "Đổi mật khẩu": a plain <form method="post"> to the ManageAccount Razor Page, with the
+        antiforgery token rendered by <AntiforgeryToken />. It must NOT be a circuit call: the change
+        rotates the security stamp and the cookie has to be refreshed on a real response (D-05).
+
+    Passwords exist only in that POST body. They are never bound to component state, never in a URL
+    and never in [PersistentState]. The statuses/errors the Razor Page redirects back with are a fixed
+    whitelist of codes mapped to fixed Vietnamese text here (nothing from the request is echoed).
+    The page carries no data-reveal and no Razor class expression.
+*@
+
+<PageTitle>Hồ sơ của tôi - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<AccountShell>
+    <div class="acct__head">
+        <h1>Hồ sơ của tôi</h1>
+        <p class="lede" style="margin-top:.5rem">Cập nhật thông tin liên hệ và mật khẩu đăng nhập của bạn.</p>
+    </div>
+
+    @if (Data is null)
+    {
+        <div class="alert alert--error" role="alert">
+            <p>@AccountMessages.ProfileNotFound</p>
+        </div>
+    }
+    else
+    {
+        <section class="acct-block" aria-labelledby="acct-profile-title">
+            <h2 class="acct-block__title" id="acct-profile-title"><NfIcon Name="pencil" Size="20" /> Thông tin cá nhân</h2>
+
+            @if (Saved == "1")
+            {
+                <div class="alert alert--ok" role="status"><p>Đã lưu thông tin cá nhân.</p></div>
+            }
+            @if (_profileError is not null)
+            {
+                <div class="alert alert--error" role="alert"><p>@_profileError</p></div>
+            }
+
+            <form class="acct-form" @onsubmit="SaveProfileAsync" @onsubmit:preventDefault="@RendererInfo.IsInteractive">
+                <div>
+                    <label class="nf-label" for="acct-name">Họ và tên</label>
+                    <input id="acct-name" type="text" class="nf-field" autocomplete="name" maxlength="150" required
+                           @bind="_fullName" @bind:event="oninput" />
+                </div>
+
+                <div>
+                    <label class="nf-label" for="acct-phone">Số điện thoại (không bắt buộc)</label>
+                    <input id="acct-phone" type="tel" class="nf-field" autocomplete="tel" maxlength="30"
+                           placeholder="Nhập số điện thoại" @bind="_phone" @bind:event="oninput" />
+                </div>
+
+                <div>
+                    <label class="nf-label" for="acct-email">Email</label>
+                    <input id="acct-email" type="email" class="nf-field" value="@Data.Email" readonly aria-describedby="acct-email-note" />
+                    <p class="acct-note" id="acct-email-note">Email dùng để đăng nhập nên chưa thể thay đổi tại đây.</p>
+                </div>
+
+                <div class="acct-form__actions">
+                    <button type="submit" class="btn btn--red" disabled="@(_saving || !RendererInfo.IsInteractive)"
+                            aria-busy="@(_saving ? "true" : "false")">
+                        <span>Lưu thay đổi</span>
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section class="acct-block" aria-labelledby="acct-password-title">
+            <h2 class="acct-block__title" id="acct-password-title"><NfIcon Name="lock" Size="20" /> Đổi mật khẩu</h2>
+
+            @if (Status == "doi-mat-khau")
+            {
+                <div class="alert alert--ok" role="status"><p>Đã đổi mật khẩu thành công.</p></div>
+            }
+            @if (PasswordErrorMessage is not null)
+            {
+                <div class="alert alert--error" role="alert"><p>@PasswordErrorMessage</p></div>
+            }
+
+            @* A real POST to the Razor Page (cookie refresh needs a real response). The token below is the
+               antiforgery token the page validates; the three fields are only ever in the POST body. *@
+            <form class="acct-form" method="post" action="/pages/tai-khoan/quan-ly/ChangePassword">
+                <AntiforgeryToken />
+                @* Lets a password manager attach the new password to the right account. The email is already
+                   on this page (the owner's own); it is never put in a URL or a log. *@
+                <input type="hidden" name="username" autocomplete="username" value="@Data.Email" />
+
+                <div>
+                    <label class="nf-label" for="acct-current">Mật khẩu hiện tại</label>
+                    <input id="acct-current" name="CurrentPassword" type="password" class="nf-field"
+                           autocomplete="current-password" required maxlength="128" />
+                </div>
+
+                <div>
+                    <label class="nf-label" for="acct-new">Mật khẩu mới</label>
+                    <input id="acct-new" name="NewPassword" type="password" class="nf-field"
+                           autocomplete="new-password" required minlength="8" maxlength="128" aria-describedby="acct-new-note" />
+                    <p class="acct-note" id="acct-new-note">Ít nhất 8 ký tự, gồm chữ hoa, chữ thường và số.</p>
+                </div>
+
+                <div>
+                    <label class="nf-label" for="acct-confirm">Xác nhận mật khẩu mới</label>
+                    <input id="acct-confirm" name="ConfirmPassword" type="password" class="nf-field"
+                           autocomplete="new-password" required maxlength="128" />
+                </div>
+
+                <div class="acct-form__actions">
+                    <button type="submit" class="btn btn--red"><span>Đổi mật khẩu</span></button>
+                </div>
+            </form>
+        </section>
+    }
+</AccountShell>
+
+@code {
+    /// <summary>
+    /// The profile read, carried across prerender -> interactive so the form does not reload and reset.
+    /// Name, phone and email only: no password, user id or security data.
+    /// </summary>
+    public sealed record ProfileData(string FullName, string Email, string? PhoneNumber);
+
+    [PersistentState] public ProfileData? Data { get; set; }
+
+    // Set by the ManageAccount Razor Page redirects (fixed whitelist, mapped to fixed text below).
+    [SupplyParameterFromQuery(Name = "trang-thai")] public string? Status { get; set; }
+    [SupplyParameterFromQuery(Name = "loi")] public string? Error { get; set; }
+    [SupplyParameterFromQuery(Name = "da-luu")] public string? Saved { get; set; }
+
+    private string _fullName = string.Empty;
+    private string? _phone;
+    private string? _profileError;
+    private bool _saving;
+
+    private string? PasswordErrorMessage => Error switch
+    {
+        null or "" => null,
+        "thieu-hien-tai" => AccountMessages.CurrentPasswordRequired,
+        "hien-tai" => AccountMessages.CurrentPasswordWrong,
+        "moi" => AccountMessages.NewPasswordRejected,
+        "trung" => AccountMessages.NewPasswordSameAsCurrent,
+        "xac-nhan" => AccountMessages.ConfirmMismatch,
+        _ => AccountMessages.PasswordChangeFailed
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Data ??= await LoadAsync();
+
+        if (Data is not null)
+        {
+            _fullName = Data.FullName;
+            _phone = Data.PhoneNumber;
+        }
+    }
+
+    private async Task<ProfileData?> LoadAsync()
+    {
+        var result = await Sender.Send(new GetMyProfileQuery());
+        return result.IsSuccess
+            ? new ProfileData(result.Value.FullName, result.Value.Email, result.Value.PhoneNumber)
+            : null;
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        if (_saving || !RendererInfo.IsInteractive)
+            return;
+
+        _saving = true;
+        _profileError = null;
+
+        try
+        {
+            var result = await Sender.Send(new UpdateMyProfileCommand(_fullName, _phone));
+
+            if (result.IsSuccess)
+            {
+                // Full page load through the Razor Page that re-issues this cookie, so the header
+                // picks up the new name. The stamp is unchanged, so the session simply carries on.
+                var back = Uri.EscapeDataString("/tai-khoan/ho-so?da-luu=1");
+                Navigation.NavigateTo($"/pages/tai-khoan/quan-ly/refresh?returnUrl={back}", forceLoad: true);
+                return;
+            }
+
+            _profileError = result.Status == ResultStatus.Invalid
+                ? result.ValidationErrors.FirstOrDefault()?.ErrorMessage ?? AccountMessages.ProfileSaveFailed
+                : result.Errors.FirstOrDefault() ?? AccountMessages.ProfileSaveFailed;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

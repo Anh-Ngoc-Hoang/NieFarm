@@ -37,15 +37,28 @@ public class LoginModel(
 
         if (result.Succeeded)
         {
-            logger.LogInformation("Customer sign-in succeeded for {Email}", Email);
-            await TryMergeGuestCartAsync();
+            // D-03 (R-16): logs carry the user id only, never the email.
+            // Best-effort: a database hiccup here must not turn a successful sign-in into a 500.
+            string? userId = null;
+            try
+            {
+                userId = (await userManager.FindByEmailAsync(Email))?.Id;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not resolve the user id after a successful sign-in");
+            }
+
+            logger.LogInformation("Customer sign-in succeeded for user {UserId}", userId);
+            await TryMergeGuestCartAsync(userId);
             return Redirect(safeReturn);
         }
 
         var query = $"?error={(result.IsLockedOut ? "locked" : "1")}" +
                     $"&email={Uri.EscapeDataString(Email)}" +
                     $"&returnUrl={Uri.EscapeDataString(safeReturn)}";
-        logger.LogWarning("Customer sign-in failed for {Email}", Email);
+        // The account may not exist, so there is no user id to log: record the event only.
+        logger.LogWarning("Customer sign-in failed (locked out: {LockedOut})", result.IsLockedOut);
         return Redirect("/dang-nhap" + query);
     }
 
@@ -56,7 +69,7 @@ public class LoginModel(
     /// Page request scope, where ICurrentUser's AuthenticationStateProvider-first resolution
     /// has no state set by any component.
     /// </summary>
-    private async Task TryMergeGuestCartAsync()
+    private async Task TryMergeGuestCartAsync(string? userId)
     {
         try
         {
@@ -64,13 +77,12 @@ public class LoginModel(
             if (string.IsNullOrWhiteSpace(anonymousId))
                 return;
 
-            var userId = (await userManager.FindByEmailAsync(Email))?.Id;
             if (!string.IsNullOrWhiteSpace(userId))
                 await sender.Send(new MergeGuestCartCommand(anonymousId, userId), HttpContext.RequestAborted);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to merge guest cart on sign-in for {Email}", Email);
+            logger.LogWarning(ex, "Failed to merge guest cart on sign-in for user {UserId}", userId);
         }
     }
 }
