@@ -27,16 +27,20 @@ public static class CoffeeRegionUi
         new(VietnamMapGeometry.CentralLabel.X + 66, VietnamMapGeometry.CentralLabel.Y + 38);
 
     /// <summary>
-    /// Where the "Tây Nguyên – Nam Bộ" label sits: offshore in the sea east of the Mekong delta, above Côn
-    /// Đảo. The region's inner point falls on the narrow neck under Tây Nguyên, and the widest
-    /// band of the delta (about 79 viewBox units) is narrower than the label at every width
-    /// (about 76 units at 1440 px, 111 at 390 px), so an inland label always crossed the
-    /// outline. Left-aligned, with a leader from <see cref="SouthLeaderStart"/>.
+    /// Where the "Tây Nguyên – Nam Bộ" label sits: offshore, just east of the plateau coast (off
+    /// Ninh Thuận / Bình Thuận), a short straight leader from <see cref="SouthLeaderStart"/>. The
+    /// widest band of the region is narrower than the label at every width (about 76 viewBox units
+    /// at 1440 px, 111 at 390 px), so an inland label always crossed the outline. Left-aligned.
+    /// Kept clear of the "Quần đảo Trường Sa" label (starts near x 450) and the Central coast; check
+    /// at 390 px and 1440 px after moving it.
     /// </summary>
-    public static readonly MapPoint SouthOffshoreLabel = new(222, 668);
+    public static readonly MapPoint SouthOffshoreLabel = new(338, 574);
 
-    /// <summary>A point inside the delta where the South label's leader starts.</summary>
-    public static readonly MapPoint SouthLeaderStart = new(150, 655);
+    /// <summary>
+    /// Where the South leader starts: on the plateau, between Đắk Lắk and Lâm Đồng (about 108.2 E, 12.3 N),
+    /// so the dot points at the coffee heartland rather than at the delta.
+    /// </summary>
+    public static readonly MapPoint SouthLeaderStart = new(282, 523);
 
     /// <summary>Hairline leaders from inside a region to its offshore label, in viewBox units.</summary>
     public static readonly IReadOnlyList<(MapPoint From, MapPoint To)> Leaders =
