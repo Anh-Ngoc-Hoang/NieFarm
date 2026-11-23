@@ -482,6 +482,61 @@
     padding-left: 38px;
 }
 
+/* The magnifier is the submit button (R-20: search applies on Enter or click, never while typing). */
+.admin-search__btn {
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    bottom: 2px;
+    width: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: var(--admin-radius);
+    background: transparent;
+    color: var(--admin-text-muted);
+    cursor: pointer;
+}
+
+.admin-search__btn:hover,
+.admin-search__btn:focus-visible {
+    color: var(--admin-accent);
+}
+
+.admin-search .admin-search__btn .material-symbols-outlined {
+    position: static;
+    transform: none;
+}
+
+/* Pager under a table (R-20). */
+.admin-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.admin-pager__info {
+    margin: 0;
+    font-size: 14px;
+    color: var(--admin-text-muted);
+}
+
+.admin-pager__nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-pager__page {
+    font-size: 14px;
+    color: var(--admin-text-muted);
+}
+
 /* ---------------------------------------------------------------------
    Tables
    --------------------------------------------------------------------- */

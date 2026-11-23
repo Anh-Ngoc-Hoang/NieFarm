@@ -1,10 +1,14 @@
 @page "/admin/orders"
 @layout AdminLayout
 @attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Common.Models
 @using NieFarm.Application.Features.Admin.Orders.Dtos
 @using NieFarm.Application.Features.Admin.Orders.Queries
+@using NieFarm.Application.Features.Orders
 @using NieFarm.Domain.Enums
+@implements IDisposable
 @inject ISender Sender
+@inject NavigationManager Navigation
 
 <AdminPageTitle Title="Orders" />
 
@@ -15,13 +19,20 @@
     </div>
 </div>
 
+@* R-20: filtering and paging happen in SQL and the URL carries the state (?q=&status=&payment=&page=).
+   The search applies on Enter or on the magnifier button, never while typing. *@
 <div class="admin-toolbar">
-    <div class="admin-search">
-        <span class="material-symbols-outlined" aria-hidden="true">search</span>
-        <input class="form-control-admin" type="search" placeholder="Search by code, name or phone…"
-               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
-    </div>
-    <select class="form-control-admin" style="max-width:220px;"
+    <form class="admin-search" role="search" @onsubmit="SubmitSearchAsync">
+        @* The input comes first so Tab reaches the field before the button; the button is absolutely
+           positioned over its left padding. Nothing loads on input: @bind:event only keeps _searchText
+           current so submit never depends on the order of change and submit events. *@
+        <input class="form-control-admin" type="search" name="q" maxlength="100" aria-label="Search orders"
+               placeholder="Search by code, name or phone…" @bind="_searchText" @bind:event="oninput" />
+        <button type="submit" class="admin-search__btn" aria-label="Search orders">
+            <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        </button>
+    </form>
+    <select class="form-control-admin" style="max-width:220px;" aria-label="Status filter"
             @bind="_statusFilter" @bind:after="ApplyFilters">
         <option value="">All statuses</option>
         @foreach (var status in Enum.GetValues<OrderStatus>())
@@ -32,15 +43,15 @@
     <select class="form-control-admin" style="max-width:220px;" aria-label="Payment filter"
             @bind="_paymentFilter" @bind:after="ApplyFilters">
         <option value="">All payments</option>
-        <option value="@nameof(PaymentStatus.AwaitingPayment)">Awaiting payment</option>
-        <option value="@nameof(PaymentStatus.Paid)">Paid</option>
-        <option value="@nameof(PaymentStatus.RefundDue)">Refund due</option>
-        <option value="@nameof(PaymentStatus.Refunded)">Refunded</option>
-        <option value="@CodFilter">COD</option>
+        <option value="@nameof(OrderPaymentFilter.AwaitingPayment)">Awaiting payment</option>
+        <option value="@nameof(OrderPaymentFilter.Paid)">Paid</option>
+        <option value="@nameof(OrderPaymentFilter.RefundDue)">Refund due</option>
+        <option value="@nameof(OrderPaymentFilter.Refunded)">Refunded</option>
+        <option value="@nameof(OrderPaymentFilter.CashOnDelivery)">COD</option>
     </select>
 </div>
 
-<div class="admin-table-wrap">
+<div class="admin-table-wrap" aria-busy="@(_loading ? "true" : "false")">
     <table class="admin-table">
         <thead>
             <tr>
@@ -56,7 +67,7 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (var order in _filtered)
+            @foreach (var order in Rows)
             {
                 <tr>
                     <td class="cell-primary">
@@ -85,39 +96,187 @@
         </tbody>
     </table>
 
-    @if (_filtered.Count == 0)
+    @if (_error)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted" role="alert">Could not load orders. Reload the page and try again.</div>
+    }
+    else if (_result is not null && Rows.Count == 0)
     {
         <div style="padding:20px;text-align:center;" class="cell-muted">No orders found.</div>
     }
 </div>
 
+@if (_result is { TotalCount: > 0 } result)
+{
+    var first = (result.Page - 1) * result.PageSize + 1;
+    var last = first + result.Items.Count - 1;
+
+    <div class="admin-pager">
+        <p class="admin-pager__info" role="status">Showing @first–@last of @result.TotalCount orders</p>
+        @if (result.TotalPages > 1)
+        {
+            <nav class="admin-pager__nav" aria-label="Orders pagination">
+                @if (result.Page > 1)
+                {
+                    <a class="btn-admin-outline btn-admin--sm" rel="prev" href="@PageHref(result.Page - 1)">
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span> Previous
+                    </a>
+                }
+                else
+                {
+                    <button type="button" class="btn-admin-outline btn-admin--sm" disabled>
+                        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span> Previous
+                    </button>
+                }
+                <span class="admin-pager__page">Page @result.Page of @result.TotalPages</span>
+                @if (result.Page < result.TotalPages)
+                {
+                    <a class="btn-admin-outline btn-admin--sm" rel="next" href="@PageHref(result.Page + 1)">
+                        Next <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </a>
+                }
+                else
+                {
+                    <button type="button" class="btn-admin-outline btn-admin--sm" disabled>
+                        Next <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                    </button>
+                }
+            </nav>
+        }
+    </div>
+}
+
 @code {
-    private List<OrderAdminListDto> _all = [];
-    private List<OrderAdminListDto> _filtered = [];
+    [SupplyParameterFromQuery(Name = "q")] public string? SearchQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] public string? StatusQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "payment")] public string? PaymentQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public string? PageQuery { get; set; }
 
-    private string _search = string.Empty;
-    private string _statusFilter = string.Empty;
-    private string _paymentFilter = string.Empty;
-    private const string CodFilter = "COD";
+    private const string AllValue = "";
 
-    protected override async Task OnInitializedAsync()
+    private PagedResult<OrderAdminListDto>? _result;
+    private IReadOnlyList<OrderAdminListDto> Rows => _result?.Items ?? [];
+
+    // What the controls show. The URL is the source of truth: these are re-written from it whenever it
+    // changes, and only the search box can hold text that has not been applied yet.
+    private string _searchText = string.Empty;
+    private string _statusFilter = AllValue;
+    private string _paymentFilter = AllValue;
+
+    // What was last requested (parsed from the URL).
+    private string? _search;
+    private OrderStatus? _status;
+    private OrderPaymentFilter _payment;
+    private int _page = 1;
+    private string? _loadedKey;
+
+    private bool _loading;
+    private bool _error;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnParametersSetAsync()
     {
-        _all = await Sender.Send(new GetOrdersAdminQuery());
-        ApplyFilters();
+        _search = string.IsNullOrWhiteSpace(SearchQuery) ? null : SearchQuery.Trim();
+        _status = Enum.TryParse<OrderStatus>(StatusQuery, true, out var st) && Enum.IsDefined(st) ? st : null;
+        _payment = Enum.TryParse<OrderPaymentFilter>(PaymentQuery, true, out var pay) && Enum.IsDefined(pay)
+            ? pay
+            : OrderPaymentFilter.All;
+        _page = int.TryParse(PageQuery, out var p) && p > 0 ? p : 1;
+
+        // Parameters can be set again without the URL changing (a layout re-render); do not reload or
+        // overwrite text the admin is typing in that case.
+        var key = RequestKey(_search, _status, _payment, _page);
+        if (key == _loadedKey)
+            return;
+        _loadedKey = key;
+
+        _searchText = _search ?? string.Empty;
+        _statusFilter = _status?.ToString() ?? AllValue;
+        _paymentFilter = _payment == OrderPaymentFilter.All ? AllValue : _payment.ToString();
+
+        await LoadAsync();
     }
 
-    private void ApplyFilters() =>
-        _filtered = _all.Where(o =>
-            (string.IsNullOrWhiteSpace(_search)
-             || o.Code.Contains(_search, StringComparison.OrdinalIgnoreCase)
-             || o.CustomerName.Contains(_search, StringComparison.OrdinalIgnoreCase)
-             || o.Phone.Contains(_search, StringComparison.OrdinalIgnoreCase))
-            && (string.IsNullOrWhiteSpace(_statusFilter) || o.Status.ToString() == _statusFilter)
-            && (string.IsNullOrWhiteSpace(_paymentFilter)
-                || (_paymentFilter == CodFilter
-                    ? o.PaymentMethod == PaymentMethod.CashOnDelivery
-                    : o.PaymentStatus.ToString() == _paymentFilter)))
-            .ToList();
+    private async Task LoadAsync()
+    {
+        // Newest request wins: a slower, older response is dropped.
+        _cts?.Cancel();
+        var cts = _cts = new CancellationTokenSource();
+
+        _loading = true;
+        _error = false;
+        try
+        {
+            var result = await Sender.Send(
+                new GetOrdersAdminQuery(_search, _status, _payment, _page), cts.Token);
+            if (cts.IsCancellationRequested)
+                return;
+            _result = result;
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception)
+        {
+            if (!cts.IsCancellationRequested)
+            {
+                // Drop the old rows: they belong to another filter and would sit under the new selects.
+                _result = null;
+                _error = true;
+            }
+        }
+        finally
+        {
+            if (_cts == cts)
+                _loading = false;
+        }
+    }
+
+    private async Task SubmitSearchAsync()
+    {
+        var search = string.IsNullOrWhiteSpace(_searchText) ? null : _searchText.Trim();
+
+        // Enter on an unchanged request is a refresh: navigating would not re-run the page. Compare the
+        // parsed request, not URL strings, so a hand-typed non-canonical URL still refreshes.
+        if (RequestKey(search, _status, _payment, 1) == _loadedKey)
+        {
+            _search = search;
+            await LoadAsync();
+        }
+        else
+        {
+            Navigation.NavigateTo(BuildUri(search, _status, _payment, 1));
+        }
+    }
+
+    // A filter change goes back to page 1 and keeps the applied search term, not the typed one.
+    private void ApplyFilters()
+    {
+        var status = Enum.TryParse<OrderStatus>(_statusFilter, out var st) ? st : (OrderStatus?)null;
+        var payment = Enum.TryParse<OrderPaymentFilter>(_paymentFilter, out var pay) ? pay : OrderPaymentFilter.All;
+        Navigation.NavigateTo(BuildUri(_search, status, payment, 1));
+    }
+
+    private static string RequestKey(string? search, OrderStatus? status, OrderPaymentFilter payment, int page) =>
+        $"{search}|{status}|{payment}|{page}";
+
+    private string PageHref(int page) => BuildUri(_search, _status, _payment, page);
+
+    private string BuildUri(string? search, OrderStatus? status, OrderPaymentFilter payment, int page) =>
+        Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["q"] = search,
+            ["status"] = status?.ToString(),
+            ["payment"] = payment == OrderPaymentFilter.All ? null : payment.ToString(),
+            ["page"] = page > 1 ? page : null
+        });
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
 
     internal static string PaymentText(PaymentMethod method, PaymentStatus status) =>
         method == PaymentMethod.CashOnDelivery ? "COD" : PaymentStatusText(status);
