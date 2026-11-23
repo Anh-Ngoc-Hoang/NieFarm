@@ -670,6 +670,31 @@ a.btn { color: var(--btn-fg); }
 .pcard__choose:hover { color: var(--red); }
 .pcard__soldout { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-55); }
 .pcard__err { font-size: var(--fs-xs); color: var(--red); }
+
+/* Wishlist heart (Shared/ProductCard.razor, R-16 D-22). A sibling of .pcard__media (never inside its
+   link), pinned to the card's top right. State comes from aria-pressed only, never a Razor class, so
+   the card keeps its static class and its data-reveal. The hit area is 44px; NfIcon's .ico is 100%
+   wide, so the glyph is pinned to 20px. No animation: nothing here can loop. */
+.pcard__fav {
+    position: absolute;
+    top: .5rem; right: .5rem;
+    z-index: 3;
+    display: grid; place-items: center;
+    width: 44px; height: 44px; padding: 0;
+    border-radius: 50%;
+    background: rgba(251, 250, 247, .92);
+    color: var(--ink);
+    transition: color .3s var(--ease), background .3s var(--ease);
+}
+.pcard__fav .ico { width: 20px; height: 20px; flex: none; }
+.pcard__fav[aria-pressed="true"] { color: var(--red); }
+.pcard__fav[aria-pressed="true"] .ico { fill: currentColor; }
+.pcard__fav[aria-busy="true"] { cursor: progress; }
+.pcard__fav:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.pcard__fav:disabled { opacity: .55; cursor: default; }
+@media (hover: hover) {
+    .pcard__fav:hover:not(:disabled) { color: var(--red); background: #fff; }
+}
 @media (min-width: 40rem) {
     .pcard__add { padding-inline: 1.1rem; min-width: 9.25rem; }
     .pcard__add-text { display: inline; }

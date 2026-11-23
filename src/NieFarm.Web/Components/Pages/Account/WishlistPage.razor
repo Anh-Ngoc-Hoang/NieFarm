@@ -1,0 +1,172 @@
+@page "/tai-khoan/yeu-thich"
+@attribute [Authorize]
+@using NieFarm.Application.Features.Products.Dtos
+@using NieFarm.Application.Features.Wishlist.Queries
+@using NieFarm.Web.Services.Wishlist
+@implements IDisposable
+@inject ISender Sender
+@inject WishlistState WishlistState
+
+@*
+    The customer's wishlist (R-16 D-23). GetMyWishlistQuery returns the cards, newest first, with the
+    user taken from ICurrentUser (never from the browser); a hidden product is not in the list but its
+    row is kept. The hearts are the ordinary ProductCard ones, fed by the circuit-wide WishlistState:
+    un-hearting a card raises WishlistState.OnChange and the card is dropped from the grid here, with no
+    reload. The list is only filtered once the state has loaded, otherwise "not loaded yet" would read
+    as "nothing saved" and empty the grid.
+
+    The list is read in OnInitializedAsync and carried across prerender in [PersistentState] (the owner's
+    own data, and ProductCardDto is already persisted by Shop and Home), so the interactive pass does not
+    flash skeletons and re-create the cards (which would replay data-reveal).
+
+    A card that leaves the grid takes the keyboard focus and its own status message with it, so the page
+    announces the removal in its own role=status region and moves focus to the heart of the next card (the
+    previous one for the last card), or to the heading when the list is now empty.
+*@
+
+<PageTitle>Yêu thích - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<AccountShell>
+    <div class="acct__head">
+        <h1 tabindex="-1" @ref="_heading">Yêu thích</h1>
+        <p class="lede" style="margin-top:.5rem">Những sản phẩm bạn đã lưu. Chỉ mình bạn nhìn thấy danh sách này.</p>
+    </div>
+
+    <span class="sr-only" role="status">@_status</span>
+
+    @if (_loadFailed)
+    {
+        <div class="alert alert--error" role="alert">
+            <p>Không thể tải danh sách yêu thích. Vui lòng tải lại trang.</p>
+        </div>
+    }
+    else if (Data is null)
+    {
+        <div class="grid-products" aria-busy="true">
+            @for (var i = 0; i < 3; i++)
+            {
+                <div style="aspect-ratio:1;border-radius:var(--r-lg);background:var(--tint)"></div>
+            }
+        </div>
+    }
+    else if (Data.Count == 0)
+    {
+        <div class="acct__empty">
+            <NfIcon Name="heart" Size="40" CssClass="acct__empty-icon" />
+            <p class="muted" style="margin:1rem 0 1.5rem">Bạn chưa lưu sản phẩm nào. Bấm biểu tượng trái tim trên sản phẩm để lưu lại.</p>
+            <a class="btn btn--red" href="/cua-hang"><span>Xem cửa hàng</span></a>
+        </div>
+    }
+    else
+    {
+        <div class="grid-products">
+            @for (var i = 0; i < Data.Count; i++)
+            {
+                var product = Data[i];
+
+                <ProductCard @key="product.Id" Product="product" Delay="@((i % 3) * 0.06)" Registered="RegisterCard" />
+            }
+        </div>
+    }
+</AccountShell>
+
+@code {
+    /// <summary>The owner's saved products, carried across prerender -> interactive so the grid does not reload.</summary>
+    [PersistentState] public List<ProductCardDto>? Data { get; set; }
+
+    private bool _loadFailed;
+    private bool _disposed;
+    private string? _status;
+    private ElementReference _heading;
+    private readonly Dictionary<int, ProductCard> _cards = [];
+
+    // Where focus goes after the render that follows a removal: a product's heart, or the heading.
+    private int? _focusProductId;
+    private bool _focusHeading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        WishlistState.OnChange += HandleWishlistChanged;
+
+        try
+        {
+            Data ??= await LoadAsync();
+            _loadFailed = Data is null;
+        }
+        catch (Exception)
+        {
+            _loadFailed = true;
+        }
+    }
+
+    private async Task<List<ProductCardDto>?> LoadAsync()
+    {
+        var result = await Sender.Send(new GetMyWishlistQuery());
+        return result.IsSuccess ? result.Value.ToList() : null;
+    }
+
+    // A card hands itself over when it is created; a new instance for the same product replaces the old one.
+    private void RegisterCard(ProductCard card) => _cards[card.Product.Id] = card;
+
+    private void HandleWishlistChanged()
+    {
+        if (_disposed)
+            return;
+
+        _ = InvokeAsync(() =>
+        {
+            if (_disposed || Data is null || !WishlistState.IsLoaded)
+                return;
+
+            // A heart was switched off (on this page, or in another component): the card leaves the grid.
+            var removedAt = Data.FindIndex(c => !WishlistState.Contains(c.Id));
+            if (removedAt < 0)
+                return;
+
+            var removed = Data.Where(c => !WishlistState.Contains(c.Id)).ToList();
+            Data.RemoveAll(c => !WishlistState.Contains(c.Id));
+
+            _status = removed.Count == 1
+                ? $"Đã bỏ {removed[0].Name} khỏi danh sách yêu thích"
+                : $"Đã bỏ {removed.Count} sản phẩm khỏi danh sách yêu thích";
+
+            if (Data.Count == 0)
+            {
+                _focusHeading = true;
+            }
+            else
+            {
+                // The card that moved into the removed one's place, else the last one.
+                _focusProductId = Data[Math.Min(removedAt, Data.Count - 1)].Id;
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusProductId is { } productId)
+        {
+            _focusProductId = null;
+            if (_cards.TryGetValue(productId, out var card))
+                await card.FocusFavouriteAsync();
+        }
+        else if (_focusHeading)
+        {
+            _focusHeading = false;
+            try { await _heading.FocusAsync(); }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        WishlistState.OnChange -= HandleWishlistChanged;
+    }
+}

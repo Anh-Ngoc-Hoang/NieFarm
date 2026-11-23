@@ -12,10 +12,16 @@
 @using NieFarm.Application.Features.Shipping.Dtos
 @using NieFarm.Application.Features.Shipping.Queries
 @using NieFarm.Domain.Entities
+@using System.Security.Claims
+@using NieFarm.Web.Services
 @using NieFarm.Web.Services.Cart
+@using NieFarm.Web.Services.Wishlist
+@implements IDisposable
 @inject ISender Sender
 @inject NavigationManager Navigation
 @inject CartState CartState
+@inject WishlistState WishlistState
+@inject CircuitWriteGate WriteGate
 
 @*
     Full markup rewrite from docs/design-preview/san-pham.html
@@ -181,10 +187,31 @@
                             <span>@(_addingToCart ? "Đang thêm…" : "Thêm vào giỏ hàng")</span>
                         </button>
                     </div>
-                    <button type="button" class="btn btn--ghost btn--block" style="margin-top:.6rem"
-                            disabled="@(IsOutOfStock || _addingToCart)" @onclick="() => AddToCartAsync(true)">
-                        <span>@(_addingToCart ? "Đang thêm…" : "Mua ngay")</span>
-                    </button>
+                    <div class="buyrow buyrow--sub">
+                        <button type="button" class="btn btn--ghost btn--block"
+                                disabled="@(IsOutOfStock || _addingToCart)" @onclick="() => AddToCartAsync(true)">
+                            <span>@(_addingToCart ? "Đang thêm…" : "Mua ngay")</span>
+                        </button>
+                        @* Wishlist (R-16 D-22). State is aria-pressed only; disabled until the circuit is interactive
+                           and the circuit-wide WishlistState has loaded. aria-busy (not disabled) while saving keeps
+                           keyboard focus on the button. *@
+                        <button type="button" class="btn btn--ghost btn--block pdp__fav"
+                                aria-pressed="@(IsSaved ? "true" : "false")" aria-busy="@(_faving ? "true" : "false")"
+                                disabled="@(!RendererInfo.IsInteractive || !WishlistState.IsReady)"
+                                @onclick="ToggleFavouriteAsync">
+                            <NfIcon Name="heart" Size="18" />
+                            @* A fixed visible name; the saved state is aria-pressed alone (an accessible name that
+                               changed with the state, or differed from the text, would break WCAG 2.5.3). *@
+                            <span>Yêu thích</span>
+                        </button>
+                    </div>
+                    <span class="sr-only" role="status">@_favStatus</span>
+                    @if (_favError is not null)
+                    {
+                        <div class="alert alert--error" role="alert" style="margin-top:1rem">
+                            <p>@_favError</p>
+                        </div>
+                    }
 
                     @if (_product.Features.Count > 0)
                     {
@@ -418,8 +445,87 @@
     public string? Slug { get; set; }
 
     [CascadingParameter(Name = "CartAnonymousId")] public string? CartAnonymousId { get; set; }
+    [CascadingParameter] public Task<AuthenticationState>? AuthState { get; set; }
 
     private ProductDetailDto? _product;
+
+    // -- Wishlist (R-16) -----------------------------------------------------
+    private bool _faving;
+    private string? _favStatus;
+    private string? _favError;
+    private bool _disposed;
+
+    private bool IsSaved => _product is not null && WishlistState.IsLoaded && WishlistState.Contains(_product.Id);
+
+    protected override void OnInitialized() => WishlistState.OnChange += HandleWishlistChanged;
+
+    private void HandleWishlistChanged()
+    {
+        if (!_disposed)
+            _ = InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Interactive rendering only; the cards in "Sản phẩm liên quan" await the same Task.
+        if (!firstRender) return;
+
+        string? userId = null;
+        if (AuthState is not null)
+            userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        await WishlistState.EnsureLoadedAsync(userId, CartAnonymousId);
+    }
+
+    private async Task ToggleFavouriteAsync()
+    {
+        // Not while the cart buttons are working either: they share the circuit's write context.
+        if (_product is null || _faving || _addingToCart || _disposed) return;
+
+        var productId = _product.Id;
+        var name = _product.Name;
+
+        _faving = true;
+        _favError = null;
+
+        try
+        {
+            var result = await WishlistState.ToggleAsync(productId);
+
+            switch (result.Outcome)
+            {
+                case WishlistOutcome.RequiresSignIn:
+                    // No temporary save (D-20): sign in, then come back to this page.
+                    var returnUrl = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+                    Navigation.NavigateTo($"/dang-nhap?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+                    return;
+                case WishlistOutcome.Done:
+                    _favStatus = WishlistState.Contains(productId)
+                        ? $"Đã thêm {name} vào yêu thích"
+                        : $"Đã bỏ {name} khỏi yêu thích";
+                    break;
+                default:
+                    _favStatus = null;
+                    _favError = result.Error ?? "Không thể cập nhật danh sách yêu thích.";
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            _favStatus = null;
+            _favError = "Không thể cập nhật danh sách yêu thích.";
+        }
+        finally
+        {
+            _faving = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        WishlistState.OnChange -= HandleWishlistChanged;
+    }
 
     private int _selectedImage;
     private string[] _selectedOptionValues = [];
@@ -505,6 +611,8 @@
         _cartErrors = [];
         _cartMessage = null;
         _addingToCart = false;
+        _favError = null;
+        _favStatus = null;
     }
 
     private void SelectOptionValue(int optionIndex, string value)
@@ -519,7 +627,7 @@
 
     private async Task AddToCartAsync(bool buyNow)
     {
-        if (_product is null || _addingToCart) return;
+        if (_product is null || _addingToCart || _faving) return;
 
         _addingToCart = true;
         _cartErrors = [];
@@ -531,8 +639,11 @@
             var selection = _selectedOptionValues.ToArray();
             var quantity = Math.Clamp(_quantity, 1, Cart.MaxQuantityPerItem);
 
-            var result = await Sender.Send(
-                new AddToCartCommand(_product.Id, selection, quantity, CartAnonymousId));
+            // One write at a time on the circuit's shared write context (a heart on a related card, the
+            // guest-cart merge, ...): the gate makes this wait its turn instead of overlapping them.
+            var productId = _product.Id;
+            var result = await WriteGate.RunAsync(
+                () => Sender.Send(new AddToCartCommand(productId, selection, quantity, CartAnonymousId)));
 
             if (result.IsSuccess)
             {
@@ -592,7 +703,9 @@
         {
             if (_editingReviewId is { } reviewId)
             {
-                var result = await Sender.Send(new EditProductReviewCommand(reviewId, _rating, _comment));
+                var (rating, comment) = (_rating, _comment);
+                var result = await WriteGate.RunAsync(
+                    () => Sender.Send(new EditProductReviewCommand(reviewId, rating, comment)));
                 if (result.IsSuccess)
                     _successMessage = "Đã cập nhật đánh giá. Đánh giá của bạn vẫn đang chờ duyệt.";
                 else
@@ -600,7 +713,9 @@
             }
             else
             {
-                var result = await Sender.Send(new SubmitProductReviewCommand(productId, _rating, _comment));
+                var (rating, comment) = (_rating, _comment);
+                var result = await WriteGate.RunAsync(
+                    () => Sender.Send(new SubmitProductReviewCommand(productId, rating, comment)));
                 if (result.IsSuccess)
                     _successMessage = "Cảm ơn bạn! Đánh giá của bạn đang chờ duyệt.";
                 else

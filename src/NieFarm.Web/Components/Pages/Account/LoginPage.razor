@@ -60,7 +60,7 @@
 
             <p class="auth__switch">
                 Chưa có tài khoản?
-                <a class="auth__link" href="/dang-ky">Đăng ký ngay</a>
+                <a class="auth__link" href="@RegisterHref">Đăng ký ngay</a>
             </p>
 
             <a class="auth__back" href="/">
@@ -75,6 +75,15 @@
     [SupplyParameterFromQuery] public string? Error { get; set; }
     [SupplyParameterFromQuery] public string? Email { get; set; }
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    /// <summary>
+    /// The register link carries the destination along (R-16 D-20), so a visitor who was sent to sign in from a
+    /// heart button and chooses to register lands back on the product. The value is only forwarded as a query
+    /// string; the Register Razor Page validates it before it is ever used as a redirect.
+    /// </summary>
+    private string RegisterHref => string.IsNullOrWhiteSpace(ReturnUrl)
+        ? "/dang-ky"
+        : $"/dang-ky?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
 
     private string ErrorMessage => Error switch
     {

@@ -32,6 +32,8 @@
             }
 
             <form action="/pages/tai-khoan/dang-ky" method="post" class="auth__form">
+                <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+
                 <div>
                     <label class="nf-label" for="FullName">Họ và tên</label>
                     <input id="FullName" name="FullName" type="text" required autofocus
@@ -73,7 +75,7 @@
 
             <p class="auth__switch">
                 Đã có tài khoản?
-                <a class="auth__link" href="/dang-nhap">Đăng nhập</a>
+                <a class="auth__link" href="@LoginHref">Đăng nhập</a>
             </p>
 
             <a class="auth__back" href="/">
@@ -89,4 +91,11 @@
     [SupplyParameterFromQuery] public string? Email { get; set; }
     [SupplyParameterFromQuery] public string? FullName { get; set; }
     [SupplyParameterFromQuery] public string? Phone { get; set; }
+
+    /// <summary>Forwarded from the sign-in page (R-16 D-20); the Register Razor Page validates it before use.</summary>
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string LoginHref => string.IsNullOrWhiteSpace(ReturnUrl)
+        ? "/dang-nhap"
+        : $"/dang-nhap?returnUrl={Uri.EscapeDataString(ReturnUrl)}";
 }

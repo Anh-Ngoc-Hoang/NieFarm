@@ -1,10 +1,17 @@
 @using System.Globalization
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
 @using NieFarm.Application.Features.Carts.Commands
 @using NieFarm.Application.Features.Products.Dtos
+@using NieFarm.Web.Services
 @using NieFarm.Web.Services.Cart
+@using NieFarm.Web.Services.Wishlist
 @implements IDisposable
 @inject ISender Sender
 @inject CartState CartState
+@inject WishlistState WishlistState
+@inject CircuitWriteGate WriteGate
+@inject NavigationManager Navigation
 
 @*
     The one product grid card (R-09): /cua-hang, the home featured band and the PDP related grid.
@@ -18,6 +25,9 @@
     The add button is disabled until the circuit is interactive (the page prerenders first).
     The rating (R-13) sits beside the category in .pcard__meta and is hidden until the product has an
     Approved review.
+    The wishlist heart (R-16 D-22) is a sibling of the photo link, not inside it; its state is the
+    aria-pressed attribute, fed by the circuit-wide WishlistState. It is disabled until the circuit is
+    interactive AND that state has loaded. An anonymous visitor is sent to sign in (D-20).
 *@
 
 <article class="pcard" data-reveal style="--d:@DelayText">
@@ -36,6 +46,13 @@
             </span>
         }
     </a>
+    <button type="button" class="pcard__fav" aria-pressed="@(IsSaved ? "true" : "false")"
+            aria-busy="@(_faving ? "true" : "false")"
+            disabled="@(!RendererInfo.IsInteractive || !WishlistState.IsReady)"
+            aria-label="@($"Yêu thích {Product.Name}")"
+            @ref="_favButton" @onclick="ToggleFavouriteAsync">
+        <NfIcon Name="heart" Size="20" />
+    </button>
     <div class="pcard__body">
         <div class="pcard__meta">
             <p class="pcard__cat">@Product.CategoryName</p>
@@ -100,22 +117,64 @@
     [Parameter] public bool ShowQuickView { get; set; } = true;
 
     [CascadingParameter(Name = "CartAnonymousId")] public string? CartAnonymousId { get; set; }
+    [CascadingParameter] public Task<AuthenticationState>? AuthState { get; set; }
 
     private CancellationTokenSource? _resetCts;
     private bool _disposed;
     private bool _adding;
+    private bool _faving;
     private bool _added;
     private string? _status;
     private string? _error;
 
     private static readonly CultureInfo ViCulture = CultureInfo.GetCultureInfo("vi-VN");
 
+    private ElementReference _favButton;
+
+    /// <summary>Moves keyboard focus to this card's heart (used by the wishlist page after a card leaves the grid).</summary>
+    public async Task FocusFavouriteAsync()
+    {
+        try { await _favButton.FocusAsync(); }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    private bool IsSaved => WishlistState.IsLoaded && WishlistState.Contains(Product.Id);
+
+    /// <summary>Called once with this instance when the card is created (the wishlist page uses it to move focus).</summary>
+    [Parameter] public Action<ProductCard>? Registered { get; set; }
+
+    protected override void OnInitialized()
+    {
+        WishlistState.OnChange += HandleWishlistChanged;
+        Registered?.Invoke(this);
+    }
+
+    private void HandleWishlistChanged()
+    {
+        if (!_disposed)
+            _ = InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Interactive rendering only (OnAfterRender never runs while prerendering). Every card on the page
+        // awaits the same Task, so the wishlist is read once per circuit.
+        if (!firstRender) return;
+
+        string? userId = null;
+        if (AuthState is not null)
+            userId = (await AuthState).User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        await WishlistState.EnsureLoadedAsync(userId, CartAnonymousId);
+    }
+
     private string Href => $"/san-pham/{Product.Slug}";
     private string DelayText => Delay.ToString("0.00", CultureInfo.InvariantCulture) + "s";
 
     private async Task AddAsync()
     {
-        if (_adding || _disposed) return;   // double-click guard
+        if (_adding || _faving || _disposed) return;   // double-click guard
 
         // Captured before the await: the parameter may be re-bound to another product meanwhile.
         var name = Product.Name;
@@ -128,7 +187,10 @@
 
         try
         {
-            var result = await Sender.Send(new AddToCartCommand(productId, [], 1, CartAnonymousId));
+            // One write at a time on the circuit's shared write context (a heart on another card, the
+            // guest-cart merge, ...): the gate makes this wait its turn instead of overlapping them.
+            var result = await WriteGate.RunAsync(
+                () => Sender.Send(new AddToCartCommand(productId, [], 1, CartAnonymousId)));
 
             if (result.IsSuccess)
             {
@@ -154,6 +216,52 @@
         finally
         {
             _adding = false;
+        }
+    }
+
+    private async Task ToggleFavouriteAsync()
+    {
+        // One write at a time per card, and not while the cart button is working: both use the circuit's
+        // shared write context. aria-busy (not disabled) keeps keyboard focus on the heart meanwhile.
+        if (_faving || _adding || _disposed) return;
+
+        // Captured before the await: the parameter may be re-bound to another product meanwhile.
+        var name = Product.Name;
+        var productId = Product.Id;
+
+        _faving = true;
+        _error = null;
+
+        try
+        {
+            var result = await WishlistState.ToggleAsync(productId);
+
+            switch (result.Outcome)
+            {
+                case WishlistOutcome.RequiresSignIn:
+                    // No temporary save (D-20): sign in, then come back to this page.
+                    var returnUrl = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+                    Navigation.NavigateTo($"/dang-nhap?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+                    return;
+                case WishlistOutcome.Done:
+                    _status = WishlistState.Contains(productId)
+                        ? $"Đã thêm {name} vào yêu thích"
+                        : $"Đã bỏ {name} khỏi yêu thích";
+                    break;
+                default:
+                    _status = null;
+                    _error = result.Error ?? "Không thể cập nhật danh sách yêu thích.";
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            _status = null;
+            _error = "Không thể cập nhật danh sách yêu thích.";
+        }
+        finally
+        {
+            _faving = false;
         }
     }
 
@@ -190,6 +298,7 @@
     public void Dispose()
     {
         _disposed = true;
+        WishlistState.OnChange -= HandleWishlistChanged;
         CancelReset();
     }
 }

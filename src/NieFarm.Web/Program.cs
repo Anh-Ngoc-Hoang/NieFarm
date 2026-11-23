@@ -84,9 +84,15 @@ try
     builder.Services.AddScoped<NewOrderCountState>();
     builder.Services.AddScoped<PendingReviewCountState>();
 
+    // One write at a time on the circuit's shared write context (wishlist hearts, cart buttons, guest-cart merge).
+    builder.Services.AddScoped<NieFarm.Web.Services.CircuitWriteGate>();
+
     // Per-circuit cart state — merges the guest cart into the account cart at sign-in and holds the
     // live item count for the header badge.
     builder.Services.AddScoped<CartState>();
+
+    // R-16: per-circuit wishlist ids shared by every heart button; serialises the writes.
+    builder.Services.AddScoped<NieFarm.Web.Services.Wishlist.WishlistState>();
 
     // R-23: periodic deletion of abandoned guest carts (starts after app.Run(), i.e. after seeding).
     builder.Services.Configure<CartCleanupOptions>(

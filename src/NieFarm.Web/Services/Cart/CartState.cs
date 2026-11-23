@@ -13,7 +13,7 @@ namespace NieFarm.Web.Services.Cart;
 /// or gated on RendererInfo.IsInteractive) — the whole app prerenders first, and the guest-cart
 /// merge inside InitializeCoreAsync is a write that must not run twice.
 /// </summary>
-public sealed class CartState(ISender sender)
+public sealed class CartState(ISender sender, CircuitWriteGate writeGate)
 {
     private Task? _initialization;
 
@@ -35,8 +35,11 @@ public sealed class CartState(ISender sender)
         try
         {
             // Strictly sequential — both touch the shared scoped DbContext (data-access.md).
+            // The merge writes through the circuit's shared write context, so it takes the write gate: a heart
+            // or an add-to-cart clicked while it runs waits for it instead of overlapping it. Callers that
+            // themselves enter the gate must await this method BEFORE entering (it is not re-entrant).
             if (!string.IsNullOrWhiteSpace(userId) && !string.IsNullOrWhiteSpace(anonymousId))
-                await sender.Send(new MergeGuestCartCommand(anonymousId, userId));
+                await writeGate.RunAsync(() => sender.Send(new MergeGuestCartCommand(anonymousId, userId)));
 
             Count = await sender.Send(new GetCartItemCountQuery(anonymousId));
         }

@@ -323,6 +323,13 @@
 .opts { display: flex; flex-wrap: wrap; gap: .5rem; }
 
 .buyrow { display: flex; gap: .75rem; margin-top: 2rem; }
+/* Second row: "Mua ngay" beside the wishlist button (R-16). The heart is filled from aria-pressed alone;
+   ".btn .ico" already pins the glyph size. */
+.buyrow--sub { margin-top: .6rem; }
+.pdp__fav[aria-pressed="true"] { --btn-fg: var(--red); }
+.pdp__fav[aria-pressed="true"]:hover { --btn-fg: #fff; }
+.pdp__fav[aria-pressed="true"] .ico { fill: currentColor; }
+.pdp__fav[aria-busy="true"] { cursor: progress; }
 
 .assure { display: grid; gap: .9rem; margin-top: 2.25rem; padding-top: 1.75rem; border-top: 1px solid var(--line); }
 .assure li { display: flex; gap: .8rem; align-items: center; font-size: var(--fs-sm); color: var(--ink-70); list-style: none; }
