@@ -1,0 +1,430 @@
+@page "/tai-khoan/dia-chi"
+@attribute [Authorize]
+@using Ardalis.Result
+@using NieFarm.Application.Features.AddressBook
+@using NieFarm.Application.Features.AddressBook.Commands
+@using NieFarm.Application.Features.AddressBook.Dtos
+@using NieFarm.Application.Features.AddressBook.Queries
+@using NieFarm.Domain.Entities
+@inject ISender Sender
+
+@*
+    Address book (R-16 Phase 3, docs/plans/R-16-customer-account.md D-11..D-14).
+
+    Every call goes through a command or query that takes the owner from ICurrentUser, so nothing here
+    can name another customer's address. All writes are sequential and share the _busy guard (the write
+    repository is one scoped context for the whole circuit; overlapping sends would throw). The form is
+    inline, not a modal, and "Xóa" is a two-step inline confirmation like OrderCancelForm.
+
+    The page carries no data-reveal and no Razor class expression on an element that could, so nothing
+    here can strip a JS-added class. The list is read in OnInitializedAsync and carried across prerender in
+    [PersistentState] (owner's own data only), then replaced from the query after every write.
+*@
+
+<PageTitle>Sổ địa chỉ - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex" />
+</HeadContent>
+
+<AccountShell>
+    <div class="acct__head">
+        <h1>Sổ địa chỉ</h1>
+        <p class="lede" style="margin-top:.5rem">
+            Lưu địa chỉ giao hàng để điền sẵn khi thanh toán. Bạn có thể lưu tối đa @CustomerAddress.MaxPerUser địa chỉ.
+        </p>
+    </div>
+
+    @if (_message is not null)
+    {
+        <div class="alert alert--ok addr__notice" role="status"><p>@_message</p></div>
+    }
+    @if (_error is not null)
+    {
+        <div class="alert alert--error addr__notice" role="alert"><p>@_error</p></div>
+    }
+
+    @if (Data is null)
+    {
+        <div class="alert alert--error addr__notice" role="alert"><p>Không tải được sổ địa chỉ. Vui lòng tải lại trang.</p></div>
+    }
+    else
+    {
+        @if (!_formOpen)
+        {
+            <div class="addr__toolbar">
+                <button type="button" class="btn btn--ghost btn--sm" @onclick="OpenNew"
+                        disabled="@(_busy || !RendererInfo.IsInteractive || Data.Count >= CustomerAddress.MaxPerUser)">
+                    <span>Thêm địa chỉ mới</span>
+                </button>
+                @if (Data.Count >= CustomerAddress.MaxPerUser)
+                {
+                    <p class="acct-note">Sổ địa chỉ đã đầy. Hãy xóa bớt một địa chỉ trước khi thêm mới.</p>
+                }
+            </div>
+        }
+        else if (_editingId is null)
+        {
+            <div class="addr__formwrap">
+                <h2 class="acct-block__title"><NfIcon Name="location" Size="20" /> Địa chỉ mới</h2>
+                @AddressForm()
+            </div>
+        }
+
+        @if (Data.Count == 0 && !_formOpen)
+        {
+            <div class="acct__empty">
+                <NfIcon Name="location" Size="40" CssClass="acct__empty-icon" />
+                <p class="muted" style="margin-top:1rem">Bạn chưa lưu địa chỉ nào.</p>
+            </div>
+        }
+        else if (Data.Count > 0)
+        {
+            <ul class="addr-list">
+                @foreach (var address in Data)
+                {
+                    <li class="addr" @key="address.Id" aria-label="@($"Địa chỉ của {address.RecipientName}")">
+                        @if (_formOpen && _editingId == address.Id)
+                        {
+                            <div class="addr__formwrap">
+                                <h2 class="acct-block__title"><NfIcon Name="pencil" Size="20" /> Sửa địa chỉ</h2>
+                                @AddressForm()
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="addr__main">
+                                <p class="addr__name">
+                                    <b>@address.RecipientName</b>
+                                    <span class="addr__phone">@address.Phone</span>
+                                    @if (address.IsDefault)
+                                    {
+                                        <span class="badge-status badge-status--ok">Mặc định</span>
+                                    }
+                                </p>
+                                <p class="addr__text">@address.Street, @address.WardName, @address.ProvinceName</p>
+                            </div>
+
+                            @if (_confirmDeleteId == address.Id)
+                            {
+                                <div class="addr__confirm" role="group" aria-label="Xác nhận xóa địa chỉ">
+                                    <p>Xóa địa chỉ này khỏi sổ địa chỉ?</p>
+                                    <div class="addr__actions">
+                                        <button type="button" class="btn btn--red btn--sm" disabled="@(_busy)"
+                                                @onclick="() => DeleteAsync(address.Id)">
+                                            <span>@(_busy ? "Đang xóa..." : "Xác nhận xóa")</span>
+                                        </button>
+                                        <button type="button" class="btn btn--ghost btn--sm" disabled="@(_busy)"
+                                                @onclick="CancelDelete">
+                                            <span>Giữ lại</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="addr__actions">
+                                    <button type="button" class="linkbtn" disabled="@(_busy || _formOpen || !RendererInfo.IsInteractive)"
+                                            @onclick="() => OpenEdit(address)">
+                                        <NfIcon Name="pencil" Size="14" /> Sửa
+                                    </button>
+                                    <button type="button" class="linkbtn" disabled="@(_busy || !RendererInfo.IsInteractive)"
+                                            @onclick="() => AskDelete(address.Id)">
+                                        <NfIcon Name="trash" Size="14" /> Xóa
+                                    </button>
+                                    @if (!address.IsDefault)
+                                    {
+                                        <button type="button" class="linkbtn" disabled="@(_busy || !RendererInfo.IsInteractive)"
+                                                @onclick="() => SetDefaultAsync(address.Id)">
+                                            Đặt làm mặc định
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    }
+</AccountShell>
+
+@code {
+    /// <summary>The owner's address book, carried across prerender -> interactive so the list does not reload.</summary>
+    [PersistentState] public List<CustomerAddressDto>? Data { get; set; }
+
+    private bool _busy;
+    private string? _message;
+    private string? _error;
+    private int? _confirmDeleteId;
+
+    // The inline add/edit form.
+    private bool _formOpen;
+    private int? _editingId;
+    private string _recipient = string.Empty;
+    private string _phone = string.Empty;
+    private string _street = string.Empty;
+    private int? _provinceCode;
+    private string? _provinceName;
+    private int? _wardCode;
+    private string? _wardName;
+    private bool _makeDefault;
+    private bool _focusPending;
+    private ElementReference _recipientInput;
+
+    private bool DefaultLocked =>
+        _editingId is null
+            ? Data is { Count: 0 }
+            : Data?.FirstOrDefault(a => a.Id == _editingId)?.IsDefault == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Data ??= await LoadAsync();
+    }
+
+    private async Task<List<CustomerAddressDto>?> LoadAsync()
+    {
+        var result = await Sender.Send(new GetMyAddressesQuery());
+        return result.IsSuccess ? result.Value.ToList() : null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending)
+            return;
+        _focusPending = false;
+        try { await _recipientInput.FocusAsync(); }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    private void OpenNew()
+    {
+        ResetForm();
+        _formOpen = true;
+        _editingId = null;
+        _makeDefault = Data is { Count: 0 };
+        _focusPending = true;
+        _confirmDeleteId = null;
+        _message = null;
+        _error = null;
+    }
+
+    private void OpenEdit(CustomerAddressDto address)
+    {
+        ResetForm();
+        _formOpen = true;
+        _editingId = address.Id;
+        _recipient = address.RecipientName;
+        _phone = address.Phone;
+        _street = address.Street;
+        _provinceCode = address.ProvinceCode;
+        _provinceName = address.ProvinceName;
+        _wardCode = address.WardCode;
+        _wardName = address.WardName;
+        _makeDefault = address.IsDefault;
+        _focusPending = true;
+        _confirmDeleteId = null;
+        _message = null;
+        _error = null;
+    }
+
+    private void CloseForm()
+    {
+        _formOpen = false;
+        _editingId = null;
+        ResetForm();
+    }
+
+    private void ResetForm()
+    {
+        _recipient = string.Empty;
+        _phone = string.Empty;
+        _street = string.Empty;
+        _provinceCode = null;
+        _provinceName = null;
+        _wardCode = null;
+        _wardName = null;
+        _makeDefault = false;
+    }
+
+    private void AskDelete(int id)
+    {
+        _confirmDeleteId = id;
+        _message = null;
+        _error = null;
+    }
+
+    private void CancelDelete() => _confirmDeleteId = null;
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !RendererInfo.IsInteractive)
+            return;
+
+        _busy = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            var editing = _editingId is not null;
+            var result = await Sender.Send(new SaveMyAddressCommand(
+                _editingId, _recipient, _phone, _street, _provinceCode, _provinceName,
+                _wardCode, _wardName ?? string.Empty, _makeDefault));
+
+            if (result.IsSuccess)
+            {
+                CloseForm();
+                Data = await LoadAsync() ?? Data;
+                _message = editing ? "Đã cập nhật địa chỉ." : "Đã thêm địa chỉ mới.";
+                return;
+            }
+
+            _error = FirstError(result);
+
+            // The row vanished (deleted in another tab): drop the form and show the real book.
+            if (result.Status == ResultStatus.NotFound)
+            {
+                CloseForm();
+                Data = await LoadAsync() ?? Data;
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            // The unique default index can lose a race with another tab (R1); never take the circuit down.
+            _error = "Không thể lưu địa chỉ. Vui lòng tải lại trang và thử lại.";
+            await TryReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        if (_busy)
+            return;
+
+        _busy = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            var result = await Sender.Send(new DeleteMyAddressCommand(id));
+            _confirmDeleteId = null;
+            if (result.IsSuccess)
+            {
+                _message = "Đã xóa địa chỉ.";
+            }
+            else
+            {
+                _error = FirstError(result);
+            }
+            Data = await LoadAsync() ?? Data;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            _confirmDeleteId = null;
+            _error = "Không thể xóa địa chỉ. Vui lòng tải lại trang và thử lại.";
+            await TryReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SetDefaultAsync(int id)
+    {
+        if (_busy)
+            return;
+
+        _busy = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            var result = await Sender.Send(new SetDefaultMyAddressCommand(id));
+            if (result.IsSuccess)
+            {
+                _message = "Đã đặt làm địa chỉ mặc định.";
+            }
+            else
+            {
+                _error = FirstError(result);
+            }
+            Data = await LoadAsync() ?? Data;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            _error = "Không thể đặt địa chỉ mặc định. Vui lòng tải lại trang và thử lại.";
+            await TryReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // After an unexpected failure the list on screen may be stale (another tab changed it): show the real book.
+    private async Task TryReloadAsync()
+    {
+        try { Data = await LoadAsync() ?? Data; }
+        catch (Exception) { /* keep what is on screen; the error message already tells the customer to reload */ }
+    }
+
+    private static string FirstError(IResult result) =>
+        (result.ValidationErrors.Select(v => v.ErrorMessage).Concat(result.Errors)
+            .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m)))
+        ?? "Không thể thực hiện thao tác. Vui lòng thử lại.";
+
+    private RenderFragment AddressForm() => @<form class="acct-form addr-form" @onsubmit="SaveAsync"
+                                                 @onsubmit:preventDefault="@RendererInfo.IsInteractive">
+        <div class="nf-row nf-row--2">
+            <div>
+                <label class="nf-label" for="addr-name">Họ và tên người nhận *</label>
+                <input id="addr-name" @ref="_recipientInput" type="text" class="nf-field" autocomplete="shipping name"
+                       maxlength="@CustomerAddress.RecipientNameMaxLength" placeholder="Nhập họ và tên"
+                       @bind="_recipient" @bind:event="oninput" />
+            </div>
+            <div>
+                <label class="nf-label" for="addr-phone">Số điện thoại *</label>
+                <input id="addr-phone" type="tel" class="nf-field" autocomplete="shipping tel"
+                       maxlength="@CustomerAddress.PhoneMaxLength" placeholder="Nhập số điện thoại"
+                       @bind="_phone" @bind:event="oninput" />
+            </div>
+        </div>
+
+        <AddressPicker IdPrefix="addr" Disabled="@_busy"
+                       @bind-ProvinceCode="_provinceCode" @bind-ProvinceName="_provinceName"
+                       @bind-WardCode="_wardCode" @bind-WardName="_wardName" />
+
+        <div>
+            <label class="nf-label" for="addr-street">Địa chỉ cụ thể *</label>
+            <input id="addr-street" type="text" class="nf-field" autocomplete="shipping street-address"
+                   maxlength="@CustomerAddress.StreetMaxLength" placeholder="Số nhà, tên đường..."
+                   @bind="_street" @bind:event="oninput" />
+        </div>
+
+        <label class="nf-check">
+            <input type="checkbox" @bind="_makeDefault" disabled="@(DefaultLocked || _busy)" />
+            <span>Đặt làm địa chỉ mặc định</span>
+        </label>
+
+        <div class="acct-form__actions addr__actions">
+            <button type="submit" class="btn btn--red btn--sm" disabled="@(_busy || !RendererInfo.IsInteractive)"
+                    aria-busy="@(_busy ? "true" : "false")">
+                <span>@(_busy ? "Đang lưu..." : "Lưu địa chỉ")</span>
+            </button>
+            <button type="button" class="btn btn--ghost btn--sm" disabled="@_busy" @onclick="CloseForm">
+                <span>Hủy</span>
+            </button>
+        </div>
+    </form>;
+}

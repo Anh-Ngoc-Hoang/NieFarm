@@ -936,6 +936,47 @@
 }
 
 /* ==========================================================================
+   Address book (R-16 Phase 3) — /tai-khoan/dia-chi and the "Địa chỉ đã lưu"
+   block on /thanh-toan. A hairline list, one row per address; the add/edit
+   form opens inline in place. Mobile-first: actions wrap under the text, and
+   from 640px they sit to the right. No data-reveal anywhere in this section.
+   ========================================================================== */
+.addr__notice { max-width: 40rem; margin-bottom: 1.25rem; }
+.addr__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; margin-bottom: 1.75rem; }
+.addr__toolbar .acct-note { margin-top: 0; }
+.addr-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.addr { display: grid; gap: .85rem; padding-block: 1.25rem; border-bottom: 1px solid var(--line); }
+.addr__name { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .85rem; }
+.addr__name b { font-weight: 600; }
+.addr__phone { color: var(--ink-55); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.addr__text { margin-top: .35rem; color: var(--ink-70); font-size: var(--fs-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.addr__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1.25rem; }
+.addr .linkbtn { display: inline-flex; align-items: center; gap: .35rem; min-height: 2.25rem; }
+/* NfIcon's .ico is 100% wide: pinned because the button is an inline-flex row. */
+.addr .linkbtn .ico { width: 14px; height: 14px; flex: none; }
+.addr .linkbtn:disabled { opacity: .5; cursor: default; }
+.addr__confirm p { font-size: var(--fs-sm); margin-bottom: .75rem; }
+.addr__formwrap { padding-block: .5rem 1.5rem; }
+.addr-list .addr__formwrap { padding-bottom: .5rem; }
+.addr-form { max-width: 36rem; }
+.addr-form .addr__actions { padding-top: .25rem; }
+
+/* Checkbox + label row, shared by the address form and the checkout "save to book" tick. */
+.nf-check { display: flex; align-items: center; gap: .65rem; min-height: 2.75rem; font-size: var(--fs-sm); color: var(--ink-70); cursor: pointer; }
+.nf-check input { flex: none; width: 1.15rem; height: 1.15rem; margin: 0; accent-color: var(--green); }
+
+/* Checkout: the "Địa chỉ đã lưu" picker above the name field. */
+.checkout__saved { padding-bottom: 1.5rem; border-bottom: 1px solid var(--line-soft); }
+.checkout__saved .acct-note { margin-top: .5rem; }
+
+@media (min-width: 640px) {
+    .addr { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 1.5rem; }
+    .addr .addr__formwrap { grid-column: 1 / -1; }
+    .addr__confirm { text-align: right; }
+    .addr__confirm .addr__actions { justify-content: flex-end; }
+}
+
+/* ==========================================================================
    /dang-nhap, /dang-ky — Auth screens (Phase 5, step 5.1). No prototype
    source; the split layout + polaroid collage concept is kept from the
    original Tailwind build, restyled in the house language: polaroid drop

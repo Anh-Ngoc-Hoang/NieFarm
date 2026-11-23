@@ -2,6 +2,10 @@
 @layout CheckoutLayout
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using NieFarm.Application.Features.Account.Profile.Queries
+@using NieFarm.Application.Features.AddressBook.Commands
+@using NieFarm.Application.Features.AddressBook.Dtos
+@using NieFarm.Application.Features.AddressBook.Queries
 @using NieFarm.Application.Features.Addresses.Dtos
 @using NieFarm.Application.Features.Addresses.Queries
 @using NieFarm.Application.Features.Carts.Commands
@@ -20,6 +24,7 @@
 @inject NavigationManager Navigation
 @inject CartState CartState
 @inject PlacedOrderState PlacedOrders
+@inject ILogger<Checkout> Logger
 @implements IDisposable
 
 @*
@@ -208,6 +213,26 @@
                     <h2><NfIcon Name="location" Size="20" /> Địa chỉ nhận hàng</h2>
 
                     <div style="display:grid;gap:1.5rem">
+                        @* R-16 D-15: signed-in customers with a saved address book pick from it. Choosing one fills the
+                           fields and re-prices the shipping through RefreshCartAsync, so the fee shown is the fee charged. *@
+                        @if (_isSignedIn && _saved.Count > 0)
+                        {
+                            <div class="checkout__saved">
+                                <label class="nf-label" for="saved-address">Địa chỉ đã lưu</label>
+                                <select id="saved-address" class="nf-field" value="@_selectedAddressId" @key="_savedSelectKey"
+                                        disabled="@(_cart is null || _provincesLoading || _updating || _submitting || _wardsLoading)" @onchange="OnSavedAddressChangedAsync">
+                                    <option value="">Nhập địa chỉ khác</option>
+                                    @foreach (var saved in _saved)
+                                    {
+                                        <option value="@saved.Id">@SavedAddressLabel(saved)</option>
+                                    }
+                                </select>
+                                <p class="acct-note">
+                                    <a class="linkbtn" href="/tai-khoan/dia-chi" target="_blank" rel="noopener">Quản lý sổ địa chỉ</a>
+                                </p>
+                            </div>
+                        }
+
                         <div class="nf-row nf-row--2">
                             <div>
                                 <label class="nf-label" for="full-name">Họ và tên *</label>
@@ -270,6 +295,14 @@
                             <label class="nf-label" for="street">Địa chỉ cụ thể *</label>
                             <input id="street" type="text" placeholder="Số nhà, tên đường..." @bind="_street" class="nf-field" />
                         </div>
+
+                        @if (ShowSaveToBook)
+                        {
+                            <label class="nf-check">
+                                <input type="checkbox" @bind="_saveToBook" />
+                                <span>Lưu địa chỉ này vào sổ địa chỉ</span>
+                            </label>
+                        }
 
                         <div>
                             <label class="nf-label" for="note">Ghi chú đơn hàng</label>
@@ -479,6 +512,21 @@
     private bool _submitting;
     private List<string> _errors = [];
 
+    // R-16 address book (D-15). Only ever populated for a signed-in customer in the interactive pass;
+    // a guest sees none of it and checks out exactly as before.
+    private bool _isSignedIn;
+    private bool _bookLoaded;
+    private IReadOnlyList<CustomerAddressDto> _saved = [];
+    private string _selectedAddressId = string.Empty;   // "" means "enter another address"
+    private bool _saveToBook;
+    private string _accountName = string.Empty;   // the account FullName claim, never what was typed
+    private string? _profilePhone;                 // read before the cart renders, see OnInitializedAsync
+    private int _savedSelectKey;                   // bumped to rebuild the select when a change is refused
+    private int _wardsGeneration;                  // newest ward load wins (see OnProvinceChangedAsync)
+
+    private bool ShowSaveToBook =>
+        _isSignedIn && _bookLoaded && _selectedAddressId.Length == 0 && _saved.Count < CustomerAddress.MaxPerUser;
+
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     // The province name that prices the shipping and is printed on the address: the picked entry,
@@ -542,6 +590,10 @@
             if (user.Identity?.IsAuthenticated == true)
                 userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
         }
+        _isSignedIn = !string.IsNullOrWhiteSpace(userId);
+
+        if (_isSignedIn)
+            _accountName = user?.FindFirst("FullName")?.Value ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(userId) && string.IsNullOrWhiteSpace(CartAnonymousId))
         {
@@ -553,6 +605,16 @@
             try
             {
                 await CartState.EnsureInitializedAsync(userId, CartAnonymousId);
+
+                // R-16: everything the address book needs is read here, after the layout-shared cart
+                // initialisation (its guest-cart merge writes on the circuit-wide context) has finished and
+                // while the cart is still a skeleton, so no cart button can be pressed. GetMyProfileQuery
+                // uses that same circuit-wide UserManager context, so it must never overlap the merge and
+                // never run once the +/-/remove/coupon buttons are live. (Running it before the merge
+                // threw "A second operation was started on this context" in the layout's merge.)
+                if (_isSignedIn)
+                    await PreloadAddressBookAsync();
+
                 _pricedProvince = CurrentProvince;
                 _cart = await Sender.Send(new GetCartQuery(CartAnonymousId, _pricedProvince), _cts.Token);
             }
@@ -576,6 +638,151 @@
             _email = string.IsNullOrWhiteSpace(_email)
                 ? user.FindFirst(ClaimTypes.Email)?.Value ?? user.Identity.Name ?? string.Empty : _email;
         }
+
+        if (_isSignedIn)
+            await ApplyDefaultAddressAsync();
+    }
+
+    // ----- R-16 address book. Everything here is best-effort: a failure leaves checkout exactly as a guest
+    // sees it. Cart re-pricing always goes through RefreshCartAsync (the _updating guard), never inline. -----
+
+    // Reads only (no cart involved): the book through the read repository, and the profile phone only when
+    // there is no default address to take a phone from. Runs before the cart is rendered (see above).
+    private async Task PreloadAddressBookAsync()
+    {
+        try
+        {
+            var result = await Sender.Send(new GetMyAddressesQuery(), _cts.Token);
+            if (!result.IsSuccess)
+                return;
+
+            _saved = result.Value;
+            _bookLoaded = true;
+            _saveToBook = _saved.Count == 0;
+
+            if (!_saved.Any(a => a.IsDefault))
+            {
+                var profile = await Sender.Send(new GetMyProfileQuery(), _cts.Token);
+                if (profile.IsSuccess && !string.IsNullOrWhiteSpace(profile.Value.PhoneNumber))
+                    _profilePhone = profile.Value.PhoneNumber;
+            }
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        catch (Exception ex)
+        {
+            Logger.LogWarning("Checkout could not load the address book ({ExceptionType})", ex.GetType().Name);
+        }
+    }
+
+    // Runs last in OnInitializedAsync, once the cart and the province list are in: fills the default address
+    // (which re-prices through RefreshCartAsync), or just the profile phone when the book has no default.
+    private async Task ApplyDefaultAddressAsync()
+    {
+        try
+        {
+            // Only fill empty boxes: anything the customer already typed in the meantime is never overwritten.
+            var untouched = (string.IsNullOrWhiteSpace(_fullName) || _fullName == _accountName)
+                && string.IsNullOrWhiteSpace(_phone) && string.IsNullOrWhiteSpace(_street)
+                && string.IsNullOrEmpty(_provinceCode) && string.IsNullOrEmpty(_wardCode)
+                && string.IsNullOrWhiteSpace(_provinceName) && string.IsNullOrWhiteSpace(_wardName);
+
+            if (_saved.FirstOrDefault(a => a.IsDefault) is { } preferred)
+            {
+                if (untouched)
+                {
+                    _selectedAddressId = preferred.Id.ToString();
+                    await ApplyAddressAsync(preferred);
+                }
+            }
+            else if (_profilePhone is not null && string.IsNullOrWhiteSpace(_phone))
+            {
+                _phone = _profilePhone;
+            }
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        catch (Exception ex)
+        {
+            Logger.LogWarning("Checkout could not apply the saved address ({ExceptionType})", ex.GetType().Name);
+        }
+    }
+
+    private static string SavedAddressLabel(CustomerAddressDto a) =>
+        $"{a.RecipientName} - {a.Street}, {a.WardName}, {a.ProvinceName}{(a.IsDefault ? " (Mặc định)" : null)}";
+
+    private async Task OnSavedAddressChangedAsync(ChangeEventArgs e)
+    {
+        if (_cart is null || _provincesLoading || _updating || _submitting || _wardsLoading)
+        {
+            // Refused (also while the cart or province list is still loading, so the province can never be
+            // left blank next to a chosen address): a new @key rebuilds the select, so it shows the real selection again instead of the
+            // option the customer just clicked (Blazor would not repaint an unchanged bound value).
+            _savedSelectKey++;
+            StateHasChanged();
+            return;
+        }
+
+        _selectedAddressId = e.Value?.ToString() ?? string.Empty;
+
+        if (int.TryParse(_selectedAddressId, out var id) && _saved.FirstOrDefault(a => a.Id == id) is { } chosen)
+        {
+            _saveToBook = false;
+            await ApplyAddressAsync(chosen);
+            return;
+        }
+
+        // "Nhập địa chỉ khác": a clean slate, so a previous recipient is never kept by accident.
+        _selectedAddressId = string.Empty;
+        _saveToBook = false;
+        _fullName = _accountName;
+        _phone = string.Empty;
+        _street = string.Empty;
+        _wardName = null;
+        _wardCode = null;
+        _wards = [];
+        if (_addressLookupFailed)
+        {
+            _provinceName = null;
+            await RefreshCartAsync();
+        }
+        else
+        {
+            _provinceCode = null;
+            await OnProvinceChangedAsync();
+        }
+    }
+
+    // Fills the form from a saved address. The province goes through OnProvinceChangedAsync, which re-prices
+    // the cart for it (RefreshCartAsync) and loads the wards, exactly like picking the province by hand.
+    private async Task ApplyAddressAsync(CustomerAddressDto address)
+    {
+        _fullName = address.RecipientName;
+        _phone = address.Phone;
+        _street = address.Street;
+
+        if (_addressLookupFailed)
+        {
+            _provinceName = address.ProvinceName;
+            _wardName = address.WardName;
+            await RefreshCartAsync();
+            return;
+        }
+
+        var code = address.ProvinceCode ?? VietnamProvinceCatalog.TryResolve(address.ProvinceName);
+        _provinceCode = code is { } c && _provinces.Any(p => p.Code == c) ? c.ToString() : null;
+        var expectedProvince = _provinceCode;
+        var expectedSelection = _selectedAddressId;
+        await OnProvinceChangedAsync();
+
+        // The customer picked another address or province while the wards were loading: that change owns the
+        // ward list now, so this (older) application must not touch _wardCode.
+        if (_provinceCode != expectedProvince || _selectedAddressId != expectedSelection)
+            return;
+
+        // The saved ward may have been renamed or merged since: re-select by code, then by name, else leave
+        // it empty so the customer picks it again (the order needs a real ward).
+        var ward = _wards.FirstOrDefault(w => address.WardCode is { } wc && w.Code == wc)
+            ?? _wards.FirstOrDefault(w => string.Equals(w.Name, address.WardName, StringComparison.OrdinalIgnoreCase));
+        _wardCode = ward?.Code.ToString();
     }
 
     private Task IncrementAsync(CartLineDto line) => SetQuantityAsync(line.ProductId, line.VariantKey, line.Quantity + 1);
@@ -768,6 +975,19 @@
             // Snapshot: the input stays editable while the command runs, and the phone kept for
             // the auto-lookup must be exactly the one the order was stored with.
             var phone = _phone;
+
+            // R-16 D-15: what to remember if the customer ticked "Lưu địa chỉ". Read before the await: the inputs
+            // stay editable while the order is created, and the saved row must be the address the order used.
+            var addressToSave = ShowSaveToBook && _saveToBook
+                ? new SaveMyAddressCommand(
+                    null, _fullName, phone, _street,
+                    !_addressLookupFailed && int.TryParse(_provinceCode, out var pc) ? pc : null,
+                    province,
+                    !_addressLookupFailed && int.TryParse(_wardCode, out var wc) ? wc : null,
+                    ward ?? string.Empty,
+                    MakeDefault: _saved.Count == 0)
+                : null;
+
             var result = await Sender.Send(new CreateOrderCommand(
                 _fullName, phone, _email, _street,
                 ward ?? string.Empty, province ?? string.Empty,
@@ -780,6 +1000,12 @@
                 // The phone typed here is kept in circuit memory only, so "Tra cứu đơn hàng" can
                 // pre-run the code + phone lookup for the customer's own just-placed order.
                 PlacedOrders.Set(result.Value, phone);
+
+                // Best-effort and sequential (shared write context): the order is already saved, so a failure
+                // here is only logged and never blocks or undoes it.
+                if (addressToSave is not null)
+                    await TrySaveAddressAsync(addressToSave);
+
                 Navigation.NavigateTo($"/dat-hang-thanh-cong/{result.Value.Code}");
                 return;                   // leave _submitting true; we are navigating away
             }
@@ -816,6 +1042,21 @@
         }
     }
 
+    private async Task TrySaveAddressAsync(SaveMyAddressCommand command)
+    {
+        try
+        {
+            var saved = await Sender.Send(command, _cts.Token);
+            if (!saved.IsSuccess)
+                Logger.LogInformation("Checkout did not save the address to the book ({Status})", saved.Status);
+        }
+        catch (OperationCanceledException) { /* circuit tore down */ }
+        catch (Exception ex)
+        {
+            Logger.LogWarning("Checkout could not save the address to the book ({ExceptionType})", ex.GetType().Name);
+        }
+    }
+
     // Re-prices the cart for the chosen province. Runs inside the same _updating guard as every
     // other cart write, so "Xác nhận đặt hàng" stays disabled until the new total is in.
     private async Task RefreshCartAsync()
@@ -844,23 +1085,38 @@
 
     private async Task OnProvinceChangedAsync()
     {
+        // Newest call wins: a ward response that arrives after a newer province change is dropped, so the ward
+        // list (and therefore the ward name printed on the order) always belongs to the province now selected.
+        var generation = ++_wardsGeneration;
+
         _wardCode = null;
         _wards = [];
 
         await RefreshCartAsync();
+        if (generation != _wardsGeneration)
+            return;
 
         if (!int.TryParse(_provinceCode, out var code) || code <= 0)
+        {
+            _wardsLoading = false;
             return;
+        }
 
         _wardsLoading = true;
         StateHasChanged();               // paint the "Đang tải..." state before awaiting
         try
         {
             var result = await Sender.Send(new GetWardsQuery(code), _cts.Token);
+            if (generation != _wardsGeneration)
+                return;
             _wards = result.IsSuccess ? result.Value : [];
         }
         catch (OperationCanceledException) { }
-        finally { _wardsLoading = false; }
+        finally
+        {
+            if (generation == _wardsGeneration)
+                _wardsLoading = false;
+        }
     }
 
     public void Dispose()

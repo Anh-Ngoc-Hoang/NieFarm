@@ -1,0 +1,234 @@
+@using NieFarm.Application.Features.Addresses.Dtos
+@using NieFarm.Application.Features.Addresses.Queries
+@implements IDisposable
+@inject ISender Sender
+
+@*
+    Province + ward picker for the address book (R-16 Phase 3, step 10). A slimmed copy of the
+    province/ward logic in Checkout.razor (Q-07: checkout is not refactored onto this component).
+
+    Four two-way values: ProvinceCode/ProvinceName and WardCode/WardName. With the lookup available they
+    are two dependent <select>s; when GetProvincesQuery fails (the third-party API is down) the same
+    values are plain text inputs and the codes stay null, so the address can still be saved by name. The
+    server normalises the province either way (AddressProvinceResolver), so a mistyped province is
+    rejected there with a Vietnamese message; this component never decides validity.
+
+    Autocomplete: the free-text fallback inputs carry the WCAG 1.3.5 address tokens. The two selects are
+    deliberately left without one: they are filled from an API list (and the ward list depends on the
+    province), so a browser autofill would fire into an option list that is not loaded yet.
+
+    No outbound call during prerender (like Checkout): the selects render disabled until interactive.
+    Wards reload whenever the ProvinceCode parameter changes, so the parent can switch the form to another
+    address and the dependent list follows. A saved ward that is no longer in the API list is re-selected by
+    name, and if that fails the ward is cleared so the customer has to pick it again.
+*@
+
+@if (_lookupFailed)
+{
+    <div class="nf-row nf-row--2">
+        <div>
+            <label class="nf-label" for="@ProvinceId">Tỉnh / Thành phố *</label>
+            <input id="@ProvinceId" type="text" class="nf-field" placeholder="Nhập tỉnh/thành phố" maxlength="120" autocomplete="shipping address-level1"
+                   disabled="@Disabled" value="@ProvinceName" @onchange="OnProvinceTextChangedAsync" />
+        </div>
+        <div>
+            <label class="nf-label" for="@WardId">Phường / Xã *</label>
+            <input id="@WardId" type="text" class="nf-field" placeholder="Nhập phường/xã" maxlength="120" autocomplete="shipping address-level2"
+                   disabled="@Disabled" value="@WardName" @onchange="OnWardTextChangedAsync" />
+        </div>
+    </div>
+    <p class="acct-note" role="status">Không tải được danh sách tỉnh/phường. Vui lòng nhập thủ công.</p>
+}
+else
+{
+    <div class="nf-row nf-row--2">
+        <div>
+            <label class="nf-label" for="@ProvinceId">Tỉnh / Thành phố *</label>
+            <select id="@ProvinceId" class="nf-field" disabled="@(Disabled || _provincesLoading)"
+                    @onchange="OnProvinceSelectedAsync">
+                <option value="">@(_provincesLoading ? "Đang tải..." : "Chọn Tỉnh/Thành")</option>
+                @foreach (var p in _provinces)
+                {
+                    <option value="@p.Code" selected="@(p.Code == ProvinceCode)">@p.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="nf-label" for="@WardId">Phường / Xã *</label>
+            <select id="@WardId" class="nf-field" disabled="@(Disabled || ProvinceCode is null || _wardsLoading)"
+                    @onchange="OnWardSelectedAsync">
+                <option value="">@WardPlaceholder</option>
+                @foreach (var w in _wards)
+                {
+                    <option value="@w.Code" selected="@(w.Code == WardCode)">@w.Name</option>
+                }
+            </select>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int? ProvinceCode { get; set; }
+    [Parameter] public EventCallback<int?> ProvinceCodeChanged { get; set; }
+    [Parameter] public string? ProvinceName { get; set; }
+    [Parameter] public EventCallback<string?> ProvinceNameChanged { get; set; }
+    [Parameter] public int? WardCode { get; set; }
+    [Parameter] public EventCallback<int?> WardCodeChanged { get; set; }
+    [Parameter] public string? WardName { get; set; }
+    [Parameter] public EventCallback<string?> WardNameChanged { get; set; }
+
+    /// <summary>Prefix for the two input ids, so two pickers (or a picker and a checkout field) never collide.</summary>
+    [Parameter] public string IdPrefix { get; set; } = "addr";
+    [Parameter] public bool Disabled { get; set; }
+
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<ProvinceDto> _provinces = [];
+    private IReadOnlyList<WardDto> _wards = [];
+    private bool _provincesLoading;
+    private bool _wardsLoading;
+    private bool _lookupFailed;
+    private bool _provincesRequested;
+    private int? _wardsFor;   // the province the current _wards belong to
+
+    private string ProvinceId => $"{IdPrefix}-province";
+    private string WardId => $"{IdPrefix}-ward";
+
+    private string WardPlaceholder =>
+        _wardsLoading ? "Đang tải..." : ProvinceCode is null ? "Chọn Tỉnh/Thành trước" : "Chọn Phường/Xã";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Prerender pass: no outbound call (it would run twice, prerender + circuit).
+        if (!RendererInfo.IsInteractive)
+            return;
+
+        if (!_provincesRequested)
+        {
+            _provincesRequested = true;
+            _provincesLoading = true;
+            try
+            {
+                var result = await Sender.Send(new GetProvincesQuery(), _cts.Token);
+                if (result.IsSuccess) _provinces = result.Value;
+                else _lookupFailed = true;
+            }
+            catch (OperationCanceledException) { return; }
+            finally { _provincesLoading = false; }
+        }
+
+        if (_lookupFailed)
+            return;
+
+        if (ProvinceCode != _wardsFor)
+            await LoadWardsAsync(ProvinceCode);
+    }
+
+    private async Task LoadWardsAsync(int? provinceCode)
+    {
+        _wardsFor = provinceCode;
+        _wards = [];
+        if (provinceCode is not { } code || code <= 0)
+            return;
+
+        _wardsLoading = true;
+        try
+        {
+            var result = await Sender.Send(new GetWardsQuery(code), _cts.Token);
+            // The parent may have moved to another province while this was awaited; keep the newest.
+            if (_wardsFor != provinceCode)
+                return;
+            _wards = result.IsSuccess ? result.Value : [];
+        }
+        catch (OperationCanceledException) { return; }
+        finally { _wardsLoading = false; }
+
+        await ReconcileWardAsync();
+    }
+
+    // A saved ward may no longer be in the API list (renamed or merged): re-select by name, else clear it
+    // so the customer is asked to choose again instead of silently keeping a stale value.
+    private async Task ReconcileWardAsync()
+    {
+        if (_wards.Count == 0 || (string.IsNullOrWhiteSpace(WardName) && WardCode is null))
+            return;
+
+        if (WardCode is { } code && _wards.Any(w => w.Code == code))
+            return;
+
+        var byName = string.IsNullOrWhiteSpace(WardName)
+            ? null
+            : _wards.FirstOrDefault(w => string.Equals(w.Name, WardName.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (byName is not null)
+        {
+            WardCode = byName.Code;
+            await WardCodeChanged.InvokeAsync(byName.Code);
+        }
+        else
+        {
+            WardCode = null;
+            WardName = null;
+            await WardCodeChanged.InvokeAsync(null);
+            await WardNameChanged.InvokeAsync(null);
+        }
+    }
+
+    private async Task OnProvinceSelectedAsync(ChangeEventArgs e)
+    {
+        int? code = int.TryParse(e.Value?.ToString(), out var parsed) && parsed > 0 ? parsed : null;
+        var name = code is null ? null : _provinces.FirstOrDefault(p => p.Code == code)?.Name;
+
+        ProvinceCode = code;
+        ProvinceName = name;
+        WardCode = null;
+        WardName = null;
+
+        // Claim the new province before telling the parent: its re-render calls OnParametersSetAsync,
+        // which must see "already loading this one" rather than start a second ward request.
+        _wardsFor = code;
+        _wards = [];
+
+        await ProvinceCodeChanged.InvokeAsync(code);
+        await ProvinceNameChanged.InvokeAsync(name);
+        await WardCodeChanged.InvokeAsync(null);
+        await WardNameChanged.InvokeAsync(null);
+
+        await LoadWardsAsync(code);
+    }
+
+    private async Task OnWardSelectedAsync(ChangeEventArgs e)
+    {
+        int? code = int.TryParse(e.Value?.ToString(), out var parsed) && parsed > 0 ? parsed : null;
+        var name = code is null ? null : _wards.FirstOrDefault(w => w.Code == code)?.Name;
+
+        WardCode = code;
+        WardName = name;
+        await WardCodeChanged.InvokeAsync(code);
+        await WardNameChanged.InvokeAsync(name);
+    }
+
+    // Manual-entry mode: names only, so the codes are cleared and the server resolves the province by name.
+    private async Task OnProvinceTextChangedAsync(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString();
+        ProvinceCode = null;
+        ProvinceName = text;
+        await ProvinceCodeChanged.InvokeAsync(null);
+        await ProvinceNameChanged.InvokeAsync(text);
+    }
+
+    private async Task OnWardTextChangedAsync(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString();
+        WardCode = null;
+        WardName = text;
+        await WardCodeChanged.InvokeAsync(null);
+        await WardNameChanged.InvokeAsync(text);
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<ShippingZone> ShippingZones => Set<ShippingZone>();
     public DbSet<ShippingZoneProvince> ShippingZoneProvinces => Set<ShippingZoneProvince>();
     public DbSet<Coupon> Coupons => Set<Coupon>();
+    public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
