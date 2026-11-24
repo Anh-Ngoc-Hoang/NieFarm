@@ -1,0 +1,218 @@
+@page "/admin/batches"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin,SuperAdmin")]
+@using NieFarm.Application.Features.Admin.RoastBatches.Commands
+@using NieFarm.Application.Features.Admin.RoastBatches.Dtos
+@using NieFarm.Application.Features.Admin.RoastBatches.Queries
+@using NieFarm.Domain.Enums
+@using NieFarm.Web.Content
+@using NieFarm.Web.Services.Traceability
+@inject ISender Sender
+@inject PublicUrls PublicUrls
+@inject ScanAlertCountState ScanAlertState
+@using NieFarm.Web.Services.Admin
+
+<AdminPageTitle Title="Roast Batches" />
+
+<div class="admin-page-head">
+    <div class="admin-page-head__titles">
+        <h1>Roast Batches</h1>
+        <p>One QR code per roast batch. Customers scan it to see where the coffee comes from.</p>
+    </div>
+    <button class="btn-admin" type="button" @onclick="() => _formModal.OpenForCreateAsync()">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add Batch
+    </button>
+</div>
+
+@if (!PublicUrls.IsConfigured)
+{
+    <div class="form-alert form-alert--error" style="margin-bottom:16px;" role="alert">
+        <strong>The public address is not configured.</strong>
+        Set <code>Site:PublicBaseUrl</code> (for example <code>https://niefarm.vn</code>); QR codes and labels cannot be
+        downloaded until then.
+    </div>
+}
+
+<div class="admin-toolbar">
+    <div class="admin-search">
+        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+        <input class="form-control-admin" type="search" placeholder="Search by batch code or product…"
+               @bind="_search" @bind:event="oninput" @bind:after="ApplyFilters" />
+    </div>
+</div>
+
+<div class="admin-table-wrap">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th style="width:150px;">Batch code</th>
+                <th>Product</th>
+                <th style="width:100px;">Roasted</th>
+                <th style="width:90px;">Status</th>
+                <th style="width:90px;">Scans (total / today)</th>
+                <th style="width:130px;">Last scan</th>
+                <th style="width:130px;">Alert</th>
+                <th style="width:150px;text-align:right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var batch in _filtered)
+            {
+                <tr>
+                    <td class="cell-mono cell-primary" style="cursor:pointer;" @onclick="() => _formModal.OpenForEditAsync(batch.Id)">@batch.CodeDisplay</td>
+                    <td>@batch.ProductName</td>
+                    <td class="cell-muted">@batch.RoastDate.ToString("dd/MM/yyyy")</td>
+                    <td>
+                        @if (batch.IsPublished)
+                        {
+                            <AdminBadge Text="Published" Variant="success" />
+                        }
+                        else
+                        {
+                            <AdminBadge Text="Draft" Variant="muted" />
+                        }
+                    </td>
+                    <td class="cell-muted">@batch.TotalScans.ToString("N0") / @batch.TodayScans.ToString("N0")</td>
+                    <td class="cell-muted">@(batch.LastScanAtUtc is { } last ? VnTime.FromUtc(last).ToString("dd/MM/yyyy HH:mm") : "Never")</td>
+                    <td>
+                        @if (batch.HasActiveAlert)
+                        {
+                            <AdminBadge Text="@AlertText(batch.AlertReason)" Variant="warning" />
+                            <button class="btn-admin-outline" type="button" style="margin-top:4px;padding:2px 8px;font-size:12px;"
+                                    disabled="@_busy" @onclick="() => AcknowledgeAsync(batch)">
+                                Acknowledge
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="cell-muted">None</span>
+                        }
+                    </td>
+                    <td>
+                        <div class="row-actions">
+                            <button class="btn-icon" type="button" title="Edit" @onclick="() => _formModal.OpenForEditAsync(batch.Id)">
+                                <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                            </button>
+                            <button class="btn-icon" type="button" title="QR code and label" @onclick="() => _formModal.OpenForEditAsync(batch.Id, true)">
+                                <span class="material-symbols-outlined" aria-hidden="true">qr_code_2</span>
+                            </button>
+                            <a class="btn-icon" href="/truy-xuat/@batch.Code" target="_blank" rel="noopener" title="Preview the public page">
+                                <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
+                            </a>
+                            @if (!batch.IsPublished)
+                            {
+                                <button class="btn-icon btn-icon--danger" type="button" title="Delete" @onclick="() => AskDelete(batch)">
+                                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                                </button>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (_filtered.Count == 0)
+    {
+        <div style="padding:20px;text-align:center;" class="cell-muted">No batches found.</div>
+    }
+</div>
+
+@if (_actionError is not null)
+{
+    <div class="form-alert form-alert--error" style="margin-top:16px;">@_actionError</div>
+}
+
+<RoastBatchFormModal @ref="_formModal" OnSaved="ReloadAsync" />
+
+<ConfirmModal @ref="_confirmModal"
+              Title="Delete batch?"
+              Message="@($"Delete draft batch {_deleteTarget?.CodeDisplay}? This cannot be undone. Any label already printed for this batch will show \"page not found\" from now on. A published batch cannot be deleted at all.")"
+              OnConfirm="ConfirmDeleteAsync" />
+
+@code {
+    private List<RoastBatchAdminListDto> _all = [];
+    private List<RoastBatchAdminListDto> _filtered = [];
+
+    private string _search = string.Empty;
+    private string? _actionError;
+    private bool _busy;
+
+    private RoastBatchFormModal _formModal = default!;
+    private ConfirmModal _confirmModal = default!;
+    private RoastBatchAdminListDto? _deleteTarget;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        // "Today" is a Vietnam-time day; the Application layer does not know the zone, so it is passed in.
+        var todayVn = DateOnly.FromDateTime(VnTime.FromUtc(DateTime.UtcNow));
+        _all = await Sender.Send(new GetRoastBatchesAdminQuery(null, todayVn));
+        ApplyFilters();
+    }
+
+    // Filtered in memory like the other admin lists: a roastery has tens of batches, not thousands.
+    private void ApplyFilters()
+    {
+        var term = _search.Trim();
+        _filtered = _all.Where(b =>
+            term.Length == 0
+            || b.Code.Contains(term.Replace("-", ""), StringComparison.OrdinalIgnoreCase)
+            || b.ProductName.Contains(term, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private static string AlertText(ScanAlertReason? reason) => reason switch
+    {
+        ScanAlertReason.DailySpike => "Unusual: daily spike",
+        ScanAlertReason.ExceedsPackCount => "Unusual: more than packs",
+        ScanAlertReason.Both => "Unusual: spike and over packs",
+        _ => "Unusual scans"
+    };
+
+    private async Task AcknowledgeAsync(RoastBatchAdminListDto batch)
+    {
+        _busy = true;
+        _actionError = null;
+        try
+        {
+            var result = await Sender.Send(new AcknowledgeScanAlertCommand(batch.Id));
+            if (!result.IsSuccess)
+                _actionError = result.Errors.FirstOrDefault() ?? "Could not acknowledge the alert.";
+
+            await ReloadAsync();
+
+            // The sidebar badge normally refreshes on navigation; acknowledging does not navigate.
+            await ScanAlertState.RefreshAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void AskDelete(RoastBatchAdminListDto batch)
+    {
+        _actionError = null;
+        _deleteTarget = batch;
+        _confirmModal.Show();
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null)
+            return;
+
+        var result = await Sender.Send(new DeleteRoastBatchCommand(_deleteTarget.Id));
+        _deleteTarget = null;
+
+        if (!result.IsSuccess)
+        {
+            _actionError = result.Errors.FirstOrDefault() ?? "Could not delete the batch.";
+            return;
+        }
+
+        await ReloadAsync();
+    }
+}

@@ -12,7 +12,9 @@ using NieFarm.Web.Endpoints;
 using NieFarm.Web.Middleware;
 using NieFarm.Web.Services.Admin;
 using NieFarm.Web.Services.Cart;
+using NieFarm.Web.Services.Http;
 using NieFarm.Web.Services.Orders;
+using NieFarm.Web.Services.Traceability;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
@@ -108,16 +110,41 @@ try
     builder.Services.AddSingleton<NieFarm.Application.Common.Interfaces.IPaymentStatusPublisher>(
         sp => sp.GetRequiredService<PaymentStatusNotifier>());
 
+    // R-26 traceability: site address printed on QR codes, tuning knobs, and the proxy trust list.
+    builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection(SiteOptions.SectionName));
+    builder.Services.Configure<TraceabilityOptions>(builder.Configuration.GetSection(TraceabilityOptions.SectionName));
+    builder.Services.Configure<ReverseProxyOptions>(builder.Configuration.GetSection(ReverseProxyOptions.SectionName));
+    builder.Services.AddSingleton<PublicUrls>();
+    builder.Services.AddSingleton<TraceabilitySettingsProvider>();
+    builder.Services.AddSingleton<BatchScanRecorder>();
+    builder.Services.AddHostedService<BatchScanFlushService>();
+    builder.Services.AddScoped<ScanAlertCountState>();
+
+    // The per-minute limit of the public traceability pages is fixed at start-up (a change needs a restart);
+    // every other Traceability value is re-read at use. An out-of-range value falls back to its default.
+    var traceabilitySettings = TraceabilitySettings.Resolve(
+        builder.Configuration.GetSection(TraceabilityOptions.SectionName).Get<TraceabilityOptions>()
+            ?? new TraceabilityOptions(),
+        (name, value, range, fallback) => Log.Warning(
+            "Traceability:{Name} must be {Range}; got {Value}. Using {Default}.", name, range, value, fallback));
+
     // The SePay webhook is retried by SePay on any non-2xx, including 429, so the limit is generous.
-    // There is no ForwardedHeaders setup, so behind a reverse proxy every caller shares one IP
-    // partition and this behaves as one global bucket.
+    // Both policies are keyed by the client address, which is the real caller only when ReverseProxy is
+    // configured (see UseForwardedHeaders below); otherwise, behind a proxy, every caller shares one bucket.
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
         // Runs before the endpoint can opt out of the status-code-pages re-execute, so do it here and
         // give the 429 a body (SePay-style JSON), otherwise it would be re-executed through /not-found.
+        // The public traceability pages get a short Vietnamese HTML answer instead.
         options.OnRejected = async (context, token) =>
         {
+            if (TraceabilityRateLimit.IsTraceabilityRequest(context.HttpContext))
+            {
+                await TraceabilityRateLimit.WriteRejectedAsync(context, token);
+                return;
+            }
+
             var http = context.HttpContext;
             var feature = http.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>();
             if (feature is not null)
@@ -126,9 +153,10 @@ try
             http.Response.ContentType = "application/json";
             await http.Response.WriteAsync("{\"success\":false}", token);
         };
+        options.AddTraceabilityPolicy(traceabilitySettings.RateLimitPerMinute);
         options.AddPolicy(SePayWebhookEndpoint.RateLimitPolicy, httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
-                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                ClientIpKey.For(httpContext),
                 _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 120,
@@ -137,7 +165,21 @@ try
                 }));
     });
 
+    // R-26: the batch-label PDFs draw with the embedded Be Vietnam Pro (PDFsharp finds fonts only through this resolver).
+    PdfSharp.Fonts.GlobalFontSettings.FontResolver = new EmbeddedFontResolver();
+
     var app = builder.Build();
+
+    // R-26 D17: trust X-Forwarded-For / -Proto only from the configured proxy ranges, and do it first so
+    // everything after it (rate limiting, HTTPS redirection, scan counting) sees the real client.
+    var forwarded = (builder.Configuration.GetSection(ReverseProxyOptions.SectionName).Get<ReverseProxyOptions>()
+            ?? new ReverseProxyOptions())
+        .ToForwardedHeadersOptions(message => Log.Warning("{Message}", message));
+    if (forwarded is not null)
+        app.UseForwardedHeaders(forwarded);
+    else if (app.Environment.IsProduction())
+        Log.Warning("ReverseProxy is not enabled. Behind Cloudflare or any proxy every caller then shares one rate-limit bucket " +
+                    "and one scan-dedupe key: set ReverseProxy__Enabled and ReverseProxy__TrustedNetworks (see docs/production-checklist.md).");
 
     if (!app.Environment.IsDevelopment())
     {
@@ -148,9 +190,10 @@ try
     app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
     app.UseHttpsRedirection();
 
-    app.UseMiddleware<CartCookieMiddleware>();
-
+    // Before the cart cookie middleware so a 429 never carries a Set-Cookie (R-26 D16).
     app.UseRateLimiter();
+
+    app.UseMiddleware<CartCookieMiddleware>();
 
     app.UseAuthentication();
     app.UseAuthorization();
@@ -188,6 +231,7 @@ try
         .DisableAntiforgery();
 
     app.MapSePayWebhook();
+    app.MapRoastBatchLabelEndpoints();
 
     app.MapStaticAssets();
     app.MapRazorPages();

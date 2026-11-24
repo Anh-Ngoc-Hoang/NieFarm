@@ -12,4 +12,6 @@ internal sealed class WriteContextRefresher(AppDbContext db) : IWriteContextRefr
 
         db.ChangeTracker.Clear();
     }
+
+    public void ForceDiscardTrackedEntities() => db.ChangeTracker.Clear();
 }

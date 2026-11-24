@@ -10,9 +10,15 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="PDFsharp" Version="6.2.4" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Be Vietnam Pro (SIL OFL 1.1) for the printable QR labels; embedded, never served from wwwroot. -->
+    <EmbeddedResource Include="Content\Fonts\*.ttf;Content\Fonts\OFL.txt" LogicalName="NieFarm.Web.Fonts.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -300,6 +300,30 @@
             "<path d=\"M26 6c-2 3.5 2 4.5 0 8\"/>",
         }),
 
+        // Added for the R-26 traceability brew cards: drawn fresh at the 24 viewBox.
+        "thermometer" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0Z\"/>",
+            "<path d=\"M12 9v7\"/>",
+        }),
+        "scale" => ("0 0 24 24", new[]
+        {
+            "<path d=\"M5 20h14\"/>",
+            "<path d=\"M12 4v16\"/>",
+            "<path d=\"M5 8h14\"/>",
+            "<path d=\"m5 8-3 6a3 3 0 0 0 6 0L5 8Z\"/>",
+            "<path d=\"m19 8-3 6a3 3 0 0 0 6 0l-3-6Z\"/>",
+        }),
+
+        // Added for the R-26 traceability timeline ("Đóng gói"): a parcel, drawn fresh at the same 48 viewBox.
+        "package" => ("0 0 48 48", new[]
+        {
+            "<path d=\"M6 15 24 6l18 9v20L24 44 6 35V15Z\"/>",
+            "<path d=\"m6 15 18 9 18-9\"/>",
+            "<path d=\"M24 24v20\"/>",
+            "<path d=\"m15 10.5 18 9\"/>",
+        }),
+
         _ => ("0 0 24 24", System.Array.Empty<string>()),
     };
 }

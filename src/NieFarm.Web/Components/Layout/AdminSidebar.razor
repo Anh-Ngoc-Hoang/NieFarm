@@ -2,6 +2,7 @@
 @inject NavigationManager Navigation
 @inject NewOrderCountState OrderCountState
 @inject PendingReviewCountState ReviewCountState
+@inject ScanAlertCountState ScanAlertState
 
 <aside class="admin-sidebar">
     <div class="admin-sidebar__brand">
@@ -77,6 +78,7 @@
     {
         BadgeKeys.NewOrders => $"{count} new order{(count == 1 ? "" : "s")}",
         BadgeKeys.PendingReviews => $"{count} pending review{(count == 1 ? "" : "s")}",
+        BadgeKeys.ScanAlerts => $"{count} batch{(count == 1 ? "" : "es")} with unusual scans",
         _ => count.ToString()
     };
 
@@ -89,6 +91,7 @@
     {
         public const string NewOrders = "new-orders";
         public const string PendingReviews = "pending-reviews";
+        public const string ScanAlerts = "scan-alerts";
     }
 
     private sealed record NavChild(string Label, string Href, string? BadgeKey = null);
@@ -124,7 +127,8 @@
             [
                 new("All Products", "/admin/products"),
                 new("Categories", "/admin/product-categories")
-            ])
+            ]),
+            new("Roast Batches", "qr_code_2", "/admin/batches", BadgeKey: BadgeKeys.ScanAlerts)
         ]),
         new("Content",
         [
@@ -156,8 +160,9 @@
 
         OrderCountState.OnChange += HandleCountChanged;
         ReviewCountState.OnChange += HandleCountChanged;
+        ScanAlertState.OnChange += HandleCountChanged;
 
-        await Task.WhenAll(OrderCountState.RefreshAsync(), ReviewCountState.RefreshAsync());
+        await Task.WhenAll(OrderCountState.RefreshAsync(), ReviewCountState.RefreshAsync(), ScanAlertState.RefreshAsync());
     }
 
     public void Dispose()
@@ -165,6 +170,7 @@
         Navigation.LocationChanged -= HandleLocationChanged;
         OrderCountState.OnChange -= HandleCountChanged;
         ReviewCountState.OnChange -= HandleCountChanged;
+        ScanAlertState.OnChange -= HandleCountChanged;
     }
 
     // Raised from the state's own LocationChanged handler, so hop back onto the renderer.
@@ -174,6 +180,7 @@
     {
         BadgeKeys.NewOrders => OrderCountState.Count,
         BadgeKeys.PendingReviews => ReviewCountState.Count,
+        BadgeKeys.ScanAlerts => ScanAlertState.Count,
         _ => 0
     };
 

@@ -1,0 +1,744 @@
+@using System.Globalization
+@using NieFarm.Application.Features.Admin.Products.Dtos
+@using NieFarm.Application.Features.Admin.Products.Queries
+@using NieFarm.Application.Features.Admin.RoastBatches.Commands
+@using NieFarm.Application.Features.Admin.RoastBatches.Dtos
+@using NieFarm.Application.Features.Admin.RoastBatches.Queries
+@using NieFarm.Application.Features.Shipping
+@using NieFarm.Domain.Entities
+@using NieFarm.Domain.Enums
+@inject ISender Sender
+
+@if (_visible)
+{
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="batch-form-title">
+        <div class="admin-modal__dialog admin-modal__dialog--wide">
+            <div class="admin-modal__head">
+                <h2 id="batch-form-title">@(_model.Id is null ? "Add Roast Batch" : $"Edit Roast Batch {_model.CodeDisplay}")</h2>
+                <button class="btn-icon" type="button" title="Close" @onclick="CancelAsync">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="admin-tabs" role="tablist" aria-label="Batch form sections">
+                @foreach (var tab in Tabs)
+                {
+                    // The label tab only exists once the batch is saved: before that there is no code to print.
+                    if (tab.Key == FormTab.Label && _model.Id is null)
+                        continue;
+
+                    var isActive = _activeTab == tab.Key;
+                    <button type="button" role="tab"
+                            id="@($"batch-tab-{tab.Key}")"
+                            class="admin-tab @(isActive ? "is-active" : null)"
+                            aria-selected="@(isActive ? "true" : "false")"
+                            aria-controls="@($"batch-pane-{tab.Key}")"
+                            @onclick="() => _activeTab = tab.Key">
+                        @tab.Label
+                    </button>
+                }
+            </div>
+
+            <div class="admin-modal__body">
+                @if (_errors.Count > 0)
+                {
+                    <div class="form-alert form-alert--error">
+                        @foreach (var error in _errors)
+                        {
+                            <div>@error</div>
+                        }
+                    </div>
+                }
+
+                @* ---------------- General ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.General ? "is-active" : null)"
+                     id="batch-pane-General" role="tabpanel" aria-labelledby="batch-tab-General">
+                    <div class="form-alert form-alert--info">
+                        Everything except <em>Internal note</em> and <em>Pack count</em> is shown to the public on the
+                        traceability page. Do not enter phone numbers, purchase prices or contract terms.
+                        Fields left empty are simply not shown.
+                    </div>
+
+                    <div class="form-grid form-grid--2" style="margin-top:16px;">
+                        <div>
+                            <label class="form-label-admin" for="b-product">Product *</label>
+                            <select id="b-product" class="form-control-admin" @bind="_model.ProductId">
+                                <option value="0">Select a product…</option>
+                                @foreach (var product in _products)
+                                {
+                                    <option value="@product.Id">@product.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-roast-date">Roast date *</label>
+                            <DateInput Id="b-roast-date" @bind-Value="_model.RoastDate" Group="_dates" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-best-before">Best before</label>
+                            <DateInput Id="b-best-before" @bind-Value="_model.BestBefore" Group="_dates" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-weight">Net weight per pack (g)</label>
+                            <input id="b-weight" class="form-control-admin" type="number" min="1" max="@RoastBatch.MaxNetWeightGrams" @bind="_model.NetWeightGrams" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-peak-from">Best flavour from (days after roast)</label>
+                            <input id="b-peak-from" class="form-control-admin" type="number" min="0" max="@RoastBatch.MaxPeakDays" @bind="_model.PeakFromDays" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-peak-to">Best flavour until (days after roast)</label>
+                            <input id="b-peak-to" class="form-control-admin" type="number" min="0" max="@RoastBatch.MaxPeakDays" @bind="_model.PeakToDays" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-packs">Pack count (admin only)</label>
+                            <input id="b-packs" class="form-control-admin" type="number" min="1" max="@RoastBatch.MaxPackCount" @bind="_model.PackCount" />
+                            <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                                Used to flag unusual scan activity: far more scans than packs printed.
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:flex-end;">
+                            <label class="form-check-admin">
+                                <input type="checkbox" @bind="_model.IsPublished" /> Published (the public page is visible)
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (_wasPublished && !_model.IsPublished)
+                    {
+                        <div class="form-alert form-alert--warning" style="margin-top:12px;">
+                            This batch is published and its QR codes may already be on printed packs. Unpublishing it makes
+                            those labels show "page not found".
+                        </div>
+                    }
+
+                    <div style="margin-top:16px;">
+                        <label class="form-label-admin" for="b-note">Internal note (admin only)</label>
+                        <textarea id="b-note" class="form-control-admin" rows="2"
+                                  maxlength="@RoastBatch.InternalNoteMaxLength" @bind="_model.InternalNote"></textarea>
+                    </div>
+                </div>
+
+                @* ---------------- Origin ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.Origin ? "is-active" : null)"
+                     id="batch-pane-Origin" role="tabpanel" aria-labelledby="batch-tab-Origin">
+                    <div class="form-grid form-grid--2">
+                        <div>
+                            <label class="form-label-admin" for="b-farm">Farm name</label>
+                            <input id="b-farm" class="form-control-admin" maxlength="@RoastBatch.FarmNameMaxLength" @bind="_model.FarmName" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-variety">Variety</label>
+                            <input id="b-variety" class="form-control-admin" maxlength="@RoastBatch.VarietyMaxLength" @bind="_model.Variety"
+                                   placeholder="e.g. Catimor, Bourbon" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-province">Province</label>
+                            <input id="b-province" class="form-control-admin" list="b-province-list"
+                                   maxlength="@RoastBatch.OriginProvinceMaxLength" @bind="_model.Province" />
+                            <datalist id="b-province-list">
+                                @foreach (var province in VietnamProvinceCatalog.All)
+                                {
+                                    <option value="@province.Name"></option>
+                                }
+                            </datalist>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-commune">Commune / ward</label>
+                            <input id="b-commune" class="form-control-admin" maxlength="@RoastBatch.OriginCommuneMaxLength" @bind="_model.Commune" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-locality">Locality (village, hamlet)</label>
+                            <input id="b-locality" class="form-control-admin" maxlength="@RoastBatch.OriginLocalityMaxLength" @bind="_model.Locality" />
+                        </div>
+                        <div class="form-grid form-grid--2" style="gap:12px;">
+                            <div>
+                                <label class="form-label-admin" for="b-alt-min">Altitude from (m)</label>
+                                <input id="b-alt-min" class="form-control-admin" type="number" min="0" max="@RoastBatch.MaxAltitudeMeters" @bind="_model.AltitudeMinMeters" />
+                            </div>
+                            <div>
+                                <label class="form-label-admin" for="b-alt-max">to (m)</label>
+                                <input id="b-alt-max" class="form-control-admin" type="number" min="0" max="@RoastBatch.MaxAltitudeMeters" @bind="_model.AltitudeMaxMeters" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-season">Harvest season</label>
+                            <input id="b-season" class="form-control-admin" maxlength="@RoastBatch.HarvestSeasonMaxLength" @bind="_model.HarvestSeason"
+                                   placeholder="e.g. 2025/26" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-harvest-method">Harvest method</label>
+                            <input id="b-harvest-method" class="form-control-admin" maxlength="@RoastBatch.HarvestMethodMaxLength" @bind="_model.HarvestMethod" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-harvest-from">Harvested from</label>
+                            <DateInput Id="b-harvest-from" @bind-Value="_model.HarvestedFrom" Group="_dates" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-harvest-to">Harvested until</label>
+                            <DateInput Id="b-harvest-to" @bind-Value="_model.HarvestedTo" Group="_dates" />
+                        </div>
+                    </div>
+
+                    <div style="margin-top:16px;">
+                        <label class="form-label-admin" for="b-story">Farm story</label>
+                        <textarea id="b-story" class="form-control-admin" rows="4"
+                                  maxlength="@RoastBatch.FarmStoryMaxLength" @bind="_model.FarmStory"></textarea>
+                        <div class="cell-muted" style="font-size:12px;margin-top:4px;">
+                            Plain text; a blank line starts a new paragraph. @(_model.FarmStory?.Length ?? 0) / @RoastBatch.FarmStoryMaxLength
+                        </div>
+                    </div>
+
+                    <div style="margin-top:16px;max-width:420px;">
+                        @* Unmounted with the modal so each open gets a fresh InputFile. *@
+                        <SingleImageField @ref="_farmImageField"
+                                          Label="Farm photo (optional)"
+                                          Subfolder="@RoastBatchImageLimits.Subfolder"
+                                          MaxBytes="RoastBatchImageLimits.MaxImageBytes"
+                                          AllowedContentTypes="RoastBatchImageLimits.AllowedContentTypes"
+                                          Value="@_model.FarmImageUrl"
+                                          ValueChanged="url => _model.FarmImageUrl = url"
+                                          PersistedValue="@_persistedFarmImageUrl"
+                                          Disabled="_saving"
+                                          UploadingChanged="value => _uploadingFarm = value" />
+                    </div>
+                </div>
+
+                @* ---------------- Process ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.Process ? "is-active" : null)"
+                     id="batch-pane-Process" role="tabpanel" aria-labelledby="batch-tab-Process">
+                    <h3 class="form-section-title">Processing</h3>
+                    <div class="form-grid form-grid--2">
+                        <div>
+                            <label class="form-label-admin" for="b-proc">Method</label>
+                            <select id="b-proc" class="form-control-admin" @bind="_model.ProcessingMethod">
+                                <option value="">Not specified</option>
+                                @foreach (var method in Enum.GetValues<CoffeeProcessingMethod>())
+                                {
+                                    <option value="@method">@Humanize(method.ToString())</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-proc-note">Processing note</label>
+                            <input id="b-proc-note" class="form-control-admin" maxlength="@RoastBatch.ProcessingNoteMaxLength" @bind="_model.ProcessingNote" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-ferment">Fermentation (hours)</label>
+                            <input id="b-ferment" class="form-control-admin" type="number" min="0" max="@RoastBatch.MaxFermentationHours" @bind="_model.FermentationHours" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-dry-days">Drying (days)</label>
+                            <input id="b-dry-days" class="form-control-admin" type="number" min="0" max="@RoastBatch.MaxDryingDays" @bind="_model.DryingDays" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-dry-method">Drying method</label>
+                            <input id="b-dry-method" class="form-control-admin" maxlength="@RoastBatch.DryingMethodMaxLength" @bind="_model.DryingMethod" />
+                        </div>
+                    </div>
+
+                    <h3 class="form-section-title">Roasting</h3>
+                    <div class="form-grid form-grid--2">
+                        <div>
+                            <label class="form-label-admin" for="b-roast-level">Roast level</label>
+                            <select id="b-roast-level" class="form-control-admin" @bind="_model.RoastLevel">
+                                <option value="">Not specified</option>
+                                @foreach (var level in Enum.GetValues<RoastLevel>())
+                                {
+                                    <option value="@level">@Humanize(level.ToString())</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-roaster">Roaster</label>
+                            <input id="b-roaster" class="form-control-admin" maxlength="@RoastBatch.RoasterNameMaxLength" @bind="_model.RoasterName" />
+                        </div>
+                        <div style="grid-column:1 / -1;">
+                            <label class="form-label-admin" for="b-roast-note">Roast note</label>
+                            <input id="b-roast-note" class="form-control-admin" maxlength="@RoastBatch.RoastNoteMaxLength" @bind="_model.RoastNote" />
+                        </div>
+                    </div>
+
+                    <h3 class="form-section-title">Packing</h3>
+                    <div class="form-grid form-grid--2">
+                        <div>
+                            <label class="form-label-admin" for="b-packed">Packed on</label>
+                            <DateInput Id="b-packed" @bind-Value="_model.PackedOn" Group="_dates" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-pack-note">Packaging note</label>
+                            <input id="b-pack-note" class="form-control-admin" maxlength="@RoastBatch.PackagingNoteMaxLength" @bind="_model.PackagingNote" />
+                        </div>
+                        <div>
+                            <label class="form-check-admin"><input type="checkbox" @bind="_model.HasOneWayValve" /> One-way degassing valve</label>
+                        </div>
+                        <div>
+                            <label class="form-check-admin"><input type="checkbox" @bind="_model.IsNitrogenFlushed" /> Nitrogen flushed</label>
+                        </div>
+                    </div>
+                </div>
+
+                @* ---------------- Quality ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.Quality ? "is-active" : null)"
+                     id="batch-pane-Quality" role="tabpanel" aria-labelledby="batch-tab-Quality">
+                    <div class="form-grid form-grid--2">
+                        <div>
+                            <label class="form-label-admin" for="b-score">Cupping score (SCA, 0 to 100)</label>
+                            <input id="b-score" class="form-control-admin" type="number" min="0" max="100" step="0.25"
+                                   @bind="_model.CuppingScore" @bind:culture="CultureInfo.InvariantCulture" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-cupped-by">Cupped by</label>
+                            <input id="b-cupped-by" class="form-control-admin" maxlength="@RoastBatch.CuppedByMaxLength" @bind="_model.CuppedBy" />
+                        </div>
+                        <div style="grid-column:1 / -1;">
+                            <label class="form-label-admin" for="b-flavour">Flavour notes (comma separated)</label>
+                            <input id="b-flavour" class="form-control-admin" maxlength="@RoastBatch.FlavourNotesMaxLength" @bind="_model.FlavourNotes"
+                                   placeholder="Honey, Dark chocolate, Orange" />
+                            <div class="cell-muted" style="font-size:12px;margin-top:4px;">The first note is shown large on the page.</div>
+                        </div>
+                    </div>
+
+                    <h3 class="form-section-title">Sensory scales (1 to 5)</h3>
+                    <div class="form-grid form-grid--2">
+                        <div>
+                            <label class="form-label-admin" for="b-acidity">Acidity</label>
+                            <select id="b-acidity" class="form-control-admin" @bind="_model.AcidityLevel">@LevelOptions</select>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-body">Body</label>
+                            <select id="b-body" class="form-control-admin" @bind="_model.BodyLevel">@LevelOptions</select>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-sweet">Sweetness</label>
+                            <select id="b-sweet" class="form-control-admin" @bind="_model.SweetnessLevel">@LevelOptions</select>
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-bitter">Bitterness</label>
+                            <select id="b-bitter" class="form-control-admin" @bind="_model.BitternessLevel">@LevelOptions</select>
+                        </div>
+                    </div>
+
+                    <h3 class="form-section-title">Technical figures</h3>
+                    <div class="form-grid form-grid--2">
+                        <div>
+                            <label class="form-label-admin" for="b-moisture">Moisture (%)</label>
+                            <input id="b-moisture" class="form-control-admin" type="number" min="0" max="20" step="0.1"
+                                   @bind="_model.MoisturePercent" @bind:culture="CultureInfo.InvariantCulture" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-screen">Screen size</label>
+                            <input id="b-screen" class="form-control-admin" maxlength="@RoastBatch.ScreenSizeMaxLength" @bind="_model.ScreenSize" placeholder="e.g. 16-18" />
+                        </div>
+                        <div>
+                            <label class="form-label-admin" for="b-defects">Defect rate (%)</label>
+                            <input id="b-defects" class="form-control-admin" type="number" min="0" max="100" step="0.1"
+                                   @bind="_model.DefectRatePercent" @bind:culture="CultureInfo.InvariantCulture" />
+                        </div>
+                    </div>
+
+                    <div style="margin-top:16px;max-width:420px;">
+                        <SingleImageField @ref="_labImageField"
+                                          Label="Lab report photo (optional)"
+                                          Subfolder="@RoastBatchImageLimits.Subfolder"
+                                          MaxBytes="RoastBatchImageLimits.MaxImageBytes"
+                                          AllowedContentTypes="RoastBatchImageLimits.AllowedContentTypes"
+                                          Value="@_model.LabReportImageUrl"
+                                          ValueChanged="url => _model.LabReportImageUrl = url"
+                                          PersistedValue="@_persistedLabImageUrl"
+                                          Disabled="_saving"
+                                          UploadingChanged="value => _uploadingLab = value" />
+                    </div>
+
+                    <h3 class="form-section-title">Certifications (max @RoastBatch.MaxCertifications)</h3>
+                    @foreach (var cert in _model.Certifications)
+                    {
+                        <div class="batch-row">
+                            <input class="form-control-admin" placeholder="Name, e.g. VietGAP" aria-label="Certification name"
+                                   maxlength="@RoastBatchCertification.NameMaxLength" @bind="cert.Name" />
+                            <input class="form-control-admin" placeholder="Number (optional)" aria-label="Certification number"
+                                   maxlength="@RoastBatchCertification.NumberMaxLength" @bind="cert.Number" />
+                            <button class="btn-icon btn-icon--danger" type="button" title="Remove certification"
+                                    @onclick="() => _model.Certifications.Remove(cert)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                            </button>
+                        </div>
+                    }
+                    <button class="btn-admin-outline" type="button" disabled="@(_model.Certifications.Count >= RoastBatch.MaxCertifications)"
+                            @onclick="() => _model.Certifications.Add(new())">
+                        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add certification
+                    </button>
+                </div>
+
+                @* ---------------- Brewing ---------------- *@
+                <div class="admin-tab-pane @(_activeTab == FormTab.Brewing ? "is-active" : null)"
+                     id="batch-pane-Brewing" role="tabpanel" aria-labelledby="batch-tab-Brewing">
+                    <div>
+                        <label class="form-label-admin" for="b-storage">Storage tip</label>
+                        <textarea id="b-storage" class="form-control-admin" rows="2"
+                                  maxlength="@RoastBatch.StorageTipMaxLength" @bind="_model.StorageTip"></textarea>
+                    </div>
+
+                    <h3 class="form-section-title">Brew guides (max @RoastBatch.MaxBrewGuides, one per method)</h3>
+                    @foreach (var guide in _model.Guides)
+                    {
+                        <div class="batch-guide">
+                            <div class="form-grid form-grid--2">
+                                <div>
+                                    <label class="form-label-admin">Method</label>
+                                    <select class="form-control-admin" @bind="guide.Method">
+                                        @foreach (var method in Enum.GetValues<BrewMethod>())
+                                        {
+                                            <option value="@method">@Humanize(method.ToString())</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label-admin">Ratio (coffee : water)</label>
+                                    <input class="form-control-admin" placeholder="1:15" maxlength="@RoastBatchBrewGuide.RatioMaxLength" @bind="guide.Ratio" />
+                                </div>
+                                <div>
+                                    <label class="form-label-admin">Water temperature (C)</label>
+                                    <input class="form-control-admin" type="number" min="0" max="@RoastBatchBrewGuide.MaxWaterTempCelsius" @bind="guide.WaterTempCelsius" />
+                                </div>
+                                <div>
+                                    <label class="form-label-admin">Brew time</label>
+                                    <input class="form-control-admin" placeholder="3 phút 30 giây" maxlength="@RoastBatchBrewGuide.BrewTimeMaxLength" @bind="guide.BrewTime" />
+                                </div>
+                                <div style="grid-column:1 / -1;">
+                                    <label class="form-label-admin">Note</label>
+                                    <input class="form-control-admin" maxlength="@RoastBatchBrewGuide.NoteMaxLength" @bind="guide.Note" />
+                                </div>
+                            </div>
+                            <button class="btn-admin-outline" type="button" style="margin-top:8px;" @onclick="() => _model.Guides.Remove(guide)">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span> Remove guide
+                            </button>
+                        </div>
+                    }
+                    <button class="btn-admin-outline" type="button" disabled="@(_model.Guides.Count >= RoastBatch.MaxBrewGuides)"
+                            @onclick="AddGuide">
+                        <span class="material-symbols-outlined" aria-hidden="true">add</span> Add brew guide
+                    </button>
+                </div>
+
+                @* ---------------- Label ---------------- *@
+                @if (_model.Id is { } savedId)
+                {
+                    <div class="admin-tab-pane @(_activeTab == FormTab.Label ? "is-active" : null)"
+                         id="batch-pane-Label" role="tabpanel" aria-labelledby="batch-tab-Label">
+                        <RoastBatchLabelPanel BatchId="savedId" Code="@_model.Code" CodeDisplay="@_model.CodeDisplay"
+                                              IsPublished="_wasPublished" />
+                    </div>
+                }
+            </div>
+
+            <div class="admin-modal__foot">
+                <button class="btn-admin-outline" type="button" @onclick="CancelAsync" disabled="@_saving">Cancel</button>
+                <button class="btn-admin" type="button" @onclick="SaveAsync" disabled="@(_saving || _uploadingFarm || _uploadingLab)">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private enum FormTab { General, Origin, Process, Quality, Brewing, Label }
+
+    private static readonly (FormTab Key, string Label)[] Tabs =
+    [
+        (FormTab.General, "General"),
+        (FormTab.Origin, "Origin"),
+        (FormTab.Process, "Process"),
+        (FormTab.Quality, "Quality"),
+        (FormTab.Brewing, "Brewing"),
+        (FormTab.Label, "Label")
+    ];
+
+    private sealed class CertModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Number { get; set; }
+    }
+
+    private sealed class GuideModel
+    {
+        public BrewMethod Method { get; set; }
+        public string? Ratio { get; set; }
+        public int? WaterTempCelsius { get; set; }
+        public string? BrewTime { get; set; }
+        public string? Note { get; set; }
+    }
+
+    private sealed class FormModel
+    {
+        public int? Id { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string CodeDisplay { get; set; } = string.Empty;
+        public int ProductId { get; set; }
+        public bool IsPublished { get; set; }
+
+        public DateOnly RoastDate { get; set; } = DateOnly.FromDateTime(VnToday());
+        public DateOnly? BestBefore { get; set; }
+        public int? PeakFromDays { get; set; }
+        public int? PeakToDays { get; set; }
+        public int? NetWeightGrams { get; set; }
+        public int? PackCount { get; set; }
+        public string? InternalNote { get; set; }
+
+        public string? Province { get; set; }
+        public string? Commune { get; set; }
+        public string? Locality { get; set; }
+        public int? AltitudeMinMeters { get; set; }
+        public int? AltitudeMaxMeters { get; set; }
+        public string? Variety { get; set; }
+        public string? FarmName { get; set; }
+        public string? FarmStory { get; set; }
+        public string FarmImageUrl { get; set; } = string.Empty;
+        public string? HarvestSeason { get; set; }
+        public DateOnly? HarvestedFrom { get; set; }
+        public DateOnly? HarvestedTo { get; set; }
+        public string? HarvestMethod { get; set; }
+
+        public CoffeeProcessingMethod? ProcessingMethod { get; set; }
+        public string? ProcessingNote { get; set; }
+        public int? FermentationHours { get; set; }
+        public int? DryingDays { get; set; }
+        public string? DryingMethod { get; set; }
+        public RoastLevel? RoastLevel { get; set; }
+        public string? RoasterName { get; set; }
+        public string? RoastNote { get; set; }
+        public DateOnly? PackedOn { get; set; }
+        public bool HasOneWayValve { get; set; }
+        public bool IsNitrogenFlushed { get; set; }
+        public string? PackagingNote { get; set; }
+
+        public decimal? CuppingScore { get; set; }
+        public string? CuppedBy { get; set; }
+        public string? FlavourNotes { get; set; }
+        public int? AcidityLevel { get; set; }
+        public int? BodyLevel { get; set; }
+        public int? SweetnessLevel { get; set; }
+        public int? BitternessLevel { get; set; }
+        public decimal? MoisturePercent { get; set; }
+        public string? ScreenSize { get; set; }
+        public decimal? DefectRatePercent { get; set; }
+        public string LabReportImageUrl { get; set; } = string.Empty;
+        public List<CertModel> Certifications { get; set; } = [];
+
+        public string? StorageTip { get; set; }
+        public List<GuideModel> Guides { get; set; } = [];
+    }
+
+    private FormModel _model = new();
+    private List<ProductAdminListDto> _products = [];
+    private SingleImageField? _farmImageField;
+    private SingleImageField? _labImageField;
+    private string _persistedFarmImageUrl = string.Empty;
+    private string _persistedLabImageUrl = string.Empty;
+    private List<string> _errors = [];
+
+    private FormTab _activeTab = FormTab.General;
+    private bool _visible;
+    private readonly DateInputGroup _dates = new();
+    private bool _saving;
+    private bool _uploadingFarm;
+    private bool _uploadingLab;
+    private bool _wasPublished;
+
+    // The sensory selects share their option list.
+    private static readonly RenderFragment LevelOptions = @<text>
+        <option value="">Not specified</option>
+        @for (var level = 1; level <= 5; level++)
+        {
+            <option value="@level">@level</option>
+        }
+    </text>;
+
+    private static DateTime VnToday() => NieFarm.Web.Content.VnTime.FromUtc(DateTime.UtcNow);
+
+    private static string Humanize(string name)
+    {
+        // "MediumLight" -> "Medium light", "PourOver" -> "Pour over".
+        var text = System.Text.RegularExpressions.Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", " ");
+        return text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..].ToLowerInvariant();
+    }
+
+    public async Task OpenForCreateAsync()
+    {
+        await LoadProductsAsync();
+        _model = new FormModel();
+        _persistedFarmImageUrl = string.Empty;
+        _persistedLabImageUrl = string.Empty;
+        _wasPublished = false;
+        _errors = [];
+        _activeTab = FormTab.General;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    public async Task OpenForEditAsync(int id, bool labelTab = false)
+    {
+        var batch = await Sender.Send(new GetRoastBatchForEditQuery(id));
+        if (batch is null)
+            return;
+
+        await LoadProductsAsync();
+
+        var g = batch.General;
+        var o = batch.Origin;
+        var p = batch.Process;
+        var q = batch.Quality;
+        _model = new FormModel
+        {
+            Id = batch.Id,
+            Code = batch.Code,
+            CodeDisplay = batch.CodeDisplay,
+            ProductId = batch.ProductId,
+            IsPublished = batch.IsPublished,
+            RoastDate = g.RoastDate,
+            BestBefore = g.BestBefore,
+            PeakFromDays = g.PeakFromDays,
+            PeakToDays = g.PeakToDays,
+            NetWeightGrams = g.NetWeightGrams,
+            PackCount = g.PackCount,
+            InternalNote = g.InternalNote,
+            Province = o.Province,
+            Commune = o.Commune,
+            Locality = o.Locality,
+            AltitudeMinMeters = o.AltitudeMinMeters,
+            AltitudeMaxMeters = o.AltitudeMaxMeters,
+            Variety = o.Variety,
+            FarmName = o.FarmName,
+            FarmStory = o.FarmStory,
+            FarmImageUrl = o.FarmImageUrl ?? string.Empty,
+            HarvestSeason = o.HarvestSeason,
+            HarvestedFrom = o.HarvestedFrom,
+            HarvestedTo = o.HarvestedTo,
+            HarvestMethod = o.HarvestMethod,
+            ProcessingMethod = p.ProcessingMethod,
+            ProcessingNote = p.ProcessingNote,
+            FermentationHours = p.FermentationHours,
+            DryingDays = p.DryingDays,
+            DryingMethod = p.DryingMethod,
+            RoastLevel = p.RoastLevel,
+            RoasterName = p.RoasterName,
+            RoastNote = p.RoastNote,
+            PackedOn = p.PackedOn,
+            HasOneWayValve = p.HasOneWayValve,
+            IsNitrogenFlushed = p.IsNitrogenFlushed,
+            PackagingNote = p.PackagingNote,
+            CuppingScore = q.CuppingScore,
+            CuppedBy = q.CuppedBy,
+            FlavourNotes = q.FlavourNotes,
+            AcidityLevel = q.AcidityLevel,
+            BodyLevel = q.BodyLevel,
+            SweetnessLevel = q.SweetnessLevel,
+            BitternessLevel = q.BitternessLevel,
+            MoisturePercent = q.MoisturePercent,
+            ScreenSize = q.ScreenSize,
+            DefectRatePercent = q.DefectRatePercent,
+            LabReportImageUrl = q.LabReportImageUrl ?? string.Empty,
+            Certifications = q.Certifications.Select(c => new CertModel { Name = c.Name, Number = c.Number }).ToList(),
+            StorageTip = batch.Brewing.StorageTip,
+            Guides = batch.Brewing.Guides.Select(x => new GuideModel
+            {
+                Method = x.Method,
+                Ratio = x.Ratio,
+                WaterTempCelsius = x.WaterTempCelsius,
+                BrewTime = x.BrewTime,
+                Note = x.Note
+            }).ToList()
+        };
+
+        _persistedFarmImageUrl = _model.FarmImageUrl;
+        _persistedLabImageUrl = _model.LabReportImageUrl;
+        _wasPublished = batch.IsPublished;
+        _errors = [];
+        _activeTab = labelTab ? FormTab.Label : FormTab.General;
+        _visible = true;
+        StateHasChanged();
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        if (_products.Count == 0)
+            _products = (await Sender.Send(new GetProductsAdminQuery())).OrderBy(p => p.Name).ToList();
+    }
+
+    private void AddGuide()
+    {
+        // Offer the first method that does not have a guide yet (the server keeps one guide per method).
+        var free = Enum.GetValues<BrewMethod>().FirstOrDefault(m => _model.Guides.All(g => g.Method != m));
+        _model.Guides.Add(new GuideModel { Method = free == default ? BrewMethod.Phin : free });
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+
+        try
+        {
+            if (_dates.HasInvalid)
+            {
+                _errors = ["Fix the highlighted date fields (dd/MM/yyyy)."];
+                return;
+            }
+
+            var m = _model;
+            var command = new SaveRoastBatchCommand(
+                m.Id,
+                m.ProductId,
+                m.IsPublished,
+                new RoastBatchGeneralInput(m.RoastDate, m.BestBefore, m.PeakFromDays, m.PeakToDays, m.NetWeightGrams, m.PackCount, m.InternalNote),
+                new RoastBatchOriginInput(m.Province, m.Commune, m.Locality, m.AltitudeMinMeters, m.AltitudeMaxMeters, m.Variety, m.FarmName,
+                    m.FarmStory, m.FarmImageUrl, m.HarvestSeason, m.HarvestedFrom, m.HarvestedTo, m.HarvestMethod),
+                new RoastBatchProcessInput(m.ProcessingMethod, m.ProcessingNote, m.FermentationHours, m.DryingDays, m.DryingMethod,
+                    m.RoastLevel, m.RoasterName, m.RoastNote, m.PackedOn, m.HasOneWayValve, m.IsNitrogenFlushed, m.PackagingNote),
+                new RoastBatchQualityInput(m.CuppingScore, m.CuppedBy, m.FlavourNotes, ToLevel(m.AcidityLevel), ToLevel(m.BodyLevel),
+                    ToLevel(m.SweetnessLevel), ToLevel(m.BitternessLevel), m.MoisturePercent, m.ScreenSize, m.DefectRatePercent,
+                    m.LabReportImageUrl,
+                    m.Certifications.Where(c => !string.IsNullOrWhiteSpace(c.Name)).Select(c => new RoastBatchCertificationInput(c.Name, c.Number)).ToList()),
+                new RoastBatchBrewingInput(m.StorageTip,
+                    m.Guides.Select(g => new RoastBatchBrewGuideInput(g.Method, g.Ratio, g.WaterTempCelsius, g.BrewTime, g.Note)).ToList()));
+
+            var result = await Sender.Send(command);
+            if (!result.IsSuccess)
+            {
+                _errors = result.ValidationErrors.Select(e => e.ErrorMessage)
+                    .Concat(result.Errors)
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .DefaultIfEmpty("Could not save the batch.")
+                    .ToList();
+                return;
+            }
+
+            // The uploads are stored values now, so the fields must not treat them as orphans.
+            _persistedFarmImageUrl = _model.FarmImageUrl;
+            _persistedLabImageUrl = _model.LabReportImageUrl;
+
+            _visible = false;
+            await OnSaved.InvokeAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private static byte? ToLevel(int? value) => value is >= 1 and <= 5 ? (byte)value.Value : null;
+
+    private async Task CancelAsync()
+    {
+        // Removes uploads that were never persisted, before the fields unmount.
+        if (_farmImageField is not null)
+            await _farmImageField.DiscardAsync();
+        if (_labImageField is not null)
+            await _labImageField.DiscardAsync();
+
+        _visible = false;
+    }
+}

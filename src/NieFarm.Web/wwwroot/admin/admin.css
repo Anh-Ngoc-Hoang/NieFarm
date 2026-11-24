@@ -1339,6 +1339,122 @@ textarea.form-control-admin {
     content: "An error has occurred.";
 }
 
+/* ---------------------------------------------------------------------
+   Roast batches (R-26): form alerts, repeated rows, the QR / label panel
+   --------------------------------------------------------------------- */
+
+.form-alert--warning {
+    background: rgba(180, 83, 9, 0.10);
+    color: var(--admin-warning);
+}
+
+.form-alert--info {
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent);
+}
+
+.cell-mono {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.admin-app .row-actions a.btn-icon {
+    text-decoration: none;
+}
+
+.admin-app .form-section-title {
+    margin: 24px 0 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--admin-border);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.admin-app .form-section-title:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.admin-app .batch-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.admin-app .batch-guide {
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius);
+}
+
+.admin-app .qr-panel {
+    display: grid;
+    gap: 20px;
+}
+
+.admin-app .qr-preview {
+    justify-self: start;
+    padding: 8px;
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius);
+    background: #fff;
+    line-height: 0;
+}
+
+.admin-app .qr-preview img {
+    display: block;
+    width: 220px;
+    max-width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+}
+
+.admin-app .qr-panel__facts {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+.admin-app .qr-panel__facts dt {
+    font-size: 12px;
+    color: var(--admin-text-muted);
+}
+
+.admin-app .qr-panel__facts dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.admin-app .qr-panel__h {
+    margin: 20px 0 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.admin-app .qr-panel__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.admin-app .qr-panel__row a {
+    text-decoration: none;
+}
+
+@media (min-width: 720px) {
+    .admin-app .qr-panel {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+    }
+}
+
 /* ---------- Date input (dd/MM/yyyy text box + native calendar picker) ---------- */
 .admin-app .date-input {
     position: relative;

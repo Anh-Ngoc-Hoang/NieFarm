@@ -1,0 +1,96 @@
+@using NieFarm.Web.Content
+@using NieFarm.Web.Services.Traceability
+@inject PublicUrls PublicUrls
+
+@* The "Label" tab of the batch form (R-26): the QR for this batch and the downloads. The QR always points at
+   Site:PublicBaseUrl (configuration), never at the address the admin is browsing from. The downloads are plain GETs
+   served by RoastBatchLabelEndpoints, so they need no circuit round trip and stay admin-only through the role policy. *@
+
+@if (!PublicUrls.TryGetTraceUrl(Code, out var url))
+{
+    <div class="form-alert form-alert--error">
+        <strong>The public address is not configured.</strong>
+        Set <code>Site:PublicBaseUrl</code> (for example <code>https://niefarm.vn</code>); QR codes and labels
+        cannot be generated until then.
+    </div>
+}
+else
+{
+    <div class="qr-panel">
+        <div class="qr-preview">
+            <img src="@QrMatrix.Create(url).ToPngDataUri(8)" width="220" height="220"
+                 alt="QR code of batch @CodeDisplay" />
+        </div>
+
+        <div class="qr-panel__body">
+            <dl class="qr-panel__facts">
+                <div><dt>Batch code</dt><dd class="cell-mono">@CodeDisplay</dd></div>
+                <div><dt>The QR opens</dt><dd class="cell-mono">@url</dd></div>
+            </dl>
+
+            @if (!IsPublished)
+            {
+                <div class="form-alert form-alert--warning">
+                    This batch is a draft. A printed label will show "page not found" until it is published.
+                </div>
+            }
+
+            <h3 class="qr-panel__h">QR image</h3>
+            <div class="qr-panel__row">
+                <a class="btn-admin-outline" href="/api/admin/batches/@BatchId/qr.png" download>Download PNG</a>
+                <a class="btn-admin-outline" href="/api/admin/batches/@BatchId/qr.svg" download>Download SVG</a>
+            </div>
+
+            <h3 class="qr-panel__h">Printable label (PDF)</h3>
+            <div class="form-grid form-grid--2">
+                <div>
+                    <label class="form-label-admin" for="lbl-layout">Layout</label>
+                    <select id="lbl-layout" class="form-control-admin" @bind="_layout">
+                        <option value="single">One label per page, 50 x 30 mm</option>
+                        <option value="a4">A4 sheet, 3 x 7 labels of 63.5 x 38.1 mm</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label-admin" for="lbl-copies">Copies</label>
+                    <input id="lbl-copies" class="form-control-admin" type="number" min="1" max="420" @bind="_copies" />
+                </div>
+                @if (_layout == "a4")
+                {
+                    <div>
+                        <label class="form-label-admin" for="lbl-skip">Skip labels already used</label>
+                        <input id="lbl-skip" class="form-control-admin" type="number" min="0" max="20" @bind="_skip" />
+                    </div>
+                }
+            </div>
+
+            <div class="qr-panel__row">
+                <a class="btn-admin" href="@PdfHref()" download>Download label PDF</a>
+            </div>
+            <p class="cell-muted" style="font-size:12px;margin:8px 0 0;">
+                Print at 100% / Actual size (turn off "fit to page"), otherwise the QR comes out smaller than designed.
+                Scan a printed test label with a phone before printing a whole roll.
+            </p>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public int BatchId { get; set; }
+    [Parameter, EditorRequired] public string Code { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string CodeDisplay { get; set; } = string.Empty;
+    [Parameter] public bool IsPublished { get; set; }
+
+    private string _layout = "single";
+    private int _copies = 1;
+    private int _skip;
+
+    // The endpoint clamps these too; clamping here keeps the link honest while the admin types.
+    private string PdfHref()
+    {
+        var copies = Math.Clamp(_copies, 1, RoastBatchLabelPdf.MaxCopies);
+        var href = $"/api/admin/batches/{BatchId}/label.pdf?layout={_layout}&copies={copies}";
+        return _layout == "a4"
+            ? href + $"&skip={Math.Clamp(_skip, 0, RoastBatchLabelPdf.MaxSkip)}"
+            : href;
+    }
+}

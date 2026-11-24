@@ -1,0 +1,60 @@
+@page "/truy-xuat"
+@layout TraceLayout
+@attribute [ExcludeFromInteractiveRouting]
+@attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(NieFarm.Web.Endpoints.TraceabilityRateLimit.Policy)]
+@using NieFarm.Application.Features.Traceability
+@inject NavigationManager Navigation
+
+@*
+    Manual entry of a batch code (R-26 D23): a plain GET form (?ma=), static SSR. A well-formed code redirects to the
+    canonical page; a malformed one is answered here without touching the database. The typed text is never echoed
+    back (no reflected content), and the only redirect target is /truy-xuat/{normalised code}.
+*@
+
+<PageTitle>Tra cứu mã lô - Nie Farm Việt Nam</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<section class="trace-entry">
+    <div class="shell trace-entry__in">
+        <p class="eyebrow">Truy xuất nguồn gốc</p>
+        <h1>Tra cứu <span class="accent">mã lô</span></h1>
+        <p class="lede">Nhập mã lô in trên bao bì để xem nguồn gốc, hành trình và chất lượng của gói cà phê.</p>
+
+        <form class="trace-entry__form" method="get" action="/truy-xuat">
+            <label for="trace-code">Mã lô</label>
+            <input id="trace-code" name="ma" class="nf-field" type="text" inputmode="text" autocomplete="off"
+                   autocapitalize="characters" spellcheck="false" maxlength="40" placeholder="ABCD-2345-EFGH"
+                   aria-describedby="trace-code-hint@(_invalid ? " trace-code-error" : null)" />
+            <p id="trace-code-hint" class="muted trace-entry__hint">12 ký tự, ví dụ ABCD-2345-EFGH.</p>
+            @if (_invalid)
+            {
+                <p id="trace-code-error" class="trace-entry__error" role="alert">
+                    Mã lô chưa đúng định dạng. Vui lòng kiểm tra lại mã in trên bao bì.
+                </p>
+            }
+            <button type="submit" class="btn btn--red"><span>Xem nguồn gốc</span></button>
+        </form>
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "ma")] public string? Ma { get; set; }
+
+    private bool _invalid;
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrWhiteSpace(Ma))
+            return;
+
+        if (BatchCode.TryNormalise(Ma, out var code))
+        {
+            Navigation.NavigateTo($"/truy-xuat/{code}");
+            return;
+        }
+
+        _invalid = true;
+    }
+}

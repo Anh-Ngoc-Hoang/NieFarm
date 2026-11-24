@@ -1,0 +1,18 @@
+@*
+    The verification seal of the traceability hero (R-26 design brief). Two rings and a check draw themselves once
+    (the .draw group, static class, nf-motion.js adds is-in); the lettering runs round the ring as a textPath that
+    fades in after them. The ring path lives OUTSIDE the .draw group on purpose: nf-motion.js stamps pathLength="1"
+    on every path inside a .draw element, and that would rescale the textPath's own distances.
+*@
+
+<svg class="trace__seal" viewBox="0 0 120 120" role="img" aria-label="Con dấu: đã xác thực bởi NieFarm">
+    <defs>
+        <path id="trace-seal-ring" d="M60 60m-47 0a47 47 0 1 1 94 0a47 47 0 1 1-94 0" />
+    </defs>
+    <g class="draw">
+        <circle cx="60" cy="60" r="57" pathLength="1" style="--d:0s" />
+        <circle cx="60" cy="60" r="37" pathLength="1" style="--d:.25s" />
+        <path d="m45 61 10 10 20-22" pathLength="1" style="--d:.7s" />
+    </g>
+    <text class="trace__seal-text"><textPath href="#trace-seal-ring" textLength="292" lengthAdjust="spacing">ĐÃ XÁC THỰC BỞI NIEFARM · ĐÃ XÁC THỰC BỞI NIEFARM ·</textPath></text>
+</svg>

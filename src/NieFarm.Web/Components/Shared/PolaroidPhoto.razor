@@ -9,7 +9,7 @@
 
 <div class="polaroid">
     <div class="polaroid__frame">
-        <img src="@ImageUrl" alt="@ImageAlt" />
+        <img src="@ImageUrl" alt="@ImageAlt" loading="@(Lazy ? "lazy" : null)" decoding="async" />
     </div>
     <p class="polaroid__caption">@Caption</p>
 </div>
@@ -18,4 +18,7 @@
     [Parameter, EditorRequired] public string ImageUrl { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string ImageAlt { get; set; } = string.Empty;
     [Parameter, EditorRequired] public string Caption { get; set; } = string.Empty;
+
+    /// <summary>Set for photos below the first screen (R-26 traceability page).</summary>
+    [Parameter] public bool Lazy { get; set; }
 }

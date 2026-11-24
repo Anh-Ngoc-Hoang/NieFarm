@@ -1,0 +1,593 @@
+@page "/truy-xuat/{Code}"
+@layout TraceLayout
+@attribute [ExcludeFromInteractiveRouting]
+@attribute [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(NieFarm.Web.Endpoints.TraceabilityRateLimit.Policy)]
+@using NieFarm.Application.Features.Traceability.Dtos
+@using NieFarm.Application.Features.Traceability.Queries
+@using NieFarm.Web.Services.Traceability
+@inject ISender Sender
+@inject NavigationManager Navigation
+@inject BatchScanRecorder ScanRecorder
+@inject PublicUrls PublicUrls
+
+@*
+    The page behind a batch QR code (R-26, design: docs/plans/R-26-trace-page-design.md). Static SSR on purpose
+    (ExcludeFromInteractiveRouting): no circuit is opened per scan, every view is one HTTP GET that the rate limiter
+    and the scan counter see, and nothing here may rely on @onclick or a Razor class expression (accordions are
+    <details>, the sensory radar is plain SVG). Application decides which blocks exist (a null block is hidden); this
+    file only checks "is not null". All text is plain text and Razor encodes it: no MarkupString.
+    Reveal/draw hooks (data-reveal, .draw) only sit on elements with a static class attribute.
+*@
+
+@if (_dto is { } d)
+{
+    <PageTitle>Truy xuất nguồn gốc: @d.Product.Name - Nie Farm Việt Nam</PageTitle>
+    <HeadContent>
+        @* Only one HeadContent per page is rendered (the page's own wins over the layout's), so the no-JavaScript
+           fallback lives here. Without JavaScript nf-motion.js never adds .is-in, so everything that starts hidden
+           (reveals, the drawn seal and icons, the timeline rule, the radar and the bars) would stay invisible. These
+           pages are scanned from phones in the aisle; the content must read either way. !important beats the
+           media-query rules in nf-pages.css. *@
+        <noscript>
+            <style>
+                [data-reveal] { opacity: 1 !important; transform: none !important; clip-path: none !important; }
+                .draw path, .draw circle, .draw line, .draw polyline, .draw rect { stroke-dashoffset: 0 !important; }
+                .trace__step::before { transform: none !important; }
+                .trace__seal-text { opacity: 1 !important; }
+                .trace__radar-shape { transform: none !important; opacity: 1 !important; }
+                .trace__bar::after { transform: none !important; }
+            </style>
+        </noscript>
+        <meta name="robots" content="noindex, nofollow" />
+        <meta name="description" content="Nguồn gốc, hành trình và chất lượng của lô cà phê @d.Product.Name." />
+        <link rel="canonical" href="/truy-xuat/@d.Code" />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content="Truy xuất nguồn gốc: @d.Product.Name" />
+        <meta property="og:description" content="Nguồn gốc, hành trình và chất lượng của lô cà phê này." />
+        @if (OgImage(d) is { } og)
+        {
+            <meta property="og:image" content="@og" />
+        }
+    </HeadContent>
+
+    <article class="trace">
+        @* ===== 1. Hero: the passport ===== *@
+        <section class="trace__hero" aria-labelledby="trace-title">
+            <div class="shell trace__hero-in">
+                <div class="trace__hero-text" data-reveal="fade">
+                    @if (!d.IsPublished)
+                    {
+                        <p class="trace__preview" role="note">Bản xem trước, chỉ quản trị viên thấy.</p>
+                    }
+                    <p class="eyebrow">Truy xuất nguồn gốc</p>
+                    <h1 id="trace-title" class="trace__title">
+                        Hành trình của <span class="accent">@d.Product.Name</span>
+                    </h1>
+
+                    <p class="trace__verified">
+                        <NfIcon Name="check" Size="16" />
+                        <span><strong>Đã xác thực bởi NieFarm.</strong> Mã lô @d.CodeDisplay có trong hệ thống của NieFarm.</span>
+                    </p>
+
+                    <p class="trace__code">
+                        <span class="trace__code-label">Mã lô</span>
+                        <strong class="trace__code-value">@d.CodeDisplay</strong>
+                    </p>
+
+                    <dl class="trace__facts">
+                        <div>
+                            <dt>Ngày rang</dt>
+                            <dd>@TraceText.Date(d.Verification.RoastDate)</dd>
+                        </div>
+                        @if (d.Verification.BestBefore is { } bestBefore)
+                        {
+                            <div>
+                                <dt>Hạn dùng tốt nhất</dt>
+                                <dd>@TraceText.Date(bestBefore)</dd>
+                            </div>
+                        }
+                        @if (d.Verification.NetWeightGrams is { } grams)
+                        {
+                            <div>
+                                <dt>Khối lượng tịnh</dt>
+                                <dd>@TraceText.Weight(grams)</dd>
+                            </div>
+                        }
+                    </dl>
+
+                    @if (TraceText.PeakWindow(d.Verification.PeakFrom, d.Verification.PeakTo) is { } peak)
+                    {
+                        <p class="trace__peak"><NfIcon Name="clock" Size="16" /> <span>@peak</span></p>
+                    }
+
+                    <p class="trace__note">
+                        Hãy đối chiếu <strong>mã lô</strong> và <strong>ngày rang</strong> in trên bao bì với thông tin
+                        dưới đây. Nếu không khớp hoặc bao bì có dấu hiệu bất thường, vui lòng
+                        <a href="@InfoPages.ContactHref("/truy-xuat/" + d.Code)">liên hệ NieFarm</a>.
+                    </p>
+                </div>
+
+                <div class="trace__art" data-reveal="fade" style="--d:.12s">
+                    @if (d.Product.ImageUrl is { } productImage)
+                    {
+                        <div class="trace__pola">
+                            <PolaroidPhoto ImageUrl="@productImage" ImageAlt="@d.Product.ImageAlt" Caption="@d.Product.Name" />
+                        </div>
+                        <div class="trace__seal-pos">
+                            <TraceSeal />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="trace__seal-pos trace__seal-pos--solo">
+                            <TraceSeal />
+                        </div>
+                    }
+                </div>
+            </div>
+        </section>
+
+        @* ===== 2. Highlight strip ===== *@
+        @if (_stats.Count > 0)
+        {
+            <section class="trace__stats" aria-labelledby="trace-stats-h">
+                <h2 id="trace-stats-h" class="sr-only">Số liệu nổi bật của lô</h2>
+                <div class="shell">
+                    <dl class="trace__stat-list" data-reveal="fade">
+                        @foreach (var stat in _stats)
+                        {
+                            <div class="trace__stat">
+                                <dt class="trace__stat-label">@stat.Label</dt>
+                                <dd class="trace__stat-value accent">@stat.Value@if (stat.Unit is not null){<small>@stat.Unit</small>}</dd>
+                            </div>
+                        }
+                    </dl>
+                </div>
+            </section>
+        }
+
+        @* ===== 3. Journey ===== *@
+        @if (_steps.Count > 0)
+        {
+            <section class="trace__chapter trace__journey-ch" aria-labelledby="trace-journey-h">
+                <div class="shell">
+                    <header class="trace__head" data-reveal="fade">
+                        <p class="eyebrow">Hành trình</p>
+                        <h2 id="trace-journey-h">Từ cây đến <span class="accent">tách</span></h2>
+                    </header>
+
+                    <ol class="trace__tl">
+                        @foreach (var step in _steps)
+                        {
+                            <li class="trace__step" data-reveal="fade">
+                                <span class="trace__node"><NfIcon Name="@step.Icon" Size="28" /></span>
+                                <div class="trace__step-body">
+                                    <h3>@step.Title</h3>
+                                    @if (step.When is not null)
+                                    {
+                                        <p class="trace__step-when">@step.When</p>
+                                    }
+                                    @foreach (var line in step.Lines)
+                                    {
+                                        <p>@line</p>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ol>
+                </div>
+            </section>
+        }
+
+        @* ===== 4. Quality band ===== *@
+        @if (d.Quality is { } q && HasQualityBand(q))
+        {
+            <section class="trace__quality" aria-labelledby="trace-quality-h">
+                <div class="shell">
+                    <header class="trace__head trace__head--inverse" data-reveal="fade">
+                        <p class="eyebrow">Chất lượng</p>
+                        <h2 id="trace-quality-h">Chất lượng trong <span class="accent">từng con số</span></h2>
+                    </header>
+
+                    <div class="trace__q-grid">
+                        @if (q.CuppingScore is { } score)
+                        {
+                            <div class="trace__score" data-reveal="fade">
+                                <p class="trace__score-value accent">@TraceText.Score(score)</p>
+                                <p class="trace__score-caption">điểm cupping</p>
+                                @if (q.CuppedBy is not null)
+                                {
+                                    <p class="trace__score-by">Chấm bởi @q.CuppedBy</p>
+                                }
+                                <p class="trace__score-scale">Thang điểm SCA tối đa 100; từ 80 điểm là cà phê đặc sản theo SCA.</p>
+                            </div>
+                        }
+                        else if (q.CuppedBy is not null)
+                        {
+                            <div class="trace__score" data-reveal="fade">
+                                <p class="trace__score-by">Chấm bởi @q.CuppedBy</p>
+                            </div>
+                        }
+
+                        @if (q.Sensory is not null)
+                        {
+                            <div class="trace__sensory" data-reveal="fade" style="--d:.1s">
+                                @if (_radar is { } radar)
+                                {
+                                    @* The chart is plain SVG; its labels are HTML spans positioned over it (Razor reserves the
+                                       <text> tag, and the map on the home page does the same). *@
+                                    <div class="trace__radar-wrap">
+                                        <svg class="trace__radar" viewBox="0 0 @Num(TraceRadar.Size) @Num(TraceRadar.Size)"
+                                             aria-hidden="true" focusable="false">
+                                            @foreach (var ring in radar.Rings)
+                                            {
+                                                <polygon class="trace__radar-ring" points="@ring" />
+                                            }
+                                            @foreach (var axis in radar.Axes)
+                                            {
+                                                <line class="trace__radar-axis" x1="@Num(radar.Center)" y1="@Num(radar.Center)" x2="@axis.TickX" y2="@axis.TickY" />
+                                            }
+                                            <polygon class="trace__radar-shape" points="@radar.Shape" />
+                                            @foreach (var axis in radar.Axes)
+                                            {
+                                                <circle class="trace__radar-dot" cx="@axis.DotX" cy="@axis.DotY" r="3.2" />
+                                            }
+                                        </svg>
+                                        @foreach (var axis in radar.Axes)
+                                        {
+                                            <span class="trace__radar-label" aria-hidden="true" data-side="@axis.Anchor"
+                                                  style="left:@Pct(axis.LabelX)%;top:@Pct(axis.LabelY, -4)%">@axis.Label</span>
+                                        }
+                                    </div>
+                                    <table class="sr-only">
+                                        <caption>Thang cảm quan, mỗi thang từ 1 đến 5</caption>
+                                        <thead><tr><th scope="col">Thang</th><th scope="col">Mức (trên 5)</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var axis in radar.Axes)
+                                            {
+                                                <tr><th scope="row">@axis.Label</th><td>@axis.Value</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                                else
+                                {
+                                    <ul class="trace__bars">
+                                        @foreach (var scale in _scales)
+                                        {
+                                            <li>
+                                                <span class="trace__bar-label">@scale.Label</span>
+                                                <span class="trace__bar" style="--v:@scale.Value" aria-hidden="true"></span>
+                                                <span class="sr-only">@scale.Label: @scale.Value trên 5</span>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (q.Certifications.Count > 0)
+                    {
+                        <ul class="trace__seals" aria-label="Chứng nhận">
+                            @foreach (var cert in q.Certifications)
+                            {
+                                <li class="trace__cert">
+                                    <span class="trace__cert-name">@cert.Name</span>
+                                    @if (cert.Number is not null)
+                                    {
+                                        <span class="trace__cert-no">Số @cert.Number</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (q.Specs is { } specs)
+                    {
+                        <details class="trace__more">
+                            <summary>Thông số kỹ thuật</summary>
+                            <dl class="trace__specs">
+                                @if (specs.MoisturePercent is { } moisture)
+                                {
+                                    <div><dt>Độ ẩm</dt><dd>@TraceText.Percent(moisture)</dd></div>
+                                }
+                                @if (specs.ScreenSize is not null)
+                                {
+                                    <div><dt>Kích cỡ sàng</dt><dd>@specs.ScreenSize</dd></div>
+                                }
+                                @if (specs.DefectRatePercent is { } defect)
+                                {
+                                    <div><dt>Tỷ lệ hạt lỗi</dt><dd>@TraceText.Percent(defect)</dd></div>
+                                }
+                            </dl>
+                        </details>
+                    }
+
+                    @if (q.LabReportImageUrl is { } report)
+                    {
+                        <p class="trace__report">
+                            <a href="@report" target="_blank" rel="noopener">Xem phiếu kiểm nghiệm <NfIcon Name="arrow-right" Size="16" /></a>
+                        </p>
+                    }
+                </div>
+            </section>
+        }
+
+        @* ===== 5. Flavour ===== *@
+        @if (d.Quality is { FlavourNotes.Count: > 0 } flavour)
+        {
+            <section class="trace__flavour" aria-labelledby="trace-flavour-h">
+                <div class="shell">
+                    <header class="trace__head" data-reveal="fade">
+                        <p class="eyebrow">Hương vị</p>
+                        <h2 id="trace-flavour-h">Nốt hương <span class="accent">bạn sẽ gặp</span></h2>
+                    </header>
+                    <div class="trace__flavour-body" data-reveal="fade">
+                        <p class="trace__pull accent">“@flavour.FlavourNotes[0]”</p>
+                        @if (flavour.FlavourNotes.Count > 1)
+                        {
+                            <ul class="trace__chips">
+                                @foreach (var note in flavour.FlavourNotes.Skip(1))
+                                {
+                                    <li class="chip trace__chip">@note</li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+
+        @* ===== 6. Farm and region ===== *@
+        @if (d.Origin is { } origin)
+        {
+            <section class="trace__chapter trace__farm" aria-labelledby="trace-farm-h">
+                <div class="shell trace__farm-in">
+                    @if (origin.FarmImageUrl is { } farmImage)
+                    {
+                        <div class="trace__farm-photo" data-reveal="fade">
+                            <PolaroidPhoto ImageUrl="@farmImage"
+                                           ImageAlt="@(origin.FarmName is { } fn ? $"Ảnh {fn}" : "Ảnh nông trại")"
+                                           Caption="@(origin.FarmName ?? "Nông trại")" Lazy="true" />
+                        </div>
+                    }
+
+                    <div class="trace__farm-text" data-reveal="fade" style="--d:.08s">
+                        <p class="eyebrow">Nguồn gốc</p>
+                        @if (origin.FarmName is { } farmName)
+                        {
+                            <h2 id="trace-farm-h">Từ <span class="accent">@farmName</span></h2>
+                        }
+                        else
+                        {
+                            <h2 id="trace-farm-h">Vùng <span class="accent">trồng</span></h2>
+                        }
+
+                        @foreach (var paragraph in origin.FarmStoryParagraphs)
+                        {
+                            <p class="trace__story">@paragraph</p>
+                        }
+
+                        @if (HasRegionCard(origin))
+                        {
+                            <div class="trace__region">
+                                <p class="trace__region-title"><NfIcon Name="location" Size="16" /> Vùng trồng</p>
+                                <dl class="trace__kv">
+                                    @if (RegionLine(origin) is { } place)
+                                    {
+                                        <div><dt>Khu vực</dt><dd>@place</dd></div>
+                                    }
+                                    @if (origin.AltitudeMin is not null || origin.AltitudeMax is not null)
+                                    {
+                                        <div><dt>Độ cao</dt><dd>@TraceText.Altitude(origin.AltitudeMin, origin.AltitudeMax)</dd></div>
+                                    }
+                                    @if (origin.Variety is not null)
+                                    {
+                                        <div><dt>Giống cà phê</dt><dd>@origin.Variety</dd></div>
+                                    }
+                                </dl>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </section>
+        }
+
+        @* ===== 7. Brewing ===== *@
+        @if (d.Brewing is { } brewing)
+        {
+            <section class="trace__chapter trace__brew" aria-labelledby="trace-brew-h">
+                <div class="shell">
+                    <header class="trace__head" data-reveal="fade">
+                        <p class="eyebrow">Cách pha</p>
+                        <h2 id="trace-brew-h">Pha đúng, <span class="accent">trọn vị</span></h2>
+                    </header>
+
+                    @if (brewing.Guides.Count > 0)
+                    {
+                        <div class="trace__brew-grid">
+                            @for (var i = 0; i < brewing.Guides.Count; i++)
+                            {
+                                var guide = brewing.Guides[i];
+                                <article class="trace__brew-card" data-reveal="fade" style="--d:@((i * 0.08).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))s">
+                                    <h3>@TraceText.BrewLabel(guide.Method)</h3>
+                                    <ul class="trace__brew-stats">
+                                        @if (guide.Ratio is not null)
+                                        {
+                                            <li><NfIcon Name="scale" Size="20" /><span><small>Tỷ lệ</small>@guide.Ratio</span></li>
+                                        }
+                                        @if (guide.WaterTempCelsius is { } temp)
+                                        {
+                                            <li><NfIcon Name="thermometer" Size="20" /><span><small>Nhiệt độ nước</small>@temp °C</span></li>
+                                        }
+                                        @if (guide.BrewTime is not null)
+                                        {
+                                            <li><NfIcon Name="clock" Size="20" /><span><small>Thời gian</small>@guide.BrewTime</span></li>
+                                        }
+                                    </ul>
+                                    @if (guide.Note is not null)
+                                    {
+                                        <p class="trace__brew-note">@guide.Note</p>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    }
+
+                    @if (brewing.StorageTip is { } tip)
+                    {
+                        <p class="trace__storage" data-reveal="fade"><NfIcon Name="package" Size="24" /> <span><strong>Bảo quản.</strong> @tip</span></p>
+                    }
+                </div>
+            </section>
+        }
+
+        @* ===== 8. Closing ===== *@
+        <section class="trace__end" aria-labelledby="trace-end-h">
+            <div class="shell trace__end-in" data-reveal="fade">
+                <p class="eyebrow eyebrow--plain">NieFarm</p>
+                <h2 id="trace-end-h">Cảm ơn bạn đã <span class="accent">đồng hành</span></h2>
+                <p class="lede">Mỗi gói cà phê đều có một câu chuyện. Cảm ơn bạn đã dành thời gian đọc câu chuyện của gói này.</p>
+                <div class="trace__end-actions">
+                    @if (d.Product.Slug is { } slug)
+                    {
+                        <a class="btn btn--red" href="/san-pham/@slug"><span>Mua lại</span><NfIcon Name="arrow-right" /></a>
+                    }
+                    <a class="trace__end-link" href="/kien-thuc">Khám phá câu chuyện cà phê</a>
+                    <a class="trace__end-link" href="@InfoPages.ContactHref("/truy-xuat/" + d.Code)">Liên hệ</a>
+                </div>
+            </div>
+        </section>
+    </article>
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = string.Empty;
+
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private BatchTraceDto? _dto;
+    private List<Stat> _stats = [];
+    private List<Step> _steps = [];
+    private List<(string Label, int Value)> _scales = [];
+    private TraceRadar? _radar;
+
+    private sealed record Stat(string Label, string Value, string? Unit);
+
+    private sealed record Step(string Icon, string Title, string? When, IReadOnlyList<string> Lines);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = HttpContext?.User;
+        var isAdmin = user?.IsInRole("Admin") == true || user?.IsInRole("SuperAdmin") == true;
+
+        // One query. Every "no such page" case (wrong shape, unknown, unpublished) is the same null and the same 404.
+        _dto = await Sender.Send(new GetBatchTraceQuery(Code, IncludeUnpublished: isAdmin), HttpContext?.RequestAborted ?? default);
+        if (_dto is null)
+        {
+            Navigation.NotFound();
+            return;
+        }
+
+        if (HttpContext is { } http)
+        {
+            // Counted only for a published batch and not for an admin preview (the recorder ignores HEAD, bots, prefetches).
+            if (_dto.IsPublished && !isAdmin)
+                ScanRecorder.TryRecord(http, _dto.BatchId);
+
+            // No Cache-Control here on purpose: the framework's antiforgery token (issued for every Blazor page) already
+            // forces "no-cache, no-store", and setting our own value only made it log a warning on every scan.
+            http.Response.Headers["X-Robots-Tag"] = "noindex";
+        }
+
+        BuildView(_dto);
+    }
+
+    private void BuildView(BatchTraceDto d)
+    {
+        // Highlight strip: up to four figures, only the ones that exist.
+        if (d.Origin is { } o && (o.AltitudeMin is not null || o.AltitudeMax is not null))
+            _stats.Add(new Stat("Độ cao", TraceText.AltitudeNumber(o.AltitudeMin, o.AltitudeMax), "m"));
+        if (d.Quality?.CuppingScore is { } score)
+            _stats.Add(new Stat("Điểm SCA", TraceText.Score(score), null));
+        if (d.Roast.Level is { } level)
+            _stats.Add(new Stat("Mức rang", TraceText.RoastShort(level), null));
+        if (d.Processing?.Method is { } method)
+            _stats.Add(new Stat("Sơ chế", TraceText.ProcessingShort(method), null));
+
+        // Journey: only steps with data. A roast step alone adds nothing the hero does not already say.
+        if (d.Harvest is { } h)
+        {
+            var lines = new List<string>();
+            if (h.Season is not null) lines.Add(h.Season);
+            if (h.Method is not null) lines.Add(h.Method);
+            var when = h.From is null && h.To is null ? null : TraceText.DateRange(h.From, h.To);
+            _steps.Add(new Step("cherries", "Thu hoạch", when, lines));
+        }
+
+        if (d.Processing is { } p)
+        {
+            var lines = new List<string>();
+            if (p.Method is { } m) lines.Add(TraceText.ProcessingLabel(m));
+            if (p.Note is not null) lines.Add(p.Note);
+            if (p.FermentationHours is { } fh) lines.Add(TraceText.Fermentation(fh));
+            if (p.DryingDays is { } dd) lines.Add(TraceText.Drying(dd));
+            if (p.DryingMethod is not null) lines.Add(p.DryingMethod);
+            _steps.Add(new Step("drop", "Sơ chế", null, lines));
+        }
+
+        var roastLines = new List<string>();
+        if (d.Roast.Level is { } rl) roastLines.Add(TraceText.RoastLabel(rl));
+        if (d.Roast.RoasterName is not null) roastLines.Add($"Rang bởi {d.Roast.RoasterName}");
+        if (d.Roast.Note is not null) roastLines.Add(d.Roast.Note);
+        _steps.Add(new Step("roaster", "Rang", TraceText.Date(d.Roast.RoastDate), roastLines));
+
+        if (d.Packing is { } pk)
+        {
+            var lines = new List<string>();
+            if (pk.HasOneWayValve) lines.Add("Bao bì có van một chiều.");
+            if (pk.IsNitrogenFlushed) lines.Add("Xả khí nitơ trước khi đóng gói.");
+            if (pk.Note is not null) lines.Add(pk.Note);
+            _steps.Add(new Step("package", "Đóng gói", pk.PackedOn is { } on ? TraceText.Date(on) : null, lines));
+        }
+
+        if (_steps.Count == 1 && _steps[0].Lines.Count == 0)
+            _steps.Clear();
+
+        // Sensory scales: a radar from three present scales, thin bars below that.
+        if (d.Quality?.Sensory is { } s)
+        {
+            if (s.Acidity is { } a) _scales.Add(("Độ chua", a));
+            if (s.Body is { } b) _scales.Add(("Độ đậm", b));
+            if (s.Sweetness is { } sw) _scales.Add(("Vị ngọt", sw));
+            if (s.Bitterness is { } bi) _scales.Add(("Vị đắng", bi));
+            _radar = TraceRadar.Create(_scales);
+        }
+    }
+
+    private static string Num(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A coordinate in the 260-unit chart space as a percentage of its box.</summary>
+    private static string Pct(string coordinate, double offset = 0) =>
+        Num((double.Parse(coordinate, System.Globalization.CultureInfo.InvariantCulture) + offset) / TraceRadar.Size * 100);
+
+    private static bool HasQualityBand(TraceQualityDto q) =>
+        q.CuppingScore is not null || q.CuppedBy is not null || q.Sensory is not null || q.Specs is not null
+        || q.Certifications.Count > 0 || q.LabReportImageUrl is not null;
+
+    private static bool HasRegionCard(TraceOriginDto o) =>
+        RegionLine(o) is not null || o.AltitudeMin is not null || o.AltitudeMax is not null || o.Variety is not null;
+
+    private static string? RegionLine(TraceOriginDto o)
+    {
+        var parts = new[] { o.Locality, o.Commune, o.Province }.Where(x => !string.IsNullOrEmpty(x)).ToArray();
+        return parts.Length == 0 ? null : string.Join(", ", parts);
+    }
+
+    /// <summary>Absolute og:image, only when the public base URL is configured (never taken from the request).</summary>
+    private string? OgImage(BatchTraceDto d) =>
+        d.Product.ImageUrl is { } url && url.StartsWith('/') && PublicUrls.TryGetBaseUrl(out var baseUri)
+            ? $"{baseUri.GetLeftPart(UriPartial.Authority)}{url}"
+            : null;
+}

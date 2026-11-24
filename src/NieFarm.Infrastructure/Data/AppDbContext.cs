@@ -33,6 +33,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Coupon> Coupons => Set<Coupon>();
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
     public DbSet<WishlistItem> WishlistItems => Set<WishlistItem>();
+    public DbSet<RoastBatch> RoastBatches => Set<RoastBatch>();
+    public DbSet<RoastBatchCertification> RoastBatchCertifications => Set<RoastBatchCertification>();
+    public DbSet<RoastBatchBrewGuide> RoastBatchBrewGuides => Set<RoastBatchBrewGuide>();
+    public DbSet<RoastBatchScanStat> RoastBatchScanStats => Set<RoastBatchScanStat>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -13,4 +13,11 @@ public interface IWriteContextRefresher
     /// since that indicates a programming error.
     /// </summary>
     void DiscardTrackedEntities();
+
+    /// <summary>
+    /// Detaches everything the shared write context tracks, with NO unsaved-changes guard. For a handler's own
+    /// failure path only: when an operation threw half-way through mutating a tracked aggregate, the context is left
+    /// dirty and every later <see cref="DiscardTrackedEntities"/> in that circuit would throw until a reload.
+    /// </summary>
+    void ForceDiscardTrackedEntities();
 }

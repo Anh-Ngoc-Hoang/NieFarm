@@ -25,11 +25,11 @@
     <link rel="stylesheet" href="@Assets["NieFarm.Web.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="PageRenderMode" />
 </head>
 
 <body>
-    <Routes @rendermode="InteractiveServer" CartAnonymousId="@_cartAnonymousId" />
+    <Routes @rendermode="PageRenderMode" CartAnonymousId="@_cartAnonymousId" />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     @* Interop shim only — it pulls Quill itself from the CDN the first time an admin
@@ -55,6 +55,11 @@
     // protected) because a <CascadingValue> here would not cross the InteractiveServer
     // render-mode boundary.
     private string? _cartAnonymousId;
+
+    // Every page is interactive unless it opts out with [ExcludeFromInteractiveRouting] (the R-26
+    // traceability pages): those render as plain static SSR, so a QR scan never opens a circuit.
+    private IComponentRenderMode? PageRenderMode =>
+        HttpContextAccessor.HttpContext?.AcceptsInteractiveRouting() == false ? null : InteractiveServer;
 
     protected override void OnInitialized() =>
         _cartAnonymousId = HttpContextAccessor.HttpContext?

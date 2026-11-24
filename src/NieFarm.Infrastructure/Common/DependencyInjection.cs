@@ -13,6 +13,7 @@ using NieFarm.Infrastructure.Services.Addresses;
 using NieFarm.Infrastructure.Services.Carts;
 using NieFarm.Infrastructure.Services.Payments;
 using NieFarm.Infrastructure.Services.Shipping;
+using NieFarm.Infrastructure.Services.Traceability;
 
 namespace NieFarm.Infrastructure.Common;
 
@@ -58,6 +59,7 @@ public static class DependencyInjection
         services.AddSingleton<ISlugGenerator, SlugGenerator>();
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSingleton<IOrderLookupThrottle, OrderLookupThrottle>();
+        services.AddSingleton<IBatchTraceCache, MemoryBatchTraceCache>();
         services.AddSingleton<ICouponAttemptThrottle, CouponAttemptThrottle>();
         services.AddScoped<IShippingRateProvider, DbShippingRateProvider>();
         services.AddScoped<IAbandonedCartPurger, AbandonedCartPurger>();

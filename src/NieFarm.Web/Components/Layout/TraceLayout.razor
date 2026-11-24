@@ -1,0 +1,23 @@
+@inherits LayoutComponentBase
+
+@*
+    Shell of the two static-SSR traceability pages (R-26 D2). There is no circuit behind these pages, so the
+    interactive SiteHeader (menu buttons use @onclick) and CartInitializer are left out: just the wordmark and a
+    plain link to the shop. data-enhance-nav="false" makes every link in here a full page load, so following one
+    into an interactive page starts a normal circuit instead of trying to patch it into a static document.
+*@
+
+<div class="nf nf-shell trace-shell" data-enhance-nav="false">
+    <header class="hdr">
+        <div class="shell hdr__in">
+            <a class="wordmark" href="/">Nie<em>Farm</em></a>
+            <a class="trace-hdr__link" href="/cua-hang">Cửa hàng</a>
+        </div>
+    </header>
+
+    <main class="nf-main">
+        @Body
+    </main>
+
+    <SiteFooter />
+</div>

@@ -4,17 +4,27 @@ using MediatR;
 using NieFarm.Application.Common.Interfaces;
 using NieFarm.Application.Features.Admin.Products.Dtos;
 using NieFarm.Application.Features.Products.Specifications;
+using NieFarm.Application.Features.Traceability.Specifications;
 using NieFarm.Domain.Entities;
 
 namespace NieFarm.Application.Features.Admin.Products.Commands;
 
 public class DeleteProductCommandHandler(
     IRepositoryBase<Product> repository,
+    IReadRepositoryBase<RoastBatch> roastBatches,
     IImageStorage imageStorage)
     : IRequestHandler<DeleteProductCommand, Result>
 {
     public async Task<Result> Handle(DeleteProductCommand request, CancellationToken cancellationToken)
     {
+        // A batch has a QR printed on real packs (R-26 D7), so its product cannot be deleted from under it.
+        // The foreign key is Restrict as well; this check just gives the admin a readable message.
+        if (await roastBatches.AnyAsync(new RoastBatchesByProductSpec(request.Id), cancellationToken))
+        {
+            return Result.Error(
+                "This product has roast batches with printed QR labels. Hide the product instead of deleting it.");
+        }
+
         // The matrix has to be tracked for the join rows to be removed with the product.
         var product = await repository.FirstOrDefaultAsync(
             new ProductByIdWithDetailsSpec(request.Id), cancellationToken);
