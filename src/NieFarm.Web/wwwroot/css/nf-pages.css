@@ -1382,21 +1382,29 @@
     min-width: 0;
     display: flex;
     overflow: hidden;
+    background: var(--paper); /* backdrop for the logos' mix-blend-mode */
 }
 .hpartner__list { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: var(--hpartner-gap); flex: none; }
 /* min-inline-size is coupled to PartnerMarquee.MinSlotsPerLoop. */
 .hpartner__item { flex: none; display: flex; justify-content: center; min-inline-size: 9rem; }
 .hpartner__link { position: relative; display: inline-flex; align-items: center; min-block-size: 44px; color: var(--ink-55); transition: color .3s var(--ease); }
+/* Logos are admin uploads and usually carry a wide margin (a 700x400 wordmark, a square JPG with
+   the mark in its middle third), so the box is generous: the artwork itself is only 20-45% of it.
+   multiply drops a white or JPEG background onto the paper instead of showing a grey box; it needs
+   a backdrop to blend with, which is why .hpartner__viewport paints --paper (a mask alone makes
+   the viewport an isolated group with nothing behind it). */
 .hpartner__logo {
-    block-size: clamp(2rem, 3.5vw, 2.75rem);
+    block-size: clamp(3.75rem, 6.5vw, 5.25rem);
     inline-size: auto;
-    max-inline-size: 10rem;
+    max-inline-size: 15rem;
     object-fit: contain;
-    filter: grayscale(1);
-    opacity: .7;
-    transition: filter .3s var(--ease), opacity .3s var(--ease);
+    mix-blend-mode: multiply;
+    transition: transform .35s var(--ease), opacity .3s var(--ease);
 }
-.hpartner__mark { font-size: clamp(1.15rem, 2.2vw, 1.5rem); font-weight: 800; letter-spacing: -.02em; white-space: nowrap; }
+.hpartner__mark { font-size: clamp(1.15rem, 2.2vw, 1.5rem); font-weight: 800; letter-spacing: -.02em; white-space: nowrap; transition: transform .35s var(--ease), opacity .3s var(--ease); }
+/* Full colour at rest. The zoom goes on the image itself, never on .hpartner__link: a transform
+   (or opacity) on an ancestor makes it a stacking context and the logo's multiply would then
+   blend with nothing, bringing the white background back. */
 
 /* Marquee (D8-D10): edge fade, and a constant ~55px/s whatever the count,
    because both the loop distance and --count grow together. */
@@ -1433,7 +1441,8 @@
 .hpartner__viewport:has(a:focus-visible) .hpartner__list[aria-hidden="true"] { display: none; }
 
 a.hpartner__link:focus-visible { color: var(--ink); }
-a.hpartner__link:focus-visible .hpartner__logo { filter: none; opacity: 1; }
+a.hpartner__link:focus-visible .hpartner__logo,
+a.hpartner__link:focus-visible .hpartner__mark { transform: scale(1.12); }
 
 .hpartner__toggle { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow .3s var(--ease); }
 .hpartner__toggle .ico { width: 16px; height: 16px; }
@@ -1441,7 +1450,11 @@ a.hpartner__link:focus-visible .hpartner__logo { filter: none; opacity: 1; }
 @media (hover: hover) {
     .hpartner__viewport:hover .hpartner__list { animation-play-state: paused; }
     a.hpartner__link:hover { color: var(--ink); }
-    a.hpartner__link:hover .hpartner__logo { filter: none; opacity: 1; }
+    /* The hovered partner zooms; the others step back a little so it stands out. */
+    .hpartner__link:hover .hpartner__logo,
+    .hpartner__link:hover .hpartner__mark { transform: scale(1.12); }
+    .hpartner__list:has(.hpartner__link:hover) .hpartner__item:not(:hover) .hpartner__logo,
+    .hpartner__list:has(.hpartner__link:hover) .hpartner__item:not(:hover) .hpartner__mark { opacity: .55; }
     .hpartner__toggle:hover { box-shadow: inset 0 0 0 1.5px var(--red); }
 }
 
