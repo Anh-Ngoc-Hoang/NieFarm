@@ -54,11 +54,11 @@ public static class TraceText
 
     public static string ProcessingLabel(CoffeeProcessingMethod method) => method switch
     {
-        CoffeeProcessingMethod.Washed => "Chế biến ướt (Washed)",
-        CoffeeProcessingMethod.Natural => "Chế biến khô (Natural)",
-        CoffeeProcessingMethod.Honey => "Chế biến mật ong (Honey)",
-        CoffeeProcessingMethod.SemiWashed => "Chế biến bán ướt (Semi-washed)",
-        CoffeeProcessingMethod.Anaerobic => "Lên men yếm khí (Anaerobic)",
+        CoffeeProcessingMethod.Washed => "Washed",
+        CoffeeProcessingMethod.Natural => "Natural",
+        CoffeeProcessingMethod.Honey => "Honey",
+        CoffeeProcessingMethod.SemiWashed => "Semi-washed",
+        CoffeeProcessingMethod.Anaerobic => "Anaerobic",
         _ => "Phương pháp sơ chế khác"
     };
 
@@ -73,7 +73,15 @@ public static class TraceText
         _ => "Khác"
     };
 
-    public static string RoastLabel(RoastLevel level) => "Rang " + RoastShort(level).ToLower(Vi);
+    /// <summary>The roast degree under its original English name, as roasters and the packaging use it.</summary>
+    public static string RoastLabel(RoastLevel level) => level switch
+    {
+        RoastLevel.Light => "Light",
+        RoastLevel.MediumLight => "Medium light",
+        RoastLevel.Medium => "Medium",
+        RoastLevel.MediumDark => "Medium dark",
+        _ => "Dark"
+    };
 
     public static string RoastShort(RoastLevel level) => level switch
     {
