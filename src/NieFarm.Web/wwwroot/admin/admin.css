@@ -1338,3 +1338,67 @@ textarea.form-control-admin {
 .login-wrap .blazor-error-boundary::after {
     content: "An error has occurred.";
 }
+
+/* ---------- Date input (dd/MM/yyyy text box + native calendar picker) ---------- */
+.admin-app .date-input {
+    position: relative;
+}
+
+.admin-app .date-input > .form-control-admin {
+    padding-right: 42px;
+}
+
+.admin-app .date-input.is-invalid > .form-control-admin {
+    border-color: var(--admin-danger);
+}
+
+/* The native date input is only a picker: invisible, stretched over the calendar icon. */
+.admin-app .date-input__pick {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    inline-size: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--admin-text);
+    cursor: pointer;
+}
+
+.admin-app .date-input__pick .material-symbols-outlined {
+    font-size: 20px;
+    pointer-events: none;
+}
+
+.admin-app .date-input__pick input[type="date"] {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.admin-app .date-input__pick input[type="date"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    margin: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+.admin-app .date-input:focus-within > .form-control-admin {
+    border-color: var(--admin-accent);
+    box-shadow: 0 0 0 3px var(--admin-accent-soft);
+}
+
+.admin-app .date-input__error {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--admin-danger);
+}

@@ -43,7 +43,7 @@
                     </div>
                     <div>
                         <label class="form-label-admin" for="ac-date">Event date *</label>
-                        <input id="ac-date" class="form-control-admin" type="date" @bind="_model.EventDate" />
+                        <DateInput Id="ac-date" @bind-Value="_model.EventDate" Group="_dates" />
                     </div>
                     <div>
                         <label class="form-label-admin" for="ac-size">Card size *</label>
@@ -129,6 +129,7 @@
     private Guid _editorKey = Guid.NewGuid();
 
     private bool _visible;
+    private readonly DateInputGroup _dates = new();
     private bool _saving;
     private bool _uploading;
 
@@ -176,6 +177,12 @@
 
         try
         {
+            if (_dates.HasInvalid)
+            {
+                _errors = ["Fix the highlighted date fields (dd/MM/yyyy)."];
+                return;
+            }
+
             var result = await Sender.Send(new SaveActivityCommand(
                 _model.Id,
                 _model.Title ?? string.Empty,

@@ -1,0 +1,177 @@
+@typeparam TValue
+@implements IDisposable
+@using System.Globalization
+
+@* A native <input type="date"> always shows the browser's own locale (mm/dd/yyyy on an English
+   browser), and no attribute can change that. So the visible field is a plain text box that is
+   always dd/MM/yyyy (optionally "dd/MM/yyyy HH:mm"); the calendar button is a native date input
+   stretched invisibly over the icon, so the picker still works with no JavaScript. The native
+   input is only ever a picker: its value is converted to the text box and never shown. *@
+
+<div class="date-input @(_error is null ? null : "is-invalid")">
+    <input id="@Id"
+           class="form-control-admin"
+           type="text"
+           inputmode="numeric"
+           autocomplete="off"
+           maxlength="@MaxLength"
+           placeholder="@Placeholder"
+           value="@_text"
+           aria-invalid="@(_error is null ? null : "true")"
+           aria-describedby="@(_error is null ? null : ErrorId)"
+           @onchange="OnTextChangedAsync" />
+    <span class="date-input__pick" title="Choose from calendar">
+        <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+        <input type="date"
+               tabindex="-1"
+               aria-label="Choose a date from the calendar"
+               value="@PickerValue"
+               @onchange="OnPickerChangedAsync" />
+    </span>
+</div>
+@if (_error is not null)
+{
+    <div id="@ErrorId" class="date-input__error" role="alert">@_error</div>
+}
+
+@code {
+    private static readonly Type Underlying = Nullable.GetUnderlyingType(typeof(TValue)) ?? typeof(TValue);
+    private static readonly bool IsNullable =
+        !typeof(TValue).IsValueType || Nullable.GetUnderlyingType(typeof(TValue)) is not null;
+
+    private static readonly string[] DateFormats = ["d/M/yyyy"];
+    private static readonly string[] DateTimeFormats = ["d/M/yyyy H:mm", "d/M/yyyy HH:mm"];
+
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public TValue? Value { get; set; }
+    [Parameter] public EventCallback<TValue?> ValueChanged { get; set; }
+
+    /// <summary>Also asks for a time: "dd/MM/yyyy HH:mm".</summary>
+    [Parameter] public bool WithTime { get; set; }
+
+    /// <summary>Time used when a date is picked from the calendar and no time is set yet.</summary>
+    [Parameter] public TimeOnly DefaultTime { get; set; } = TimeOnly.MinValue;
+
+    /// <summary>Lets the form know a date box holds text that is not a date, so Save can refuse.</summary>
+    [Parameter] public DateInputGroup? Group { get; set; }
+
+    private string _text = string.Empty;
+    private string? _error;
+    private DateTime? _current;
+    private bool _initialised;
+
+    private string Placeholder => WithTime ? "dd/MM/yyyy HH:mm" : "dd/MM/yyyy";
+    private int MaxLength => WithTime ? 16 : 10;
+    private string ErrorId => (Id ?? "date-input") + "-error";
+    private string? PickerValue => _current?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    protected override void OnInitialized()
+    {
+        if (Underlying != typeof(DateTime) && Underlying != typeof(DateOnly))
+            throw new InvalidOperationException("DateInput supports DateTime, DateOnly and their nullable forms only.");
+    }
+
+    protected override void OnParametersSet()
+    {
+        var incoming = ToDateTime(Value);
+        if (_initialised && incoming == _current) return;
+
+        // First render, or the parent changed the value (not our own edit echoing back).
+        _initialised = true;
+        _current = incoming;
+        _text = Format(incoming);
+        SetError(null);
+    }
+
+    private async Task OnTextChangedAsync(ChangeEventArgs e)
+    {
+        var raw = (e.Value as string ?? string.Empty).Trim();
+        _text = raw;
+
+        if (raw.Length == 0)
+        {
+            if (!IsNullable)
+            {
+                SetError("Enter a date as " + Placeholder + ".");
+                return;
+            }
+            await CommitAsync(null);
+            return;
+        }
+
+        if (!TryParse(raw, out var parsed))
+        {
+            SetError("Enter a date as " + Placeholder + ".");
+            return;
+        }
+
+        await CommitAsync(parsed);
+        _text = Format(parsed); // "5/3/2026" becomes "05/03/2026"
+    }
+
+    private async Task OnPickerChangedAsync(ChangeEventArgs e)
+    {
+        var raw = e.Value as string;
+        if (string.IsNullOrEmpty(raw))
+        {
+            if (IsNullable) { await CommitAsync(null); _text = string.Empty; }
+            return;
+        }
+
+        if (!DateTime.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+            return;
+
+        var picked = WithTime
+            ? day.Date + (_current is { } c ? c.TimeOfDay : DefaultTime.ToTimeSpan())
+            : day.Date;
+
+        await CommitAsync(picked);
+        _text = Format(picked);
+    }
+
+    private async Task CommitAsync(DateTime? value)
+    {
+        SetError(null);
+        _current = value;
+        await ValueChanged.InvokeAsync(FromDateTime(value));
+    }
+
+    private void SetError(string? message)
+    {
+        _error = message;
+        Group?.Report(this, message is not null);
+    }
+
+    private bool TryParse(string raw, out DateTime result)
+    {
+        // Typing habits: 05-03-2026 and 05.03.2026 mean the same thing.
+        var text = raw.Replace('-', '/').Replace('.', '/');
+        return DateTime.TryParseExact(
+            text,
+            WithTime ? DateTimeFormats : DateFormats,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out result);
+    }
+
+    // InvariantCulture, so "/" is always a slash whatever the server's culture is.
+    private string Format(DateTime? value) =>
+        value is null ? string.Empty
+        : value.Value.ToString(WithTime ? "dd/MM/yyyy HH:mm" : "dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    private static DateTime? ToDateTime(TValue? value) => (object?)value switch
+    {
+        DateTime d => d,
+        DateOnly d => d.ToDateTime(TimeOnly.MinValue),
+        _ => null,
+    };
+
+    private static TValue? FromDateTime(DateTime? value)
+    {
+        if (value is null) return default;
+        object boxed = Underlying == typeof(DateOnly) ? DateOnly.FromDateTime(value.Value) : value.Value;
+        return (TValue)boxed;
+    }
+
+    public void Dispose() => Group?.Report(this, false);
+}

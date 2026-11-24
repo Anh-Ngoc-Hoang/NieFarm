@@ -52,7 +52,7 @@
                     </div>
                     <div>
                         <label class="form-label-admin" for="a-date">Publish date *</label>
-                        <input id="a-date" class="form-control-admin" type="date" @bind="_model.PublishedOn" />
+                        <DateInput Id="a-date" @bind-Value="_model.PublishedOn" Group="_dates" />
                     </div>
                 </div>
 
@@ -155,6 +155,7 @@
 
     private Guid _editorKey = Guid.NewGuid();
     private bool _visible;
+    private readonly DateInputGroup _dates = new();
     private bool _saving;
     private bool _cardUploading;
     private bool _heroUploading;
@@ -212,6 +213,12 @@
 
         try
         {
+            if (_dates.HasInvalid)
+            {
+                _errors = ["Fix the highlighted date fields (dd/MM/yyyy)."];
+                return;
+            }
+
             var result = await Sender.Send(new SaveArticleCommand(
                 _model.Id,
                 _model.Title ?? string.Empty,

@@ -108,11 +108,11 @@
                 <div class="form-grid form-grid--2" style="margin-top:16px;">
                     <div>
                         <label class="form-label-admin" for="cp-start">Starts (GMT+7)</label>
-                        <input id="cp-start" class="form-control-admin" type="datetime-local" @bind="_model.StartsAtLocal" />
+                        <DateInput Id="cp-start" @bind-Value="_model.StartsAtLocal" WithTime="true" Group="_dates" />
                     </div>
                     <div>
                         <label class="form-label-admin" for="cp-end">Ends (GMT+7)</label>
-                        <input id="cp-end" class="form-control-admin" type="datetime-local" @bind="_model.EndsAtLocal" />
+                        <DateInput Id="cp-end" @bind-Value="_model.EndsAtLocal" WithTime="true" DefaultTime="new TimeOnly(23, 59)" Group="_dates" />
                         <div class="cell-muted" style="font-size:12px;margin-top:4px;">
                             Leave empty for no start or end. The coupon stops working at the end time.
                         </div>
@@ -173,6 +173,7 @@
     private FormModel _model = new();
     private List<string> _errors = [];
     private bool _visible;
+    private readonly DateInputGroup _dates = new();
     private bool _saving;
 
     private bool _locked => _model.TimesRedeemed > 0;
@@ -222,6 +223,12 @@
 
         try
         {
+            if (_dates.HasInvalid)
+            {
+                _errors = ["Fix the highlighted date fields (dd/MM/yyyy)."];
+                return;
+            }
+
             var isPercentage = _model.Type == CouponType.Percentage;
             var result = await Sender.Send(new SaveCouponCommand(
                 _model.Id,
